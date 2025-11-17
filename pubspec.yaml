@@ -1,0 +1,49 @@
+name: rentease_app
+description: "RentEase - Property Rental Application"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.7
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/appicon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/appicon.png"
+  android_adaptive_icon_foreground: "assets/appicon.png"
+  android_adaptive_icon_background: "#FFFFFF"
+
+flutter_native_splash:
+  color: "#FFFFFF"
+  android: true
+  ios: true
+  image: "assets/appicon.png"
+  android_gravity: center
+  ios_content_mode: scaleAspectFit
+  android_12:
+    color: "#FFFFFF"
+    image: "assets/appicon.png"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/appicon.png
+    - assets/landingbg.png
+    - assets/logo.png
+    - assets/getstarted_imgs/
+    - assets/sign_in_up/
