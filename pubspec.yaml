@@ -11,6 +11,8 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.2.2
+  permission_handler: ^11.3.1
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:
@@ -47,3 +49,5 @@ flutter:
     - assets/logo.png
     - assets/getstarted_imgs/
     - assets/sign_in_up/
+    - assets/category_imgs/
+    - assets/listings/

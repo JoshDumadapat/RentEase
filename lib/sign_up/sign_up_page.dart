@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:rentease_app/sign_in/sign_in_page.dart';
+import 'package:rentease_app/sign_up/student_sign_up_page.dart';
 
 /// Sign Up Page with user type selection
 class SignUpPage extends StatefulWidget {
@@ -122,7 +123,9 @@ class _SignUpContentWidget extends StatelessWidget {
                     backgroundColor: Colors.blue[50]!,
                     arrowColor: Colors.blue,
                     onTap: () {
-                      // Handle student sign up
+                      Navigator.of(context).push(
+                        _SlideUpPageRoute(page: const StudentSignUpPage()),
+                      );
                     },
                   ),
                   const SizedBox(height: 12),
