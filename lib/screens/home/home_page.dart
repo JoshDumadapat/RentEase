@@ -4,6 +4,7 @@ import 'package:rentease_app/models/category_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/posts/posts_page.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
+import 'package:rentease_app/screens/search/search_page.dart';
 import 'package:rentease_app/widgets/bottom_navigation_bar.dart';
 
 class HomePage extends StatefulWidget {
@@ -59,9 +60,22 @@ class _HomePageState extends State<HomePage> {
       bottomNavigationBar: CustomBottomNavigationBar(
         currentIndex: _currentBottomNavIndex,
         onTap: (index) {
-          setState(() {
-            _currentBottomNavIndex = index;
-          });
+          if (index != _currentBottomNavIndex) {
+            if (index == 1) {
+              // Navigate to Search Page
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SearchPage(),
+                ),
+              );
+            } else {
+              // For other tabs, just update the index
+              setState(() {
+                _currentBottomNavIndex = index;
+              });
+            }
+          }
         },
       ),
     );
