@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/models/category_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/posts/posts_page.dart';
@@ -288,7 +289,10 @@ class _LargeCategoryCard extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.7),
+                    ],
                     stops: const [0.4, 1.0],
                   ),
                 ),
@@ -371,7 +375,10 @@ class _TallCategoryCard extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.7),
+                    ],
                     stops: const [0.4, 1.0],
                   ),
                 ),
@@ -454,7 +461,10 @@ class _SmallCategoryCard extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.7),
+                    ],
                     stops: const [0.4, 1.0],
                   ),
                 ),
@@ -806,18 +816,14 @@ class _ModernListingCard extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
+                        _HeartActionIcon(label: 'Like'),
                         _ModernActionIcon(
-                          icon: Icons.favorite_outline_rounded,
-                          label: 'Save',
+                          assetPath: 'assets/icons/navbar/message_outlined.svg',
+                          label: 'Comment',
                           onTap: () {},
                         ),
                         _ModernActionIcon(
-                          icon: Icons.chat_bubble_outline_rounded,
-                          label: 'Message',
-                          onTap: () {},
-                        ),
-                        _ModernActionIcon(
-                          icon: Icons.share_outlined,
+                          assetPath: 'assets/icons/navbar/share_outlined.svg',
                           label: 'Share',
                           onTap: () {},
                         ),
@@ -834,13 +840,107 @@ class _ModernListingCard extends StatelessWidget {
   }
 }
 
+class _HeartActionIcon extends StatefulWidget {
+  final String label;
+
+  const _HeartActionIcon({required this.label});
+
+  @override
+  State<_HeartActionIcon> createState() => _HeartActionIconState();
+}
+
+class _HeartActionIconState extends State<_HeartActionIcon>
+    with SingleTickerProviderStateMixin {
+  bool _isSaved = false;
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    setState(() {
+      _isSaved = !_isSaved;
+    });
+    _animationController.forward().then((_) {
+      _animationController.reverse();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _handleTap,
+        borderRadius: BorderRadius.circular(12),
+        splashColor: Colors.blue.withValues(alpha: 0.1),
+        highlightColor: Colors.blue.withValues(alpha: 0.05),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedBuilder(
+                animation: _scaleAnimation,
+                builder: (context, child) {
+                  return Transform.scale(
+                    scale: _scaleAnimation.value,
+                    child: SvgPicture.asset(
+                      _isSaved
+                          ? 'assets/icons/navbar/heart_filled.svg'
+                          : 'assets/icons/navbar/heart_outlined.svg',
+                      width: 20,
+                      height: 20,
+                      colorFilter: ColorFilter.mode(
+                        _isSaved
+                            ? const Color(0xFFE91E63)
+                            : const Color(0xFFB0B0B0),
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ModernActionIcon extends StatelessWidget {
-  final IconData icon;
+  final String assetPath;
   final String label;
   final VoidCallback onTap;
 
   const _ModernActionIcon({
-    required this.icon,
+    required this.assetPath,
     required this.label,
     required this.onTap,
   });
@@ -859,7 +959,15 @@ class _ModernActionIcon extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 20, color: Colors.grey[700]),
+              SvgPicture.asset(
+                assetPath,
+                width: 20,
+                height: 20,
+                colorFilter: ColorFilter.mode(
+                  const Color(0xFFB0B0B0),
+                  BlendMode.srcIn,
+                ),
+              ),
               const SizedBox(height: 4),
               Text(
                 label,

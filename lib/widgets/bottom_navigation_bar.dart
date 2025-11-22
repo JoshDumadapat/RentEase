@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
-/// Custom Bottom Navigation Bar Widget
-/// Used across multiple screens for consistent navigation
 class CustomBottomNavigationBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
@@ -19,9 +18,9 @@ class CustomBottomNavigationBar extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
+            color: Colors.grey.withValues(alpha: 0.08),
+            spreadRadius: 0,
+            blurRadius: 8,
             offset: const Offset(0, -2),
           ),
         ],
@@ -31,32 +30,69 @@ class CustomBottomNavigationBar extends StatelessWidget {
         onTap: onTap,
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        selectedItemColor: Colors.blue[700],
-        unselectedItemColor: Colors.grey[600],
-        selectedFontSize: 12,
-        unselectedFontSize: 12,
+        selectedItemColor: const Color(0xFF5B9BD5),
+        unselectedItemColor: const Color(0xFFB0B0B0),
+        selectedFontSize: 0,
+        unselectedFontSize: 0,
         iconSize: 24,
         elevation: 0,
-        items: const [
+        showSelectedLabels: false,
+        showUnselectedLabels: false,
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
+            icon: _NavIcon(
+              assetPath: 'assets/icons/navbar/home_outlined.svg',
+              isSelected: false,
+            ),
+            activeIcon: _NavIcon(
+              assetPath: 'assets/icons/navbar/home_filled.svg',
+              isSelected: true,
+            ),
+            label: '',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: 'Search',
+            icon: _NavIcon(
+              assetPath: 'assets/icons/navbar/search_outlined.svg',
+              isSelected: false,
+            ),
+            activeIcon: _NavIcon(
+              assetPath: 'assets/icons/navbar/search_filled.svg',
+              isSelected: true,
+            ),
+            label: '',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.add_box),
-            label: 'Add',
+            icon: _NavIcon(
+              assetPath: 'assets/icons/navbar/add_outlined.svg',
+              isSelected: false,
+            ),
+            activeIcon: _NavIcon(
+              assetPath: 'assets/icons/navbar/add_filled.svg',
+              isSelected: true,
+            ),
+            label: '',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_outlined),
-            label: 'Notifications',
+            icon: _NavIcon(
+              assetPath: 'assets/icons/navbar/notifications_outlined.svg',
+              isSelected: false,
+            ),
+            activeIcon: _NavIcon(
+              assetPath: 'assets/icons/navbar/notifications_filled.svg',
+              isSelected: true,
+            ),
+            label: '',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: 'Profile',
+            icon: _NavIcon(
+              assetPath: 'assets/icons/navbar/profile_outlined.svg',
+              isSelected: false,
+            ),
+            activeIcon: _NavIcon(
+              assetPath: 'assets/icons/navbar/profile_filled.svg',
+              isSelected: true,
+            ),
+            label: '',
           ),
         ],
       ),
@@ -64,3 +100,25 @@ class CustomBottomNavigationBar extends StatelessWidget {
   }
 }
 
+class _NavIcon extends StatelessWidget {
+  final String assetPath;
+  final bool isSelected;
+
+  const _NavIcon({
+    required this.assetPath,
+    required this.isSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SvgPicture.asset(
+      assetPath,
+      width: 24,
+      height: 24,
+      colorFilter: ColorFilter.mode(
+        isSelected ? const Color(0xFF5B9BD5) : const Color(0xFFB0B0B0),
+        BlendMode.srcIn,
+      ),
+    );
+  }
+}
