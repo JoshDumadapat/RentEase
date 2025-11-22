@@ -24,27 +24,19 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/appicon.png"
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/appicon.png"
-  android_adaptive_icon_foreground: "assets/appicon.png"
-  android_adaptive_icon_background: "#FFFFFF"
+  image_path: "assets/icons/app_icon.png"
 
 flutter_native_splash:
-  color: "#FFFFFF"
+  color: "#ffffff"
+  image: assets/images/splash.png
   android: true
   ios: true
-  image: "assets/appicon.png"
-  android_gravity: center
-  ios_content_mode: scaleAspectFit
-  android_12:
-    color: "#FFFFFF"
-    image: "assets/appicon.png"
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/appicon.png
+    - assets/icons/app_icon.png
+    - assets/images/splash.png
     - assets/landingbg.png
     - assets/logo.png
     - assets/getstarted_imgs/

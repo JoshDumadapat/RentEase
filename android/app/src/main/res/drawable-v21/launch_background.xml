@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
+    <item>
+        <bitmap android:gravity="fill" android:src="@drawable/background"/>
+    </item>
     <item>
         <inset
             android:drawable="@drawable/splash"
-            android:insetLeft="40%"
-            android:insetRight="40%"
-            android:insetTop="40%"
-            android:insetBottom="40%"
-            android:gravity="center" />
+            android:insetLeft="25%"
+            android:insetRight="25%"
+            android:insetTop="25%"
+            android:insetBottom="25%" />
     </item>
 </layer-list>

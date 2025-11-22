@@ -147,9 +147,9 @@ class _BackgroundImageWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Image.asset(
       imagePath,
-      fit: BoxFit.cover,
+      fit: BoxFit.fitWidth,
       width: double.infinity,
-      height: double.infinity,
+      alignment: Alignment.topCenter,
       errorBuilder: (context, error, stackTrace) {
         return Container(
           color: Colors.grey[300],
@@ -173,7 +173,8 @@ class _WhiteArcBackgroundWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
-    final height = screenHeight * 0.48; // 48% of screen height to match design
+    // Responsive height: smaller screens = slightly taller, larger screens = shorter
+    final height = screenHeight * (screenHeight < 700 ? 0.43 : 0.38);
     return Positioned(
       left: 0,
       right: 0,
@@ -278,38 +279,47 @@ class _ContentWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
-    
+    final spacing = screenHeight * 0.012;
+
     return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: 24.0,
-        vertical: isSmallScreen ? 20.0 : 24.0,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const SizedBox(height: 16),
-          // Pagination Indicators Widget
+          // TOP: dots with more top padding to bring them lower and make visible
+          SizedBox(height: spacing * 6),
           _PaginationIndicatorsWidget(
             currentPage: currentPage,
             totalPages: totalPages,
           ),
-          const SizedBox(height: 20),
-          // Title Widget
-          _TitleWidget(title: content.title),
-          const SizedBox(height: 12),
-          // Description Widget
-          _DescriptionWidget(description: content.description),
-          const SizedBox(height: 40),
-          // Next Button Widget
-          _NextButtonWidget(
-            onPressed: onNext,
-            isLastPage: currentPage == totalPages - 1,
+
+          // MIDDLE: title + description, take flexible space with less space from dots
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(height: spacing * 0.1), // Less space between dots and title
+                  _TitleWidget(title: content.title),
+                  SizedBox(height: spacing * 0.8),
+                  _DescriptionWidget(description: content.description),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 1),
-          // Skip Link Widget
-          _SkipLinkWidget(onSkip: onSkip),
-          const SizedBox(height: 20),
+
+          // BOTTOM: buttons with less space from description, reduced space between Next and Skip
+          Column(
+            children: [
+              SizedBox(height: spacing * 0.1), // Less space between description and Next
+              _NextButtonWidget(
+                onPressed: onNext,
+                isLastPage: currentPage == totalPages - 1,
+              ),
+              SizedBox(height: spacing * 1.2), // Reduced space between Next and Skip
+              _SkipLinkWidget(onSkip: onSkip),
+              SizedBox(height: spacing * 3), // More spacing below Skip button
+            ],
+          ),
         ],
       ),
     );
@@ -460,20 +470,18 @@ class _SkipLinkWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onSkip,
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      ),
+    return GestureDetector(
+      onTap: onSkip,
       child: Text(
         'Skip',
         style: TextStyle(
-          fontSize: 14,
+          fontSize: 13,
           fontWeight: FontWeight.w500,
           color: Colors.grey[700],
           decoration: TextDecoration.underline,
           decorationColor: Colors.grey[700],
         ),
+        textAlign: TextAlign.center,
       ),
     );
   }
