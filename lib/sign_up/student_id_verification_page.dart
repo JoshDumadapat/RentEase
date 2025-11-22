@@ -3,27 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// Student ID Verification Page with camera functionality
-/// This page allows users to capture front and back photos of their student ID
 class StudentIDVerificationPage extends StatefulWidget {
   const StudentIDVerificationPage({super.key});
 
   @override
-  State<StudentIDVerificationPage> createState() => _StudentIDVerificationPageState();
+  State<StudentIDVerificationPage> createState() =>
+      _StudentIDVerificationPageState();
 }
 
 class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
-  // Image picker instance
   final ImagePicker _imagePicker = ImagePicker();
-  
-  // Store captured images
+
   XFile? _frontIdImage;
   XFile? _backIdImage;
-  
-  // Track which image is being captured
-  String? _capturingImageType; // 'front' or 'back'
-  
-  // Loading state
+
+  String? _capturingImageType;
+
   bool _isLoading = false;
 
   @override
@@ -31,9 +26,7 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
     return Scaffold(
       body: Stack(
         children: [
-          // Background Image Widget at the top
           _BackgroundImageWidget(),
-          // White Card Background Widget
           _WhiteCardBackgroundWidget(
             child: _StudentIDVerificationContentWidget(
               frontIdImage: _frontIdImage,
@@ -50,44 +43,35 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
     );
   }
 
-  /// Request camera and storage permissions
-  /// Returns true if permissions are granted, false otherwise
   Future<bool> _requestPermissions() async {
     try {
-      // Request camera permission
       final cameraStatus = await Permission.camera.request();
-      
-      // Request photos permission (for gallery access)
-      // On Android 13+, we need photos permission
-      // On iOS, we need photos permission
+
       PermissionStatus photosStatus;
       if (Platform.isAndroid) {
-        // For Android 13+, use photos permission
         photosStatus = await Permission.photos.request();
-        // If photos permission is not available (older Android), try storage
         if (photosStatus.isDenied) {
           photosStatus = await Permission.storage.request();
         }
       } else {
-        // For iOS, use photos permission
         photosStatus = await Permission.photos.request();
       }
 
-      // Check if both permissions are granted
       if (cameraStatus.isGranted && photosStatus.isGranted) {
         return true;
-      } else if (cameraStatus.isPermanentlyDenied || photosStatus.isPermanentlyDenied) {
-        // Show dialog to open app settings
+      } else if (cameraStatus.isPermanentlyDenied ||
+          photosStatus.isPermanentlyDenied) {
         if (mounted) {
           _showPermissionDeniedDialog();
         }
         return false;
       } else {
-        // Permissions denied but not permanently
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Camera and storage permissions are required to capture ID photos.'),
+              content: Text(
+                'Camera and storage permissions are required to capture ID photos.',
+              ),
               backgroundColor: Colors.red,
               duration: Duration(seconds: 3),
             ),
@@ -109,7 +93,6 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
     }
   }
 
-  /// Show dialog when permissions are permanently denied
   void _showPermissionDeniedDialog() {
     showDialog(
       context: context,
@@ -138,8 +121,6 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
     );
   }
 
-  /// Capture image from camera or gallery
-  /// imageType: 'front' or 'back'
   Future<void> _captureImage(String imageType) async {
     setState(() {
       _capturingImageType = imageType;
@@ -147,7 +128,6 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
     });
 
     try {
-      // Request permissions first
       final hasPermission = await _requestPermissions();
       if (!hasPermission) {
         setState(() {
@@ -157,30 +137,44 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
         return;
       }
 
-      // Show dialog to choose camera or gallery
       if (mounted) {
         final source = await showDialog<ImageSource>(
           context: context,
           builder: (BuildContext context) {
             return AlertDialog(
-              title: Text('Capture ${imageType == 'front' ? 'Front' : 'Back'} ID'),
-              content: const Text('Choose an option:'),
-              actions: [
-                TextButton.icon(
-                  onPressed: () => Navigator.of(context).pop(ImageSource.camera),
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text('Camera'),
-                ),
-                TextButton.icon(
-                  onPressed: () => Navigator.of(context).pop(ImageSource.gallery),
-                  icon: const Icon(Icons.photo_library),
-                  label: const Text('Gallery'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-              ],
+              title: Text(
+                'Capture ${imageType == 'front' ? 'Front' : 'Back'} ID',
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Choose an option:'),
+                  const SizedBox(height: 20),
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () =>
+                              Navigator.of(context).pop(ImageSource.camera),
+                          icon: const Icon(Icons.camera_alt),
+                          label: const Text('Camera'),
+                        ),
+                        TextButton.icon(
+                          onPressed: () =>
+                              Navigator.of(context).pop(ImageSource.gallery),
+                          icon: const Icon(Icons.photo_library),
+                          label: const Text('Gallery'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             );
           },
         );
@@ -193,16 +187,14 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
           return;
         }
 
-        // Pick image based on selected source
         final XFile? image = await _imagePicker.pickImage(
           source: source,
-          imageQuality: 85, // Compress image to reduce file size
-          maxWidth: 1920, // Limit image width
-          maxHeight: 1920, // Limit image height
+          imageQuality: 85,
+          maxWidth: 1920,
+          maxHeight: 1920,
         );
 
         if (image != null) {
-          // Show preview and confirmation dialog
           if (mounted) {
             final confirmed = await _showImagePreview(image, imageType);
             if (confirmed) {
@@ -246,116 +238,109 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
     }
   }
 
-  /// Show image preview and ask for confirmation
-  /// Returns true if user confirms, false if they want to retake
   Future<bool> _showImagePreview(XFile image, String imageType) async {
     return await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Title
-                Text(
-                  'Verify your image for upload.',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                const SizedBox(height: 16),
-                // Image preview
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.file(
-                    File(image.path),
-                    width: double.infinity,
-                    height: 300,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        width: double.infinity,
-                        height: 300,
-                        color: Colors.grey[300],
-                        child: const Icon(
-                          Icons.error_outline,
-                          size: 50,
-                          color: Colors.grey,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Action buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Reject button
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).pop(false),
-                      child: Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.red, width: 2),
-                          color: Colors.white,
-                        ),
-                        child: const Icon(
-                          Icons.close,
-                          color: Colors.red,
-                          size: 30,
-                        ),
+                    Text(
+                      'Verify your image for upload.',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[800],
                       ),
                     ),
-                    const SizedBox(width: 40),
-                    // Accept button
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).pop(true),
-                      child: Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.green, width: 2),
-                          color: Colors.white,
-                        ),
-                        child: const Icon(
-                          Icons.check,
-                          color: Colors.green,
-                          size: 30,
-                        ),
+                    const SizedBox(height: 16),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.file(
+                        File(image.path),
+                        width: double.infinity,
+                        height: 300,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: double.infinity,
+                            height: 300,
+                            color: Colors.grey[300],
+                            child: const Icon(
+                              Icons.error_outline,
+                              size: 50,
+                              color: Colors.grey,
+                            ),
+                          );
+                        },
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        GestureDetector(
+                          onTap: () => Navigator.of(context).pop(false),
+                          child: Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.red, width: 2),
+                              color: Colors.white,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.red,
+                              size: 30,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 40),
+                        GestureDetector(
+                          onTap: () => Navigator.of(context).pop(true),
+                          child: Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.green, width: 2),
+                              color: Colors.white,
+                            ),
+                            child: const Icon(
+                              Icons.check,
+                              color: Colors.green,
+                              size: 30,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-        );
-      },
-    ) ?? false;
+              ),
+            );
+          },
+        ) ??
+        false;
   }
 }
 
-/// Widget for displaying the background image at the top
 class _BackgroundImageWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final imageHeight = screenHeight * 0.30;
-    
+
     return Positioned(
       top: 0,
       left: 0,
@@ -378,19 +363,16 @@ class _BackgroundImageWidget extends StatelessWidget {
   }
 }
 
-/// Widget for the white card background with rounded top corners
 class _WhiteCardBackgroundWidget extends StatelessWidget {
   final Widget child;
 
-  const _WhiteCardBackgroundWidget({
-    required this.child,
-  });
+  const _WhiteCardBackgroundWidget({required this.child});
 
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final imageHeight = screenHeight * 0.30;
-    
+
     return Positioned(
       left: 0,
       right: 0,
@@ -410,7 +392,6 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
   }
 }
 
-/// Widget for the student ID verification content
 class _StudentIDVerificationContentWidget extends StatelessWidget {
   final XFile? frontIdImage;
   final XFile? backIdImage;
@@ -436,7 +417,7 @@ class _StudentIDVerificationContentWidget extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenHeight < 700;
     final isNarrowScreen = screenWidth < 360;
-    
+
     return SingleChildScrollView(
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -448,19 +429,14 @@ class _StudentIDVerificationContentWidget extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(height: isSmallScreen ? 4 : 8),
-            // Back button
             _BackButtonWidget(),
             SizedBox(height: isSmallScreen ? 12 : 16),
-            // Logo Widget
             _LogoWidget(),
             SizedBox(height: isSmallScreen ? 16 : 20),
-            // Title Widget
             _TitleWidget(),
             SizedBox(height: isSmallScreen ? 4 : 8),
-            // Description Widget
             _DescriptionWidget(),
             SizedBox(height: isSmallScreen ? 20 : 24),
-            // Front ID Capture Section
             _IDCaptureSectionWidget(
               title: 'Front ID',
               image: frontIdImage,
@@ -469,7 +445,6 @@ class _StudentIDVerificationContentWidget extends StatelessWidget {
               onRetake: onRetakeFront,
             ),
             SizedBox(height: isSmallScreen ? 16 : 20),
-            // Back ID Capture Section
             _IDCaptureSectionWidget(
               title: 'Back ID',
               image: backIdImage,
@@ -478,7 +453,6 @@ class _StudentIDVerificationContentWidget extends StatelessWidget {
               onRetake: onRetakeBack,
             ),
             SizedBox(height: isSmallScreen ? 20 : 24),
-            // Upload ID Photo Button (only enabled when both images are captured)
             _UploadIDButtonWidget(
               isEnabled: frontIdImage != null && backIdImage != null,
               isLoading: isLoading,
@@ -491,7 +465,6 @@ class _StudentIDVerificationContentWidget extends StatelessWidget {
   }
 }
 
-/// Widget for back button
 class _BackButtonWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -506,14 +479,13 @@ class _BackButtonWidget extends StatelessWidget {
   }
 }
 
-/// Widget for the RentEase logo
 class _LogoWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
     final logoHeight = isSmallScreen ? 40.0 : 45.0;
-    
+
     return Center(
       child: Image.asset(
         'assets/sign_in_up/signlogo.png',
@@ -527,13 +499,12 @@ class _LogoWidget extends StatelessWidget {
   }
 }
 
-/// Widget for the Sign Up as Student title
 class _TitleWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
-    
+
     return Text(
       'Sign Up as Student',
       style: TextStyle(
@@ -545,7 +516,6 @@ class _TitleWidget extends StatelessWidget {
   }
 }
 
-/// Widget for the description text
 class _DescriptionWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -561,7 +531,6 @@ class _DescriptionWidget extends StatelessWidget {
   }
 }
 
-/// Widget for ID capture section (Front or Back)
 class _IDCaptureSectionWidget extends StatelessWidget {
   final String title;
   final XFile? image;
@@ -582,7 +551,6 @@ class _IDCaptureSectionWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Title
         Text(
           '$title:',
           style: TextStyle(
@@ -592,7 +560,6 @@ class _IDCaptureSectionWidget extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        // Capture area or preview
         GestureDetector(
           onTap: image == null ? onCapture : null,
           child: Container(
@@ -608,9 +575,7 @@ class _IDCaptureSectionWidget extends StatelessWidget {
               ),
             ),
             child: image == null
-                ? _EmptyCaptureAreaWidget(
-                    onTap: isLoading ? null : onCapture,
-                  )
+                ? _EmptyCaptureAreaWidget(onTap: isLoading ? null : onCapture)
                 : _ImagePreviewWidget(
                     imagePath: image!.path,
                     onRetake: onRetake,
@@ -622,13 +587,10 @@ class _IDCaptureSectionWidget extends StatelessWidget {
   }
 }
 
-/// Widget for empty capture area (shows camera icon)
 class _EmptyCaptureAreaWidget extends StatelessWidget {
   final VoidCallback? onTap;
 
-  const _EmptyCaptureAreaWidget({
-    this.onTap,
-  });
+  const _EmptyCaptureAreaWidget({this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -636,18 +598,11 @@ class _EmptyCaptureAreaWidget extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.camera_alt,
-            size: 50,
-            color: Colors.grey[400],
-          ),
+          Icon(Icons.camera_alt, size: 50, color: Colors.grey[400]),
           const SizedBox(height: 8),
           Text(
             'Tap to capture',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[600],
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
         ],
       ),
@@ -655,21 +610,16 @@ class _EmptyCaptureAreaWidget extends StatelessWidget {
   }
 }
 
-/// Widget for image preview
 class _ImagePreviewWidget extends StatelessWidget {
   final String imagePath;
   final VoidCallback onRetake;
 
-  const _ImagePreviewWidget({
-    required this.imagePath,
-    required this.onRetake,
-  });
+  const _ImagePreviewWidget({required this.imagePath, required this.onRetake});
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Image
         ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: Image.file(
@@ -691,7 +641,6 @@ class _ImagePreviewWidget extends StatelessWidget {
             },
           ),
         ),
-        // Retake button overlay
         Positioned(
           top: 8,
           right: 8,
@@ -703,11 +652,7 @@ class _ImagePreviewWidget extends StatelessWidget {
                 color: Colors.black54,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(
-                Icons.refresh,
-                color: Colors.white,
-                size: 20,
-              ),
+              child: const Icon(Icons.refresh, color: Colors.white, size: 20),
             ),
           ),
         ),
@@ -716,7 +661,6 @@ class _ImagePreviewWidget extends StatelessWidget {
   }
 }
 
-/// Widget for Upload ID Photo button
 class _UploadIDButtonWidget extends StatelessWidget {
   final bool isEnabled;
   final bool isLoading;
@@ -730,14 +674,13 @@ class _UploadIDButtonWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
-    
+
     return SizedBox(
       width: double.infinity,
       height: isSmallScreen ? 44 : 48,
       child: ElevatedButton(
         onPressed: isEnabled && !isLoading
             ? () {
-                // TODO: Handle upload logic
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('ID photos uploaded successfully!'),
@@ -765,13 +708,9 @@ class _UploadIDButtonWidget extends StatelessWidget {
               )
             : const Text(
                 'Upload ID Photo',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
       ),
     );
   }
 }
-
