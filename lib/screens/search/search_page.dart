@@ -29,7 +29,17 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   void _onFilterChanged() {
-    setState(() {});
+    // CRITICAL FIX: Defer setState() until after the current build frame completes.
+    // This prevents "setState() called during build" errors when FilterSheet's
+    // initState() calls resetTemporaryFilters() which triggers notifyListeners()
+    // synchronously during the modal bottom sheet's build phase.
+    // Using addPostFrameCallback ensures the state update happens after the
+    // widget tree is fully built, making it safe to call setState().
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   @override
@@ -342,9 +352,7 @@ class _SearchPageState extends State<SearchPage> {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? colorScheme.primary
-                      : colorScheme.surface,
+                  color: isSelected ? colorScheme.primary : colorScheme.surface,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: isSelected
@@ -470,7 +478,9 @@ class _SearchPageState extends State<SearchPage> {
           child: ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: _filteredListings.length > 3 ? 3 : _filteredListings.length,
+            itemCount: _filteredListings.length > 3
+                ? 3
+                : _filteredListings.length,
             itemBuilder: (context, index) {
               return Padding(
                 padding: EdgeInsets.only(bottom: index == 2 ? 0 : 16),
@@ -480,8 +490,9 @@ class _SearchPageState extends State<SearchPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) =>
-                            ListingDetailsPage(listing: _filteredListings[index]),
+                        builder: (context) => ListingDetailsPage(
+                          listing: _filteredListings[index],
+                        ),
                       ),
                     );
                   },
