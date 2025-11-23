@@ -18,7 +18,6 @@ class PostsPage extends StatefulWidget {
 
 class _PostsPageState extends State<PostsPage> {
   late List<ListingModel> _listings;
-  int _currentBottomNavIndex = 0;
 
   @override
   void initState() {
@@ -67,14 +66,6 @@ class _PostsPageState extends State<PostsPage> {
                 );
               },
             ),
-      bottomNavigationBar: CustomBottomNavigationBar(
-        currentIndex: _currentBottomNavIndex,
-        onTap: (index) {
-          setState(() {
-            _currentBottomNavIndex = index;
-          });
-        },
-      ),
     );
   }
 }

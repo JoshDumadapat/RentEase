@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/models/listing_model.dart';
-import 'package:rentease_app/widgets/bottom_navigation_bar.dart';
 
 class ListingDetailsPage extends StatefulWidget {
   final ListingModel listing;
@@ -17,7 +16,6 @@ class ListingDetailsPage extends StatefulWidget {
 
 class _ListingDetailsPageState extends State<ListingDetailsPage> {
   int _currentImageIndex = 0;
-  int _currentBottomNavIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -104,14 +102,6 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: CustomBottomNavigationBar(
-        currentIndex: _currentBottomNavIndex,
-        onTap: (index) {
-          setState(() {
-            _currentBottomNavIndex = index;
-          });
-        },
       ),
     );
   }

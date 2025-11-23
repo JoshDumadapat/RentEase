@@ -94,8 +94,10 @@ class _FilterSheetState extends State<FilterSheet> {
               Expanded(
                 child: TextButton(
                   onPressed: () {
+                    // Clear all filters and reset to default values
+                    // Note: We do NOT close the sheet here - user can continue
+                    // adjusting filters or click Apply/Cancel to close
                     _filterModel.clearFilters();
-                    Navigator.of(context).pop();
                   },
                   child: Text(
                     'Clear Filters',

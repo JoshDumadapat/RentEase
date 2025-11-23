@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:rentease_app/sign_up/sign_up_page.dart';
-import 'package:rentease_app/screens/home/home_page.dart';
+import 'package:rentease_app/main_app.dart';
 
 /// Sign In Page with form and authentication options
 class SignInPage extends StatefulWidget {
@@ -445,7 +445,7 @@ class _SignInButtonWidget extends StatelessWidget {
           // For now, navigate directly to HomePage
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) => const HomePage(),
+              builder: (context) => const MainApp(),
             ),
           );
         },

@@ -15,7 +15,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _currentBottomNavIndex = 0;
   final List<CategoryModel> _categories = CategoryModel.getMockCategories();
   final List<ListingModel> _listings = ListingModel.getMockListings();
 
@@ -56,27 +55,6 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 16),
           ],
         ),
-      ),
-      bottomNavigationBar: CustomBottomNavigationBar(
-        currentIndex: _currentBottomNavIndex,
-        onTap: (index) {
-          if (index != _currentBottomNavIndex) {
-            if (index == 1) {
-              // Navigate to Search Page
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SearchPage(),
-                ),
-              );
-            } else {
-              // For other tabs, just update the index
-              setState(() {
-                _currentBottomNavIndex = index;
-              });
-            }
-          }
-        },
       ),
     );
   }
