@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:rentease_app/screens/home/home_page.dart';
 import 'package:rentease_app/screens/search/search_page.dart';
+import 'package:rentease_app/screens/add_property/add_property_page.dart';
+import 'package:rentease_app/screens/notifications/notifications_page.dart';
 import 'package:rentease_app/widgets/bottom_navigation_bar.dart';
 
 class MainApp extends StatefulWidget {
@@ -16,8 +18,8 @@ class _MainAppState extends State<MainApp> {
   final List<Widget> _pages = [
     const HomePage(),
     const SearchPage(),
-    const _PlaceholderPage(title: 'Add', icon: Icons.add),
-    const _PlaceholderPage(title: 'Notifications', icon: Icons.notifications),
+    const AddPropertyPage(),
+    const NotificationsPage(),
     const _PlaceholderPage(title: 'Profile', icon: Icons.person),
   ];
 
