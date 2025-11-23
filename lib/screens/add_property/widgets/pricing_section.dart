@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// Section for property pricing information
-/// 
+///
 /// Includes:
 /// - Monthly rent
 /// - Deposit (optional)
@@ -43,9 +43,7 @@ class PricingSection extends StatelessWidget {
       children: [
         Text(
           'Pricing',
-          style: textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 24),
         // Monthly Rent
@@ -112,9 +110,7 @@ class PricingSection extends StatelessWidget {
         // Utility Toggles
         Text(
           'Utilities Included',
-          style: textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+          style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 12),
         _buildUtilityToggle(
@@ -182,15 +178,12 @@ class PricingSection extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
-            fontSize: 16,
-            color: colorScheme.onSurface,
-          ),
+          style: TextStyle(fontSize: 16, color: colorScheme.onSurface),
         ),
         Switch(
           value: value,
           onChanged: onChanged,
-          activeColor: colorScheme.primary,
+          activeThumbColor: colorScheme.primary,
         ),
       ],
     );
@@ -229,10 +222,7 @@ class PricingSection extends StatelessWidget {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: colorScheme.primary,
-          width: 2,
-        ),
+        borderSide: BorderSide(color: colorScheme.primary, width: 2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -242,10 +232,7 @@ class PricingSection extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Colors.red, width: 2),
       ),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 12,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     );
   }
 
@@ -292,4 +279,3 @@ class _CurrencyInputFormatter extends TextInputFormatter {
     return chunks.join(',').split('').reversed.join();
   }
 }
-

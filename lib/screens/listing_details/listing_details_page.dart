@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/models/listing_model.dart';
 
 class ListingDetailsPage extends StatefulWidget {
   final ListingModel listing;
 
-  const ListingDetailsPage({
-    super.key,
-    required this.listing,
-  });
+  const ListingDetailsPage({super.key, required this.listing});
 
   @override
   State<ListingDetailsPage> createState() => _ListingDetailsPageState();
@@ -125,11 +121,7 @@ class _ImageCarousel extends StatelessWidget {
         height: 300,
         color: Colors.grey[300],
         child: const Center(
-          child: Icon(
-            Icons.image,
-            size: 80,
-            color: Colors.grey,
-          ),
+          child: Icon(Icons.image, size: 80, color: Colors.grey),
         ),
       );
     }
@@ -151,11 +143,7 @@ class _ImageCarousel extends StatelessWidget {
                   return Container(
                     color: Colors.grey[300],
                     child: const Center(
-                      child: Icon(
-                        Icons.image,
-                        size: 80,
-                        color: Colors.grey,
-                      ),
+                      child: Icon(Icons.image, size: 80, color: Colors.grey),
                     ),
                   );
                 },
@@ -194,9 +182,7 @@ class _ImageCarousel extends StatelessWidget {
 class _PropertyDetailsSection extends StatelessWidget {
   final ListingModel listing;
 
-  const _PropertyDetailsSection({
-    required this.listing,
-  });
+  const _PropertyDetailsSection({required this.listing});
 
   @override
   Widget build(BuildContext context) {
@@ -257,11 +243,7 @@ class _DetailItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Icon(
-          icon,
-          size: 32,
-          color: Colors.blue[700],
-        ),
+        Icon(icon, size: 32, color: Colors.blue[700]),
         const SizedBox(height: 8),
         Text(
           value,
@@ -272,13 +254,7 @@ class _DetailItem extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
       ],
     );
   }
@@ -287,9 +263,7 @@ class _DetailItem extends StatelessWidget {
 class _DescriptionSection extends StatelessWidget {
   final String description;
 
-  const _DescriptionSection({
-    required this.description,
-  });
+  const _DescriptionSection({required this.description});
 
   @override
   Widget build(BuildContext context) {
@@ -307,11 +281,7 @@ class _DescriptionSection extends StatelessWidget {
         const SizedBox(height: 12),
         Text(
           description,
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.grey[700],
-            height: 1.5,
-          ),
+          style: TextStyle(fontSize: 16, color: Colors.grey[700], height: 1.5),
         ),
       ],
     );
@@ -322,10 +292,7 @@ class _OwnerSection extends StatelessWidget {
   final String ownerName;
   final bool isVerified;
 
-  const _OwnerSection({
-    required this.ownerName,
-    required this.isVerified,
-  });
+  const _OwnerSection({required this.ownerName, required this.isVerified});
 
   @override
   Widget build(BuildContext context) {
@@ -356,10 +323,7 @@ class _OwnerSection extends StatelessWidget {
               children: [
                 const Text(
                   'Listed by',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                  ),
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 const SizedBox(height: 4),
                 Row(
@@ -374,11 +338,7 @@ class _OwnerSection extends StatelessWidget {
                     ),
                     if (isVerified) ...[
                       const SizedBox(width: 8),
-                      Icon(
-                        Icons.verified,
-                        size: 20,
-                        color: Colors.blue[600],
-                      ),
+                      Icon(Icons.verified, size: 20, color: Colors.blue[600]),
                     ],
                   ],
                 ),
@@ -388,9 +348,7 @@ class _OwnerSection extends StatelessWidget {
           ElevatedButton(
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Contact feature coming soon!'),
-                ),
+                const SnackBar(content: Text('Contact feature coming soon!')),
               );
             },
             style: ElevatedButton.styleFrom(
@@ -416,11 +374,9 @@ class _ActionButtons extends StatelessWidget {
         Expanded(
           child: OutlinedButton(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Listing saved!'),
-                ),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Listing saved!')));
             },
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -460,10 +416,7 @@ class _ActionButtons extends StatelessWidget {
             ),
             child: const Text(
               'Schedule Viewing',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ),
         ),
@@ -471,4 +424,3 @@ class _ActionButtons extends StatelessWidget {
     );
   }
 }
-

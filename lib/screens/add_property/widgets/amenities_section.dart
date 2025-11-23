@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Section for property amenities and rules
-/// 
+///
 /// Includes checkboxes/toggles for:
 /// - Private CR
 /// - Shared CR
@@ -68,9 +68,7 @@ class AmenitiesSection extends StatelessWidget {
       children: [
         Text(
           'Amenities & Rules',
-          style: textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 24),
         // Amenities Grid
@@ -172,25 +170,18 @@ class AmenitiesSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(
-              icon,
-              size: 20,
-              color: colorScheme.onSurfaceVariant,
-            ),
+            Icon(icon, size: 20, color: colorScheme.onSurfaceVariant),
             const SizedBox(width: 12),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 16,
-                color: colorScheme.onSurface,
-              ),
+              style: TextStyle(fontSize: 16, color: colorScheme.onSurface),
             ),
           ],
         ),
         Switch(
           value: value,
           onChanged: onChanged,
-          activeColor: colorScheme.primary,
+          activeThumbColor: colorScheme.primary,
         ),
       ],
     );
@@ -233,16 +224,9 @@ class AmenitiesSection extends StatelessWidget {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: colorScheme.primary,
-          width: 2,
-        ),
+        borderSide: BorderSide(color: colorScheme.primary, width: 2),
       ),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 12,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     );
   }
 }
-

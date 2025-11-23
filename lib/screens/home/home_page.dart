@@ -4,8 +4,6 @@ import 'package:rentease_app/models/category_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/posts/posts_page.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
-import 'package:rentease_app/screens/search/search_page.dart';
-import 'package:rentease_app/widgets/bottom_navigation_bar.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});

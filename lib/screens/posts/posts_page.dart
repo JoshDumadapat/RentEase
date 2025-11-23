@@ -2,15 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:rentease_app/models/category_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
-import 'package:rentease_app/widgets/bottom_navigation_bar.dart';
 
 class PostsPage extends StatefulWidget {
   final CategoryModel category;
 
-  const PostsPage({
-    super.key,
-    required this.category,
-  });
+  const PostsPage({super.key, required this.category});
 
   @override
   State<PostsPage> createState() => _PostsPageState();
@@ -74,10 +70,7 @@ class _ListingCard extends StatelessWidget {
   final ListingModel listing;
   final VoidCallback onTap;
 
-  const _ListingCard({
-    required this.listing,
-    required this.onTap,
-  });
+  const _ListingCard({required this.listing, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -102,7 +95,9 @@ class _ListingCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
               child: Stack(
                 children: [
                   listing.imagePaths.isNotEmpty
@@ -229,7 +224,7 @@ class _ListingCard extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                           color: Colors.black87,
                         ),
-                        ),
+                      ),
                       Row(
                         children: [
                           Text(
@@ -264,9 +259,7 @@ class _ListingCard extends StatelessWidget {
 class _EmptyStateWidget extends StatelessWidget {
   final String categoryName;
 
-  const _EmptyStateWidget({
-    required this.categoryName,
-  });
+  const _EmptyStateWidget({required this.categoryName});
 
   @override
   Widget build(BuildContext context) {
@@ -276,11 +269,7 @@ class _EmptyStateWidget extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.search_off,
-              size: 80,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.search_off, size: 80, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
               'No listings found',
@@ -294,10 +283,7 @@ class _EmptyStateWidget extends StatelessWidget {
             Text(
               'There are no $categoryName listings available at the moment.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             ),
           ],
         ),
@@ -305,4 +291,3 @@ class _EmptyStateWidget extends StatelessWidget {
     );
   }
 }
-

@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:rentease_app/models/category_model.dart';
 import 'package:rentease_app/models/filter_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
-import 'package:rentease_app/screens/home/home_page.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
-import 'package:rentease_app/widgets/bottom_navigation_bar.dart';
 import 'package:rentease_app/widgets/filter_sheet.dart';
 
 class SearchPage extends StatefulWidget {
