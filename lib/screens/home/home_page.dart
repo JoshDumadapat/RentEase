@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:rentease_app/models/category_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/posts/posts_page.dart';
@@ -806,16 +808,18 @@ class _ModernListingCard extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _HeartActionIcon(label: 'Like'),
+                        _HeartActionIcon(likeCount: 24),
                         _ModernActionIcon(
                           assetPath: 'assets/icons/navbar/message_outlined.svg',
-                          label: 'Comment',
+                          count: 8,
                           onTap: () {},
                         ),
                         _ModernActionIcon(
                           assetPath: 'assets/icons/navbar/share_outlined.svg',
-                          label: 'Share',
-                          onTap: () {},
+                          count: 3,
+                          onTap: () {
+                            _showShareModal(context, listing);
+                          },
                         ),
                       ],
                     ),
@@ -828,12 +832,78 @@ class _ModernListingCard extends StatelessWidget {
       ),
     );
   }
+
+  void _showShareModal(BuildContext context, ListingModel listing) {
+    const postLink = "https://example.com/post/123";
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(20),
+            ),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  _ShareOption(
+                    icon: Icons.link,
+                    title: 'Copy link',
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: postLink));
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Link copied to clipboard'),
+                          duration: Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _ShareOption(
+                    icon: Icons.share,
+                    title: 'Share to other apps',
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await Share.share(
+                        postLink,
+                        subject: listing.title,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _HeartActionIcon extends StatefulWidget {
-  final String label;
+  final int likeCount;
 
-  const _HeartActionIcon({required this.label});
+  const _HeartActionIcon({required this.likeCount});
 
   @override
   State<_HeartActionIcon> createState() => _HeartActionIconState();
@@ -883,12 +953,15 @@ class _HeartActionIconState extends State<_HeartActionIcon>
         highlightColor: Colors.blue.withValues(alpha: 0.05),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               AnimatedBuilder(
                 animation: _scaleAnimation,
                 builder: (context, child) {
+                  final iconColor = _isSaved
+                      ? const Color(0xFFE91E63)
+                      : const Color(0xFFB0B0B0);
                   return Transform.scale(
                     scale: _scaleAnimation.value,
                     child: SvgPicture.asset(
@@ -898,22 +971,22 @@ class _HeartActionIconState extends State<_HeartActionIcon>
                       width: 20,
                       height: 20,
                       colorFilter: ColorFilter.mode(
-                        _isSaved
-                            ? const Color(0xFFE91E63)
-                            : const Color(0xFFB0B0B0),
+                        iconColor,
                         BlendMode.srcIn,
                       ),
                     ),
                   );
                 },
               ),
-              const SizedBox(height: 4),
+              const SizedBox(width: 6),
               Text(
-                widget.label,
+                widget.likeCount.toString(),
                 style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey[600],
-                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                  color: _isSaved
+                      ? const Color(0xFFE91E63)
+                      : const Color(0xFFB0B0B0),
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -926,12 +999,12 @@ class _HeartActionIconState extends State<_HeartActionIcon>
 
 class _ModernActionIcon extends StatelessWidget {
   final String assetPath;
-  final String label;
+  final int count;
   final VoidCallback onTap;
 
   const _ModernActionIcon({
     required this.assetPath,
-    required this.label,
+    required this.count,
     required this.onTap,
   });
 
@@ -946,7 +1019,7 @@ class _ModernActionIcon extends StatelessWidget {
         highlightColor: Colors.blue.withValues(alpha: 0.05),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               SvgPicture.asset(
@@ -958,13 +1031,57 @@ class _ModernActionIcon extends StatelessWidget {
                   BlendMode.srcIn,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(width: 6),
               Text(
-                label,
+                count.toString(),
                 style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey[600],
+                  fontSize: 14,
+                  color: const Color(0xFFB0B0B0),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ShareOption extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  const _ShareOption({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 24,
+                color: Colors.black87,
+              ),
+              const SizedBox(width: 16),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
                   fontWeight: FontWeight.w500,
+                  color: Colors.black87,
                 ),
               ),
             ],
