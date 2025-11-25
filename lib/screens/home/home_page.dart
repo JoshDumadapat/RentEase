@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:rentease_app/models/category_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
+import 'package:rentease_app/models/looking_for_post_model.dart';
 import 'package:rentease_app/screens/posts/posts_page.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
+import 'package:rentease_app/screens/home/widgets/home_skeleton.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -14,72 +17,205 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  bool _isLoading = true;
+  bool _showTabs = true;
+  final ScrollController _listingsScrollController = ScrollController();
+  final ScrollController _lookingForScrollController = ScrollController();
+  final ValueNotifier<bool> _tabsVisibilityNotifier = ValueNotifier<bool>(true);
+
   final List<CategoryModel> _categories = CategoryModel.getMockCategories();
   final List<ListingModel> _listings = ListingModel.getMockListings();
+  final List<LookingForPostModel> _lookingForPosts =
+      LookingForPostModel.getMockLookingForPosts();
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_onTabChanged);
+    _setupScrollListeners();
+    _loadData();
+  }
+
+  void _onTabChanged() {
+    if (mounted) {
+      _handleScroll();
+    }
+  }
+
+  void _setupScrollListeners() {
+    _listingsScrollController.addListener(_handleScroll);
+
+    _lookingForScrollController.addListener(_handleScroll);
+  }
+
+  void _handleScroll() {
+    final ScrollController activeController = _tabController.index == 0
+        ? _listingsScrollController
+        : _lookingForScrollController;
+
+    if (!activeController.hasClients) return;
+
+    final double currentScrollPosition = activeController.position.pixels;
+    final direction = activeController.position.userScrollDirection;
+
+    final bool shouldShow =
+        currentScrollPosition <= 0 || direction == ScrollDirection.forward;
+
+    if (_showTabs != shouldShow) {
+      setState(() {
+        _showTabs = shouldShow;
+      });
+      _tabsVisibilityNotifier.value = shouldShow;
+    }
+  }
+
+  Future<void> _loadData() async {
+    await Future.delayed(const Duration(milliseconds: 1200));
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _listingsScrollController.removeListener(_handleScroll);
+    _lookingForScrollController.removeListener(_handleScroll);
+    _listingsScrollController.dispose();
+    _lookingForScrollController.dispose();
+    _tabsVisibilityNotifier.dispose();
+    _tabController.removeListener(_onTabChanged);
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const HomeSkeleton();
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: _buildAppBar(),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _WelcomeSection(),
-            const SizedBox(height: 24),
-            _FeaturedCategoriesSection(
-              categories: _categories,
-              onCategoryTap: (category) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => PostsPage(category: category),
-                  ),
-                );
-              },
+      body: NestedScrollView(
+        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
+          return [
+            SliverAppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              pinned: true,
+              floating: false,
+              leading: Padding(
+                padding: const EdgeInsets.only(left: 16.0),
+                child: Image.asset(
+                  'assets/logo.png',
+                  height: 40,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(Icons.home, color: Colors.blue);
+                  },
+                ),
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.menu, color: Colors.black87),
+                  onPressed: () {},
+                ),
+                const SizedBox(width: 8),
+              ],
             ),
-            const SizedBox(height: 32),
-            _VisitListingsSection(
-              listings: _listings,
-              onListingTap: (listing) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ListingDetailsPage(listing: listing),
+
+            SliverPersistentHeader(
+              pinned: false,
+              floating: false,
+              delegate: _ScrollBasedTabBarDelegate(
+                tabBar: TabBar(
+                  controller: _tabController,
+                  labelColor: Colors.blue[700],
+                  unselectedLabelColor: Colors.grey[600],
+                  indicatorColor: Colors.blue[700],
+                  indicatorWeight: 2.5,
+                  labelStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
                   ),
-                );
-              },
+                  unselectedLabelStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  tabs: const [
+                    Tab(text: 'Listings'),
+                    Tab(text: 'Looking For'),
+                  ],
+                ),
+                visibilityNotifier: _tabsVisibilityNotifier,
+                height: 40.0,
+              ),
             ),
-            const SizedBox(height: 16),
-          ],
+          ];
+        },
+        body: TabBarView(
+          controller: _tabController,
+          children: [_buildListingsTab(), _buildLookingForTab()],
         ),
       ),
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      leading: Padding(
-        padding: const EdgeInsets.only(left: 16.0),
-        child: Image.asset(
-          'assets/logo.png',
-          height: 40,
-          errorBuilder: (context, error, stackTrace) {
-            return const Icon(Icons.home, color: Colors.blue);
-          },
+  Widget _buildListingsTab() {
+    return CustomScrollView(
+      controller: _listingsScrollController,
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+            child: _WelcomeSection(),
+          ),
         ),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.menu, color: Colors.black87),
-          onPressed: () {},
+        const SliverToBoxAdapter(child: SizedBox(height: 20)),
+
+        SliverToBoxAdapter(
+          child: _FeaturedCategoriesSection(
+            categories: _categories,
+            onCategoryTap: (category) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PostsPage(category: category),
+                ),
+              );
+            },
+          ),
         ),
-        const SizedBox(width: 8),
+        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+
+        SliverToBoxAdapter(
+          child: _VisitListingsSection(
+            listings: _listings,
+            onListingTap: (listing) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ListingDetailsPage(listing: listing),
+                ),
+              );
+            },
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 16)),
       ],
+    );
+  }
+
+  Widget _buildLookingForTab() {
+    return _LookingForSection(
+      posts: _lookingForPosts,
+      scrollController: _lookingForScrollController,
     );
   }
 }
@@ -87,49 +223,46 @@ class _HomePageState extends State<HomePage> {
 class _WelcomeSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Welcome to RentEase!',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Welcome to RentEase!',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 6),
+        RichText(
+          text: TextSpan(
             style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              fontSize: 14,
+              color: Colors.grey[600],
+              height: 1.4,
             ),
-          ),
-          const SizedBox(height: 8),
-          RichText(
-            text: TextSpan(
-              style: const TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-                height: 1.5,
+            children: [
+              const TextSpan(text: 'Start your '),
+              TextSpan(
+                text: 'journey',
+                style: TextStyle(
+                  color: Colors.blue[400],
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-              children: [
-                const TextSpan(text: 'Start your '),
-                TextSpan(
-                  text: 'journey',
-                  style: TextStyle(
-                    color: Colors.blue[400],
-                    fontWeight: FontWeight.w500,
-                  ),
+              const TextSpan(text: ' by choosing your '),
+              TextSpan(
+                text: 'property preference.',
+                style: TextStyle(
+                  color: Colors.blue[400],
+                  fontWeight: FontWeight.w500,
                 ),
-                const TextSpan(text: ' by choosing your '),
-                TextSpan(
-                  text: 'property preference.',
-                  style: TextStyle(
-                    color: Colors.blue[400],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -835,7 +968,7 @@ class _ModernListingCard extends StatelessWidget {
 
   void _showShareModal(BuildContext context, ListingModel listing) {
     const postLink = "https://example.com/post/123";
-    
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -843,9 +976,7 @@ class _ModernListingCard extends StatelessWidget {
         return Container(
           decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(20),
-            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: SafeArea(
             child: Padding(
@@ -883,10 +1014,7 @@ class _ModernListingCard extends StatelessWidget {
                     title: 'Share to other apps',
                     onTap: () async {
                       Navigator.pop(context);
-                      await Share.share(
-                        postLink,
-                        subject: listing.title,
-                      );
+                      await Share.share(postLink, subject: listing.title);
                     },
                   ),
                   const SizedBox(height: 20),
@@ -970,10 +1098,7 @@ class _HeartActionIconState extends State<_HeartActionIcon>
                           : 'assets/icons/navbar/heart_outlined.svg',
                       width: 20,
                       height: 20,
-                      colorFilter: ColorFilter.mode(
-                        iconColor,
-                        BlendMode.srcIn,
-                      ),
+                      colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
                     ),
                   );
                 },
@@ -1070,11 +1195,7 @@ class _ShareOption extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           child: Row(
             children: [
-              Icon(
-                icon,
-                size: 24,
-                color: Colors.black87,
-              ),
+              Icon(icon, size: 24, color: Colors.black87),
               const SizedBox(width: 16),
               Text(
                 title,
@@ -1089,5 +1210,263 @@ class _ShareOption extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _LookingForSection extends StatelessWidget {
+  final List<LookingForPostModel> posts;
+  final ScrollController? scrollController;
+
+  const _LookingForSection({required this.posts, this.scrollController});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      controller: scrollController,
+      slivers: [
+        // Header Section
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Looking For',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Posts from renters looking for properties',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 8)),
+        // Posts List
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate((context, index) {
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom: index == posts.length - 1 ? 24 : 16,
+                ),
+                child: _LookingForPostCard(post: posts[index]),
+              );
+            }, childCount: posts.length),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LookingForPostCard extends StatelessWidget {
+  final LookingForPostModel post;
+
+  const _LookingForPostCard({required this.post});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              spreadRadius: 0,
+              blurRadius: 12,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: Colors.blue[100],
+                    child: Text(
+                      post.username[0].toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[700],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          post.username,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          post.date,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                post.description,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.black87,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Divider(height: 1, thickness: 1, color: Colors.grey[200]),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _InfoChip(
+                    icon: Icons.location_on_rounded,
+                    text: post.location,
+                  ),
+                  const SizedBox(width: 12),
+                  _InfoChip(icon: Icons.home_rounded, text: post.propertyType),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _InfoChip(
+                    icon: Icons.attach_money_rounded,
+                    text: post.budget,
+                    isBudget: true,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final bool isBudget;
+
+  const _InfoChip({
+    required this.icon,
+    required this.text,
+    this.isBudget = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isBudget ? Colors.green[50] : Colors.blue[50],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: isBudget ? Colors.green[700] : Colors.blue[700],
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: isBudget ? Colors.green[700] : Colors.blue[700],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScrollBasedTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+  final ValueNotifier<bool> visibilityNotifier;
+  final double height;
+
+  _ScrollBasedTabBarDelegate({
+    required this.tabBar,
+    required this.visibilityNotifier,
+    this.height = 40.0,
+  });
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: visibilityNotifier,
+      builder: (context, isVisible, child) {
+        return Container(
+          height: height,
+          color: Colors.white,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 250),
+            opacity: isVisible ? 1.0 : 0.0,
+            child: tabBar,
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  bool shouldRebuild(_ScrollBasedTabBarDelegate oldDelegate) {
+    return tabBar != oldDelegate.tabBar ||
+        height != oldDelegate.height ||
+        visibilityNotifier != oldDelegate.visibilityNotifier;
   }
 }

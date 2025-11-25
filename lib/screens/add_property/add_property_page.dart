@@ -325,10 +325,15 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
         automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: Text(
           'Add Property',
           style: textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
+            color: Colors.black87,
           ),
         ),
         centerTitle: true,
