@@ -4,125 +4,237 @@ import 'package:rentease_app/utils/time_ago.dart';
 
 /// Notification Tile Widget
 /// 
-/// Displays a single notification item with:
-/// - Profile avatar
-/// - Notification text (like/comment)
+/// Displays a single notification item matching the reference design:
+/// - Profile avatar with overlay icon (emoji, person icon, speech bubble)
+/// - Notification text
 /// - Time ago
-/// - Read/unread indicator
-/// - Remove button
-/// - Swipe actions (optional)
+/// - Minimal and aesthetic design
 class NotificationTile extends StatelessWidget {
   final NotificationModel notification;
-  final VoidCallback onTap;
-  final VoidCallback onRemove;
-  final VoidCallback? onToggleRead;
+  final VoidCallback? onTap;
 
   const NotificationTile({
     super.key,
     required this.notification,
-    required this.onTap,
-    required this.onRemove,
-    this.onToggleRead,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    // Skip if friend request was removed
+    if (notification.type == NotificationType.friendRequest && 
+        notification.requestRemoved == true) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        child: Text(
+          'Request removed',
+          style: TextStyle(
+            fontSize: 14,
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+          ),
+        ),
+      );
+    }
 
-    return Dismissible(
-      key: Key(notification.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.error,
-        ),
-        child: const Icon(
-          Icons.delete_outline,
-          color: Colors.white,
-          size: 24,
-        ),
-      ),
-      onDismissed: (_) => onRemove(),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 8,
-        ),
-        leading: Stack(
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: theme.colorScheme.primaryContainer,
-              child: Text(
-                notification.actorName[0].toUpperCase(),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
-              ),
-            ),
-            if (!notification.read)
-              Positioned(
-                right: 0,
-                top: 0,
-                child: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: theme.colorScheme.surface,
-                      width: 2,
+            // Profile picture with overlay icon
+            _buildAvatarWithOverlay(context, isDark),
+            const SizedBox(width: 12),
+            // Notification content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildNotificationText(context, isDark),
+                  const SizedBox(height: 4),
+                  Text(
+                    TimeAgo.format(notification.timestamp, includeAgo: false),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
                     ),
                   ),
-                ),
+                  // Show reaction count if available
+                  if (notification.reactionCount != null && 
+                      notification.reactionCount! > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        '${notification.reactionCount} Reactions',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                ],
               ),
+            ),
           ],
         ),
-        title: Text(
-          _buildNotificationText(),
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: notification.read ? FontWeight.normal : FontWeight.w500,
-            color: theme.colorScheme.onSurface,
-          ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            TimeAgo.format(notification.timestamp),
-            style: TextStyle(
-              fontSize: 13,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
-          ),
-        ),
-        trailing: IconButton(
-          icon: const Icon(Icons.close, size: 18),
-          onPressed: onRemove,
-          tooltip: 'Remove',
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-        ),
-        onTap: onTap,
       ),
     );
   }
 
-  String _buildNotificationText() {
-    if (notification.type == NotificationType.like) {
-      return '${notification.actorName} liked "${notification.postTitle}"';
-    } else {
-      return '${notification.actorName} commented "${notification.commentText}" on "${notification.postTitle}"';
+  Widget _buildAvatarWithOverlay(BuildContext context, bool isDark) {
+    // Build avatar
+    Widget avatar = CircleAvatar(
+      radius: 24,
+      backgroundColor: isDark ? Colors.grey[800] : Colors.grey[300],
+      child: notification.actorAvatarUrl != null
+          ? ClipOval(
+              child: Image.network(
+                notification.actorAvatarUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => _buildInitialsAvatar(context, isDark),
+              ),
+            )
+          : _buildInitialsAvatar(context, isDark),
+    );
+
+    // Build overlay icon
+    Widget? overlayIcon = _buildOverlayIcon(context, isDark);
+
+    if (overlayIcon != null) {
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          avatar,
+          Positioned(
+            bottom: -2,
+            left: -2,
+            child: Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[900] : Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: Center(child: overlayIcon),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return avatar;
+  }
+
+  Widget _buildInitialsAvatar(BuildContext context, bool isDark) {
+    final initials = notification.actorName.isNotEmpty
+        ? notification.actorName[0].toUpperCase()
+        : '?';
+    
+    return Text(
+      initials,
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w500,
+        color: isDark ? Colors.grey[300] : Colors.grey[700],
+      ),
+    );
+  }
+
+  Widget? _buildOverlayIcon(BuildContext context, bool isDark) {
+    switch (notification.type) {
+      case NotificationType.reaction:
+        if (notification.reactionEmoji != null) {
+          return Text(
+            notification.reactionEmoji!,
+            style: const TextStyle(fontSize: 14),
+          );
+        }
+        return Icon(
+          Icons.favorite,
+          size: 14,
+          color: Colors.red,
+        );
+      case NotificationType.friendRequest:
+        return Icon(
+          Icons.person_add,
+          size: 14,
+          color: isDark ? Colors.blue[300] : Colors.blue[600],
+        );
+      case NotificationType.comment:
+      case NotificationType.mention:
+        return Icon(
+          Icons.comment,
+          size: 14,
+          color: isDark ? Colors.green[300] : Colors.green[600],
+        );
     }
   }
 
-}
+  Widget _buildNotificationText(BuildContext context, bool isDark) {
+    String text = '';
+    
+    switch (notification.type) {
+      case NotificationType.reaction:
+        if (notification.otherActors != null && notification.otherActors!.isNotEmpty) {
+          // Calculate total count including main actor
+          final totalCount = 1 + notification.otherActors!.length;
+          final reactionCount = notification.reactionCount ?? totalCount;
+          
+          if (reactionCount <= 3) {
+            // Show all names if 3 or fewer
+            final allNames = [notification.actorName, ...notification.otherActors!];
+            text = allNames.join(', ');
+            text += ' liked your post';
+          } else {
+            // Show first name, then others, then count
+            final otherNames = notification.otherActors!.take(1).join(', ');
+            final remainingCount = reactionCount - 2; // Subtract main actor and one other
+            text = '${notification.actorName}, $otherNames and $remainingCount other people';
+            text += ' liked your post';
+          }
+          
+          if (notification.postTitle != null) {
+            text += ': "${notification.postTitle}"';
+          }
+        } else {
+          text = '${notification.actorName} liked your post';
+          if (notification.postTitle != null) {
+            text += ': "${notification.postTitle}"';
+          }
+        }
+        break;
+      case NotificationType.friendRequest:
+        text = '${notification.actorName} sent you a friend request.';
+        break;
+      case NotificationType.comment:
+        text = '${notification.actorName} commented on your post';
+        if (notification.postTitle != null) {
+          text += ': "${notification.postTitle}"';
+        }
+        text += '.';
+        break;
+      case NotificationType.mention:
+        text = '${notification.actorName} mentioned you in a comment';
+        if (notification.commentText != null) {
+          text += ' in ${notification.commentText}';
+        }
+        text += '.';
+        break;
+    }
 
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 15,
+        color: isDark ? Colors.white : Colors.black87,
+        height: 1.4,
+      ),
+      maxLines: 3,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+}

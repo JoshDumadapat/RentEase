@@ -9,14 +9,12 @@ import 'package:rentease_app/screens/notifications/widgets/notification_tile.dar
 
 /// Notifications Page
 /// 
-/// Displays all likes and comments on user's posts/properties.
+/// Displays notifications in a social media style design matching the reference.
 /// Features:
-/// - Pull-to-refresh
-/// - Remove button on each notification
-/// - Swipe to delete or mark as read/unread
-/// - Tap to navigate to relevant post/property
-/// - Read/unread indicators
-/// - Empty state
+/// - Tabs: All and Unread
+/// - Time-based sections: New, Friend requests, Today, Earlier
+/// - Minimal and aesthetic design
+/// - Light and dark mode support
 /// - Skeleton loader
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -25,8 +23,10 @@ class NotificationsPage extends StatefulWidget {
   State<NotificationsPage> createState() => _NotificationsPageState();
 }
 
-class _NotificationsPageState extends State<NotificationsPage> {
+class _NotificationsPageState extends State<NotificationsPage> with SingleTickerProviderStateMixin {
   late final NotificationController _controller;
+  late final TabController _tabController;
+  int _selectedTabIndex = 0; // 0 = All, 1 = Unread
 
   @override
   void initState() {
@@ -34,12 +34,16 @@ class _NotificationsPageState extends State<NotificationsPage> {
     _controller = NotificationController();
     _controller.initialize();
     _controller.addListener(_onControllerUpdate);
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_onTabChanged);
   }
 
   @override
   void dispose() {
     _controller.removeListener(_onControllerUpdate);
     _controller.dispose();
+    _tabController.removeListener(_onTabChanged);
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -49,81 +53,90 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
   }
 
-  /// Navigate to the relevant post/property
-  void _navigateToPost(NotificationModel notification) {
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) {
+      setState(() {
+        _selectedTabIndex = _tabController.index;
+      });
+    }
+  }
+
+  /// Navigate to the relevant listing based on notification type
+  void _navigateToNotificationTarget(NotificationModel notification) {
     // Mark as read when tapped
     _controller.markAsRead(notification.id);
 
-    // Find the listing by postId
-    final listings = ListingModel.getMockListings();
-    final listing = listings.firstWhere(
-      (l) => l.id == notification.postId,
-      orElse: () => listings.first, // Fallback to first listing if not found
-    );
-
-    // Navigate to listing details
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ListingDetailsPage(listing: listing),
-      ),
-    );
-  }
-
-  /// Handle notification removal
-  void _handleRemove(NotificationModel notification) {
-    _controller.deleteNotification(notification.id);
-  }
-
-  /// Show clear all confirmation dialog
-  Future<void> _showClearAllDialog() async {
-    if (_controller.notifications.isEmpty) return;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Clear all notifications?'),
-        content: const Text('This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Text('Clear All'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      _controller.clearAllNotifications();
+    // Skip navigation for friend requests
+    if (notification.type == NotificationType.friendRequest) {
+      return;
     }
+
+    // Navigate to listing details if postId is available
+    if (notification.postId != null) {
+      final listings = ListingModel.getMockListings();
+      final listing = listings.firstWhere(
+        (l) => l.id == notification.postId,
+        orElse: () => listings.first, // Fallback to first listing if not found
+      );
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ListingDetailsPage(listing: listing),
+        ),
+      );
+    }
+  }
+
+  List<NotificationModel> get _filteredNotifications {
+    final all = _controller.notifications;
+    if (_selectedTabIndex == 1) {
+      return all.where((n) => !n.read).toList();
+    }
+    return all;
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
+      backgroundColor: isDark ? Colors.grey[900] : Colors.grey[50],
       appBar: AppBar(
         title: const Text('Notifications'),
+        backgroundColor: isDark ? Colors.grey[900] : Colors.white,
+        elevation: 0,
         actions: [
-          if (_controller.notifications.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.clear_all),
-              onPressed: _showClearAllDialog,
-              tooltip: 'Clear all',
-            ),
+          IconButton(
+            icon: const Icon(Icons.more_vert),
+            onPressed: () {
+              // TODO: Show menu
+            },
+          ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            color: isDark ? Colors.grey[900] : Colors.white,
+            child: TabBar(
+              controller: _tabController,
+              indicatorColor: isDark ? Colors.blue[300] : Colors.blue[600],
+              labelColor: isDark ? Colors.blue[300] : Colors.blue[600],
+              unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
+              tabs: const [
+                Tab(text: 'All'),
+                Tab(text: 'Unread'),
+              ],
+            ),
+          ),
+        ),
       ),
-      body: _buildBody(),
+      body: _buildBody(isDark),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(bool isDark) {
     if (_controller.isLoading && _controller.notifications.isEmpty) {
       return const NotificationSkeleton();
     }
@@ -132,26 +145,171 @@ class _NotificationsPageState extends State<NotificationsPage> {
       return _buildErrorState();
     }
 
-    if (_controller.notifications.isEmpty) {
+    final notifications = _filteredNotifications;
+    if (notifications.isEmpty) {
       return const EmptyStateWidget();
     }
 
     return RefreshIndicator(
       onRefresh: _controller.refreshNotifications,
-      child: ListView.separated(
-        itemCount: _controller.notifications.length,
-        separatorBuilder: (context, index) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final notification = _controller.notifications[index];
-          return NotificationTile(
-            notification: notification,
-            onTap: () => _navigateToPost(notification),
-            onRemove: () => _handleRemove(notification),
-            onToggleRead: () => _controller.toggleReadStatus(notification.id),
-          );
-        },
+      child: ListView(
+        children: [
+          _buildSection(
+            title: 'New',
+            notifications: _getNewNotifications(notifications),
+            showSeeAll: true,
+            isDark: isDark,
+          ),
+          _buildSection(
+            title: 'Friend requests',
+            notifications: _getFriendRequests(notifications),
+            showSeeAll: true,
+            isDark: isDark,
+          ),
+          _buildSection(
+            title: 'Today',
+            notifications: _getTodayNotifications(notifications),
+            showSeeAll: false,
+            isDark: isDark,
+          ),
+          _buildSection(
+            title: 'Earlier',
+            notifications: _getEarlierNotifications(notifications),
+            showSeeAll: false,
+            isDark: isDark,
+          ),
+          // See previous notifications button
+          if (_getEarlierNotifications(notifications).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Center(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[800] : Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'See previous notifications',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
+  }
+
+  Widget _buildSection({
+    required String title,
+    required List<NotificationModel> notifications,
+    required bool showSeeAll,
+    required bool isDark,
+  }) {
+    if (notifications.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+              if (showSeeAll)
+                TextButton(
+                  onPressed: () {
+                    // TODO: Navigate to see all
+                  },
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'See all',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.blue[300] : Colors.blue[600],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        ...notifications.asMap().entries.map((entry) {
+          final index = entry.key;
+          final notification = entry.value;
+          final isLast = index == notifications.length - 1;
+          
+          return Column(
+            children: [
+              NotificationTile(
+                notification: notification,
+                onTap: () => _navigateToNotificationTarget(notification),
+              ),
+              if (!isLast)
+                Divider(
+                  height: 1,
+                  thickness: 0.5,
+                  indent: 72, // Align with content (avatar width + spacing)
+                  color: isDark 
+                      ? Colors.grey[800]!.withValues(alpha: 0.5) 
+                      : Colors.grey[300]!.withValues(alpha: 0.5),
+                ),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+  List<NotificationModel> _getNewNotifications(List<NotificationModel> notifications) {
+    final now = DateTime.now();
+    return notifications.where((n) {
+      final diff = now.difference(n.timestamp);
+      return diff.inMinutes < 60 && !n.read;
+    }).toList();
+  }
+
+  List<NotificationModel> _getFriendRequests(List<NotificationModel> notifications) {
+    return notifications.where((n) => n.type == NotificationType.friendRequest).toList();
+  }
+
+  List<NotificationModel> _getTodayNotifications(List<NotificationModel> notifications) {
+    final now = DateTime.now();
+    return notifications.where((n) {
+      final diff = now.difference(n.timestamp);
+      return diff.inHours < 24 && 
+             diff.inMinutes >= 60 && 
+             n.type != NotificationType.friendRequest &&
+             !_getNewNotifications(notifications).contains(n);
+    }).toList();
+  }
+
+  List<NotificationModel> _getEarlierNotifications(List<NotificationModel> notifications) {
+    final now = DateTime.now();
+    return notifications.where((n) {
+      final diff = now.difference(n.timestamp);
+      return diff.inDays >= 1 && 
+             n.type != NotificationType.friendRequest &&
+             !_getNewNotifications(notifications).contains(n) &&
+             !_getTodayNotifications(notifications).contains(n);
+    }).toList();
   }
 
   Widget _buildErrorState() {
@@ -188,4 +346,3 @@ class _NotificationsPageState extends State<NotificationsPage> {
     );
   }
 }
-
