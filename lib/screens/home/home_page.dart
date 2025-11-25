@@ -6,9 +6,12 @@ import 'package:share_plus/share_plus.dart';
 import 'package:rentease_app/models/category_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/models/looking_for_post_model.dart';
+import 'package:rentease_app/models/comment_model.dart';
 import 'package:rentease_app/screens/posts/posts_page.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
+import 'package:rentease_app/screens/looking_for_post_detail/looking_for_post_detail_page.dart';
 import 'package:rentease_app/screens/home/widgets/home_skeleton.dart';
+import 'package:rentease_app/screens/home/widgets/comment_section.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -1227,41 +1230,46 @@ class _LookingForSection extends StatelessWidget {
         // Header Section
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+            child: Row(
               children: [
                 const Text(
                   'Looking For',
                   style: TextStyle(
-                    fontSize: 22,
+                    fontSize: 20,
                     fontWeight: FontWeight.w700,
                     color: Colors.black87,
-                    letterSpacing: -0.5,
+                    letterSpacing: -0.3,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Posts from renters looking for properties',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w400,
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${posts.length} posts',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF6C63FF),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
         ),
-        const SliverToBoxAdapter(child: SizedBox(height: 8)),
         // Posts List
         SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate((context, index) {
               return Padding(
                 padding: EdgeInsets.only(
-                  bottom: index == posts.length - 1 ? 24 : 16,
+                  bottom: index == posts.length - 1 ? 24 : 0,
                 ),
                 child: _LookingForPostCard(post: posts[index]),
               );
@@ -1273,149 +1281,327 @@ class _LookingForSection extends StatelessWidget {
   }
 }
 
-class _LookingForPostCard extends StatelessWidget {
+class _LookingForPostCard extends StatefulWidget {
   final LookingForPostModel post;
 
   const _LookingForPostCard({required this.post});
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        decoration: BoxDecoration(
+  State<_LookingForPostCard> createState() => _LookingForPostCardState();
+}
+
+class _LookingForPostCardState extends State<_LookingForPostCard> {
+  bool _isLiked = false;
+  bool _showComments = false;
+  int _likeCount = 0;
+  int _commentCount = 0;
+  final List<CommentModel> _comments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _likeCount = widget.post.likeCount;
+    _commentCount = widget.post.commentCount;
+    _comments.addAll(CommentModel.getMockComments());
+  }
+
+  void _showPostOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              spreadRadius: 0,
-              blurRadius: 12,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
+        child: SafeArea(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Colors.blue[100],
-                    child: Text(
-                      post.username[0].toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[700],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          post.username,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          post.date,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                post.description,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.black87,
-                  height: 1.5,
+              ListTile(
+                leading: const Icon(Icons.visibility_off, color: Colors.black87),
+                title: const Text(
+                  'Hide post',
+                  style: TextStyle(color: Colors.black87),
                 ),
+                onTap: () {
+                  Navigator.pop(context);
+                  // TODO: Implement hide post functionality
+                },
               ),
-              const SizedBox(height: 16),
-              Divider(height: 1, thickness: 1, color: Colors.grey[200]),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  _InfoChip(
-                    icon: Icons.location_on_rounded,
-                    text: post.location,
-                  ),
-                  const SizedBox(width: 12),
-                  _InfoChip(icon: Icons.home_rounded, text: post.propertyType),
-                ],
+              ListTile(
+                leading: const Icon(Icons.block, color: Colors.red),
+                title: const Text(
+                  'Remove from feed',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  // TODO: Implement remove post functionality
+                },
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  _InfoChip(
-                    icon: Icons.attach_money_rounded,
-                    text: post.budget,
-                    isBudget: true,
-                  ),
-                ],
-              ),
+              const SizedBox(height: 8),
             ],
           ),
         ),
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Section
+          _PostHeader(
+            post: widget.post,
+            onMoreTap: _showPostOptions,
+          ),
+              
+          // Post Body (Clickable)
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => LookingForPostDetailPage(post: widget.post),
+                  ),
+                );
+              },
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Text(
+                      widget.post.description,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
+                        color: Colors.black87,
+                        height: 1.5,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  
+                  // Tags Section
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _ModernTag(
+                          icon: Icons.location_on_outlined,
+                          text: widget.post.location,
+                          color: const Color(0xFF6C63FF),
+                        ),
+                        _ModernTag(
+                          icon: Icons.home_outlined,
+                          text: widget.post.propertyType,
+                          color: const Color(0xFF4CAF50),
+                        ),
+                        _ModernTag(
+                          icon: Icons.attach_money_outlined,
+                          text: widget.post.budget,
+                          color: const Color(0xFF2196F3),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          // Action Bar (Footer)
+          _PostActionBar(
+            likeCount: _likeCount,
+            commentCount: _commentCount,
+            isLiked: _isLiked,
+            onLikeTap: () {
+              setState(() {
+                _isLiked = !_isLiked;
+                _likeCount += _isLiked ? 1 : -1;
+              });
+            },
+            onCommentTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => LookingForPostDetailPage(post: widget.post),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _InfoChip extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  final bool isBudget;
+class _PostHeader extends StatelessWidget {
+  final LookingForPostModel post;
+  final VoidCallback? onMoreTap;
 
-  const _InfoChip({
-    required this.icon,
-    required this.text,
-    this.isBudget = false,
+  const _PostHeader({
+    required this.post,
+    this.onMoreTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+        child: Row(
+          children: [
+            // Profile Picture
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF6C63FF).withValues(alpha: 0.15),
+                    const Color(0xFF4CAF50).withValues(alpha: 0.15),
+                  ],
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  post.username[0].toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF6C63FF),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            
+            // Username and Time
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        post.username,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      if (post.isVerified) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue[50],
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.verified,
+                            size: 14,
+                            color: Colors.blue[700],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(width: 6),
+                      Text(
+                        post.timeAgo,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Three dots menu
+            if (onMoreTap != null)
+              GestureDetector(
+                onTap: onMoreTap,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.more_horiz,
+                        size: 20,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModernTag extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  const _ModernTag({
+    required this.icon,
+    required this.text,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isBudget ? Colors.green[50] : Colors.blue[50],
-        borderRadius: BorderRadius.circular(8),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             icon,
-            size: 16,
-            color: isBudget ? Colors.green[700] : Colors.blue[700],
+            size: 14,
+            color: color,
           ),
           const SizedBox(width: 6),
           Text(
             text,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: isBudget ? Colors.green[700] : Colors.blue[700],
+              color: color,
+              letterSpacing: 0.1,
             ),
           ),
         ],
@@ -1423,6 +1609,115 @@ class _InfoChip extends StatelessWidget {
     );
   }
 }
+
+class _PostActionBar extends StatelessWidget {
+  final int likeCount;
+  final int commentCount;
+  final bool isLiked;
+  final VoidCallback onLikeTap;
+  final VoidCallback onCommentTap;
+
+  const _PostActionBar({
+    required this.likeCount,
+    required this.commentCount,
+    required this.isLiked,
+    required this.onLikeTap,
+    required this.onCommentTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: Colors.grey[200]!,
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Like Button
+          _ActionButton(
+            icon: isLiked ? Icons.favorite : Icons.favorite_border,
+            count: likeCount,
+            isActive: isLiked,
+            onTap: onLikeTap,
+          ),
+          const SizedBox(width: 32),
+          
+          // Comment Button
+          _ActionButton(
+            icon: Icons.chat_bubble_outline,
+            count: commentCount,
+            onTap: onCommentTap,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final int count;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.count,
+    this.isActive = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: isActive
+                    ? const Color(0xFFE91E63)
+                    : Colors.grey[600],
+              ),
+              const SizedBox(width: 8),
+              Text(
+                count > 0 ? _formatCount(count) : '',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: isActive
+                      ? const Color(0xFFE91E63)
+                      : Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatCount(int count) {
+    if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(1)}K';
+    }
+    return count.toString();
+  }
+}
+
 
 class _ScrollBasedTabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;
