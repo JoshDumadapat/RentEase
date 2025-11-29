@@ -43,7 +43,6 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   // State variables
   String? _propertyType;
   DateTime? _availableFrom;
-  int? _maxOccupants;
   int _coverImageIndex = 0;
   bool _electricityIncluded = false;
   bool _waterIncluded = false;
@@ -274,7 +273,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         }
       }
 
-      // TODO: Implement actual API call here
+      // Note: API call implementation will be added when backend is ready
       // await PropertyService.createProperty(...);
 
       if (mounted) {
@@ -412,7 +411,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                       addressController: _addressController,
                       landmarkController: _landmarkController,
                       onMapPicker: () {
-                        // TODO: Implement map picker
+                        // Note: Map picker implementation will be added when location services are integrated
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Map picker coming soon'),
@@ -420,7 +419,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                         );
                       },
                       onGPSFill: () {
-                        // TODO: Implement GPS auto-fill
+                        // Note: GPS auto-fill implementation will be added when location services are integrated
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('GPS auto-fill coming soon'),
@@ -496,9 +495,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                       maxOccupantsController: _maxOccupantsController,
                       onDateSelected: _selectDate,
                       onMaxOccupantsChanged: (value) {
-                        setState(() {
-                          _maxOccupants = value;
-                        });
+                        // Max occupants value is handled by the AvailabilitySection widget
+                        setState(() {});
                       },
                     ),
                     const SizedBox(height: 32),

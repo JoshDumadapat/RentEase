@@ -30,8 +30,8 @@ class CustomBottomNavigationBar extends StatelessWidget {
         onTap: onTap,
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        selectedItemColor: const Color(0xFF5B9BD5),
-        unselectedItemColor: const Color(0xFFB0B0B0),
+        selectedItemColor: const Color(0xFF4DAEDB),
+        unselectedItemColor: Colors.grey,
         selectedFontSize: 0,
         unselectedFontSize: 0,
         iconSize: 24,
@@ -116,7 +116,7 @@ class _NavIcon extends StatelessWidget {
       width: 24,
       height: 24,
       colorFilter: ColorFilter.mode(
-        isSelected ? const Color(0xFF5B9BD5) : const Color(0xFFB0B0B0),
+        isSelected ? const Color(0xFF4DAEDB) : Colors.grey,
         BlendMode.srcIn,
       ),
     );

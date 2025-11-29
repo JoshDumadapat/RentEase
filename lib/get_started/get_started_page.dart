@@ -278,7 +278,6 @@ class _ContentWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
-    final isSmallScreen = screenHeight < 700;
     final spacing = screenHeight * 0.012;
 
     return Padding(

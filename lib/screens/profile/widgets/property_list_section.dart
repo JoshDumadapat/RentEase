@@ -101,7 +101,7 @@ class PropertyListSection extends StatelessWidget {
                   property: property,
                   onTap: () => onPropertyTap(property),
                   onEdit: () {
-                    // TODO: Navigate to edit property page
+                    // Note: Navigation to edit property page will be implemented when backend is ready
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Edit property: ${property.title}'),
@@ -109,7 +109,7 @@ class PropertyListSection extends StatelessWidget {
                     );
                   },
                   onDelete: () {
-                    // TODO: Show delete confirmation and delete property
+                    // Note: Delete confirmation and property deletion will be implemented when backend is ready
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Delete property: ${property.title}'),

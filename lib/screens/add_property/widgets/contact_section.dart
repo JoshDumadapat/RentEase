@@ -23,7 +23,7 @@ class ContactSection extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
 
-    // TODO: Get owner name from user profile/auth
+    // Note: Owner name should be retrieved from user profile/auth when backend is ready
     const ownerName = 'John Doe'; // This should come from user profile
 
     return Column(

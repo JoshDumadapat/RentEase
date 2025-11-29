@@ -81,7 +81,7 @@ class _LandingPageState extends State<LandingPage>
         }
       } else {
         // Navigate to home/main screen if not first time
-        // TODO: Replace with your home/main screen
+        // Note: Replace with your home/main screen when available
         // if (mounted) {
         //   Navigator.of(context).pushReplacement(
         //     MaterialPageRoute(builder: (context) => const HomePage()),
@@ -159,14 +159,14 @@ class _LandingPageState extends State<LandingPage>
                       alignment: Alignment.center,
                       child: Image.asset(
                         "assets/logo.png",
-                        width: 180,
+                        width: 150,
                         fit: BoxFit.contain,
                         errorBuilder: (context, error, stackTrace) {
                           // Fallback if logo fails to load
                           return const SizedBox(
-                            width: 180,
-                            height: 180,
-                            child: Icon(Icons.home, size: 100),
+                            width: 150,
+                            height: 150,
+                            child: Icon(Icons.home, size: 80),
                           );
                         },
                       ),

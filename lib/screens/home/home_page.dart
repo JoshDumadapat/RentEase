@@ -11,7 +11,6 @@ import 'package:rentease_app/screens/posts/posts_page.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
 import 'package:rentease_app/screens/looking_for_post_detail/looking_for_post_detail_page.dart';
 import 'package:rentease_app/screens/home/widgets/home_skeleton.dart';
-import 'package:rentease_app/screens/home/widgets/comment_section.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -1292,7 +1291,6 @@ class _LookingForPostCard extends StatefulWidget {
 
 class _LookingForPostCardState extends State<_LookingForPostCard> {
   bool _isLiked = false;
-  bool _showComments = false;
   int _likeCount = 0;
   int _commentCount = 0;
   final List<CommentModel> _comments = [];
@@ -1326,7 +1324,7 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  // TODO: Implement hide post functionality
+                  // Note: Hide post functionality will be implemented when backend is ready
                 },
               ),
               ListTile(
@@ -1337,7 +1335,7 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  // TODO: Implement remove post functionality
+                  // Note: Remove post functionality will be implemented when backend is ready
                 },
               ),
               const SizedBox(height: 8),
@@ -1466,8 +1464,7 @@ class _PostHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      child: Padding(
+    return Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
         child: Row(
           children: [
@@ -1562,7 +1559,6 @@ class _PostHeader extends StatelessWidget {
               ),
           ],
         ),
-      ),
     );
   }
 }

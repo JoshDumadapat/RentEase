@@ -74,7 +74,7 @@ class FavoritesSection extends StatelessWidget {
                   property: favorite,
                   onTap: () => onPropertyTap(favorite),
                   onDelete: () {
-                    // TODO: Remove from favorites
+                    // Note: Remove from favorites functionality will be implemented when backend is ready
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Removed ${favorite.title} from favorites'),

@@ -188,7 +188,6 @@ class _FilterSheetState extends State<FilterSheet> {
     TextTheme textTheme,
   ) {
     final bedrooms = ['Studio', '1', '2', '3', '4+'];
-    final chipTheme = theme.chipTheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

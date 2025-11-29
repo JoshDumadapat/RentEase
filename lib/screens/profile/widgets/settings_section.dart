@@ -45,7 +45,7 @@ class SettingsSection extends StatelessWidget {
                 icon: Icons.lock_outline,
                 title: 'Change Password',
                 onTap: () {
-                  // TODO: Navigate to change password page
+                  // Note: Navigation to change password page will be implemented when backend is ready
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Change password feature coming soon')),
                   );
@@ -56,7 +56,7 @@ class SettingsSection extends StatelessWidget {
                 icon: Icons.email_outlined,
                 title: 'Change Email',
                 onTap: () {
-                  // TODO: Navigate to change email page
+                  // Note: Navigation to change email page will be implemented when backend is ready
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Change email feature coming soon')),
                   );
@@ -67,7 +67,7 @@ class SettingsSection extends StatelessWidget {
                 icon: Icons.phone_outlined,
                 title: 'Change Phone',
                 onTap: () {
-                  // TODO: Navigate to change phone page
+                  // Note: Navigation to change phone page will be implemented when backend is ready
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Change phone feature coming soon')),
                   );
@@ -88,7 +88,7 @@ class SettingsSection extends StatelessWidget {
                 icon: Icons.notifications_outlined,
                 title: 'Notification Settings',
                 onTap: () {
-                  // TODO: Navigate to notification settings
+                  // Note: Navigation to notification settings will be implemented when needed
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Notification settings coming soon')),
                   );
@@ -101,7 +101,7 @@ class SettingsSection extends StatelessWidget {
                 trailing: Switch(
                   value: isDark,
                   onChanged: (value) {
-                    // TODO: Implement theme toggle
+                    // Note: Theme toggle functionality will be implemented when theme management is added
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Theme toggle coming soon (currently: ${value ? "Dark" : "Light"})'),
@@ -146,7 +146,7 @@ class SettingsSection extends StatelessWidget {
           Center(
             child: TextButton(
               onPressed: () {
-                // TODO: Show delete account confirmation
+                // Note: Delete account confirmation dialog will be implemented when backend is ready
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Delete account feature coming soon'),

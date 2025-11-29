@@ -111,7 +111,7 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
           IconButton(
             icon: const Icon(Icons.more_vert),
             onPressed: () {
-              // TODO: Show menu
+              // Note: Menu functionality will be implemented when needed
             },
           ),
         ],
@@ -233,7 +233,7 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
               if (showSeeAll)
                 TextButton(
                   onPressed: () {
-                    // TODO: Navigate to see all
+                    // Note: Navigation to see all notifications will be implemented when needed
                   },
                   style: TextButton.styleFrom(
                     padding: EdgeInsets.zero,

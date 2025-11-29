@@ -94,20 +94,20 @@ class _SignUpContentWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 8),
+          const SizedBox(height: 24),
           // Logo Widget
           _LogoWidget(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           // Title Widget
           _TitleWidget(),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           // Description Widget
           _DescriptionWidget(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
           // Sign up as header
           _SignUpAsHeaderWidget(),
           const SizedBox(height: 16),
@@ -154,10 +154,10 @@ class _SignUpContentWidget extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 0),
           // Sign In Link Widget
           _SignInLinkWidget(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 40),
         ],
       ),
     );
@@ -168,13 +168,17 @@ class _SignUpContentWidget extends StatelessWidget {
 class _LogoWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenHeight < 700;
+    final logoHeight = isSmallScreen ? 50.0 : 55.0;
+    
     return Center(
       child: Image.asset(
         'assets/sign_in_up/signlogo.png',
-        height: 45,
+        height: logoHeight,
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
-          return const Icon(Icons.home, size: 45, color: Colors.blue);
+          return Icon(Icons.home, size: logoHeight, color: Colors.blue);
         },
       ),
     );
@@ -188,7 +192,7 @@ class _TitleWidget extends StatelessWidget {
     return const Text(
       'Get Started Now',
       style: TextStyle(
-        fontSize: 28,
+        fontSize: 20,
         fontWeight: FontWeight.bold,
         color: Colors.black87,
       ),
@@ -330,6 +334,7 @@ class _SignInLinkWidgetState extends State<_SignInLinkWidget> {
   Widget build(BuildContext context) {
     return Center(
       child: RichText(
+        textAlign: TextAlign.center,
         text: TextSpan(
           style: TextStyle(
             fontSize: 14,
@@ -339,8 +344,12 @@ class _SignInLinkWidgetState extends State<_SignInLinkWidget> {
             const TextSpan(text: 'Already have an account? '),
             WidgetSpan(
               child: MouseRegion(
-                onEnter: (_) => setState(() => _isHovered = true),
-                onExit: (_) => setState(() => _isHovered = false),
+                onEnter: (_) {
+                  if (mounted) setState(() => _isHovered = true);
+                },
+                onExit: (_) {
+                  if (mounted) setState(() => _isHovered = false);
+                },
                 child: GestureDetector(
                   onTap: () {
                     Navigator.of(context).pushReplacement(

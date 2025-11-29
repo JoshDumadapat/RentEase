@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:rentease_app/models/category_model.dart';
 import 'package:rentease_app/models/filter_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
@@ -14,7 +13,6 @@ class SearchPage extends StatefulWidget {
 
 class _SearchPageState extends State<SearchPage> {
   final TextEditingController _searchController = TextEditingController();
-  final List<CategoryModel> _categories = CategoryModel.getMockCategories();
   final List<ListingModel> _allListings = ListingModel.getMockListings();
   final FilterModel _filterModel = FilterModel();
   String? _selectedCategory;
@@ -480,78 +478,6 @@ class _SearchPageState extends State<SearchPage> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _CategoryFilterChip extends StatelessWidget {
-  final CategoryModel category;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _CategoryFilterChip({
-    required this.category,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 80,
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.blue[50] : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? Colors.blue[700]! : Colors.grey[300]!,
-            width: isSelected ? 2 : 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              spreadRadius: 0,
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                category.imagePath,
-                width: 50,
-                height: 50,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    width: 50,
-                    height: 50,
-                    color: Colors.blue[100],
-                    child: Icon(Icons.home, color: Colors.blue[700], size: 24),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              category.name,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected ? Colors.blue[700] : Colors.grey[700],
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

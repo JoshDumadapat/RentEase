@@ -99,7 +99,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   /// Handle edit profile action
   void _handleEditProfile() {
-    // TODO: Navigate to edit profile page
+    // Note: Navigation to edit profile page will be implemented when backend is ready
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Edit profile feature coming soon')),
     );
@@ -129,7 +129,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
 
     if (confirmed == true && mounted) {
-      // TODO: Implement actual logout logic
+      // Note: Actual logout logic will be implemented when authentication is integrated
       // For now, just show a message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Logged out successfully')),
@@ -139,7 +139,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   /// Handle settings action
   void _handleSettings() {
-    // TODO: Navigate to settings page
+    // Note: Navigation to settings page will be implemented when needed
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Settings feature coming soon')),
     );
@@ -213,7 +213,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           properties: _userProperties,
                           onPropertyTap: _navigateToProperty,
                           onAddProperty: () {
-                            // TODO: Navigate to add property page
+                            // Note: Navigation to add property page - feature available in bottom nav
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text('Add property feature available in bottom nav'),

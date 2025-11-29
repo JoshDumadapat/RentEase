@@ -158,13 +158,13 @@ class _SignInContentWidget extends StatelessWidget {
               SizedBox(height: isSmallScreen ? 4 : 8),
               // Logo Widget
               _LogoWidget(),
-              SizedBox(height: isSmallScreen ? 16 : 20),
+              SizedBox(height: isSmallScreen ? 14 : 16),
               // Title Widget
               _TitleWidget(),
               SizedBox(height: isSmallScreen ? 2 : 4),
               // Welcome Message Widget
               _WelcomeMessageWidget(),
-              SizedBox(height: isSmallScreen ? 16 : 20),
+              SizedBox(height: isSmallScreen ? 14 : 16),
               // Email Input Widget
               _EmailInputWidget(controller: emailController),
               SizedBox(height: isSmallScreen ? 12 : 14),
@@ -180,7 +180,7 @@ class _SignInContentWidget extends StatelessWidget {
                 rememberMe: rememberMe,
                 onRememberMeChanged: onRememberMeChanged,
               ),
-              SizedBox(height: isSmallScreen ? 16 : 20),
+              SizedBox(height: isSmallScreen ? 14 : 16),
               // Sign In Button Widget
               _SignInButtonWidget(),
               SizedBox(height: isSmallScreen ? 8 : 12),
@@ -207,7 +207,7 @@ class _LogoWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
-    final logoHeight = isSmallScreen ? 40.0 : 45.0;
+    final logoHeight = isSmallScreen ? 50.0 : 55.0;
     
     return Center(
       child: Image.asset(
@@ -232,7 +232,7 @@ class _TitleWidget extends StatelessWidget {
     return Text(
       'Sign In',
       style: TextStyle(
-        fontSize: isSmallScreen ? 24 : 28,
+        fontSize: isSmallScreen ? 20 : 22,
         fontWeight: FontWeight.bold,
         color: Colors.black87,
       ),
@@ -285,25 +285,25 @@ class _EmailInputWidget extends StatelessWidget {
             hintText: 'Enter your email',
             hintStyle: TextStyle(
               color: Colors.grey[400],
-              fontSize: 16,
+              fontSize: 15,
             ),
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[400]!),
             ),
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
+              horizontal: 14,
+              vertical: 10,
             ),
           ),
         ),
@@ -345,25 +345,25 @@ class _PasswordInputWidget extends StatelessWidget {
             hintText: 'Enter your password',
             hintStyle: TextStyle(
               color: Colors.grey[400],
-              fontSize: 16,
+              fontSize: 15,
             ),
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[400]!),
             ),
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
+              horizontal: 14,
+              vertical: 10,
             ),
             suffixIcon: IconButton(
               icon: Icon(
@@ -437,11 +437,11 @@ class _SignInButtonWidget extends StatelessWidget {
     
     return SizedBox(
       width: double.infinity,
-      height: isSmallScreen ? 44 : 48,
+      height: isSmallScreen ? 40 : 42,
       child: ElevatedButton(
         onPressed: () {
           // Handle sign in - Navigate to HomePage after successful login
-          // TODO: Add actual authentication logic here
+          // Note: Actual authentication logic will be implemented when backend is ready
           // For now, navigate directly to HomePage
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
@@ -453,14 +453,14 @@ class _SignInButtonWidget extends StatelessWidget {
           backgroundColor: Colors.grey[850],
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
           elevation: 0,
         ),
         child: const Text(
           'Sign In',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -559,7 +559,7 @@ class _GoogleSignInButtonWidget extends StatelessWidget {
     
     return SizedBox(
       width: double.infinity,
-      height: isSmallScreen ? 44 : 48,
+      height: isSmallScreen ? 40 : 42,
       child: OutlinedButton(
         onPressed: () {
           // Handle Google sign in
@@ -569,7 +569,7 @@ class _GoogleSignInButtonWidget extends StatelessWidget {
           foregroundColor: Colors.black87,
           side: BorderSide(color: Colors.grey[300]!),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
         ),
         child: Row(
@@ -578,12 +578,12 @@ class _GoogleSignInButtonWidget extends StatelessWidget {
             // Google icon from assets
             Image.asset(
               'assets/sign_in_up/google.png',
-              width: 24,
-              height: 24,
+              width: 20,
+              height: 20,
               errorBuilder: (context, error, stackTrace) {
                 return Container(
-                  width: 24,
-                  height: 24,
+                  width: 20,
+                  height: 20,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(4),
@@ -593,7 +593,7 @@ class _GoogleSignInButtonWidget extends StatelessWidget {
                     child: Text(
                       'G',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
                         color: Colors.blue,
                       ),
@@ -602,11 +602,11 @@ class _GoogleSignInButtonWidget extends StatelessWidget {
                 );
               },
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             const Text(
               'Continue with Google',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
             ),

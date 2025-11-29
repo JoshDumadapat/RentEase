@@ -52,11 +52,13 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
       },
     );
     if (picked != null && picked != _selectedDate) {
-      setState(() {
-        _selectedDate = picked;
-        _birthDateController.text =
-            '${picked.day}/${picked.month}/${picked.year}';
-      });
+      if (mounted) {
+        setState(() {
+          _selectedDate = picked;
+          _birthDateController.text =
+              '${picked.day}/${picked.month}/${picked.year}';
+        });
+      }
     }
   }
 
@@ -88,9 +90,11 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
               selectedCountryCode: _selectedCountryCode,
               selectedDate: _selectedDate,
               onCountryCodeChanged: (value) {
-                setState(() {
-                  _selectedCountryCode = value!;
-                });
+                if (mounted) {
+                  setState(() {
+                    _selectedCountryCode = value!;
+                  });
+                }
               },
               onDateTap: () => _selectDate(context),
               onNext: _handleNext,
@@ -147,7 +151,7 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
     return Positioned(
       left: 0,
       right: 0,
-      top: imageHeight - 25,
+      top: imageHeight - 55,
       bottom: 0,
       child: Container(
         decoration: const BoxDecoration(
@@ -202,7 +206,7 @@ class _StudentSignUpContentWidget extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: isNarrowScreen ? 20.0 : 24.0,
-          vertical: isSmallScreen ? 12.0 : 16.0,
+          vertical: isSmallScreen ? 0.0 : 2.0,
         ),
         child: Form(
           key: formKey,
@@ -210,19 +214,19 @@ class _StudentSignUpContentWidget extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(height: isSmallScreen ? 4 : 8),
+              SizedBox(height: 0),
               // Back button
               _BackButtonWidget(),
-              SizedBox(height: isSmallScreen ? 12 : 16),
+              SizedBox(height: 0),
               // Logo Widget
               _LogoWidget(),
-              SizedBox(height: isSmallScreen ? 16 : 20),
+              SizedBox(height: isSmallScreen ? 14 : 16),
               // Title Widget
               _TitleWidget(),
-              SizedBox(height: isSmallScreen ? 4 : 8),
+              SizedBox(height: isSmallScreen ? 4 : 6),
               // Description Widget
               _DescriptionWidget(),
-              SizedBox(height: isSmallScreen ? 20 : 24),
+              SizedBox(height: isSmallScreen ? 16 : 18),
               // First Name and Last Name Row
               Row(
                 children: [
@@ -239,32 +243,32 @@ class _StudentSignUpContentWidget extends StatelessWidget {
                   ),
                 ],
               ),
-              SizedBox(height: isSmallScreen ? 14 : 16),
+              SizedBox(height: isSmallScreen ? 12 : 14),
               // Email Input Widget
               _EmailInputWidget(controller: emailController),
-              SizedBox(height: isSmallScreen ? 14 : 16),
+              SizedBox(height: isSmallScreen ? 12 : 14),
               // Birth Date Input Widget
               _BirthDateInputWidget(
                 controller: birthDateController,
                 onTap: onDateTap,
               ),
-              SizedBox(height: isSmallScreen ? 14 : 16),
+              SizedBox(height: isSmallScreen ? 12 : 14),
               // Phone Number Input Widget
               _PhoneNumberInputWidget(
                 controller: phoneNumberController,
                 selectedCountryCode: selectedCountryCode,
                 onCountryCodeChanged: onCountryCodeChanged,
               ),
-              SizedBox(height: isSmallScreen ? 20 : 24),
+              SizedBox(height: isSmallScreen ? 16 : 18),
               // Next Button Widget
               _NextButtonWidget(onNext: onNext),
               SizedBox(height: isSmallScreen ? 12 : 16),
               // Sign In Link Widget
               _SignInLinkWidget(),
-              SizedBox(height: isSmallScreen ? 20 : 24),
+              SizedBox(height: isSmallScreen ? 16 : 18),
               // Divider Widget
               _DividerWidget(),
-              SizedBox(height: isSmallScreen ? 20 : 24),
+              SizedBox(height: isSmallScreen ? 16 : 18),
               // Google Sign Up Button Widget
               _GoogleSignUpButtonWidget(),
               SizedBox(height: isSmallScreen ? 8 : 16),
@@ -297,16 +301,19 @@ class _LogoWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
-    final logoHeight = isSmallScreen ? 40.0 : 45.0;
+    final logoHeight = isSmallScreen ? 50.0 : 55.0;
     
-    return Center(
-      child: Image.asset(
-        'assets/sign_in_up/signlogo.png',
-        height: logoHeight,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) {
-          return Icon(Icons.home, size: logoHeight, color: Colors.blue);
-        },
+    return Transform.translate(
+      offset: const Offset(0, -8),
+      child: Center(
+        child: Image.asset(
+          'assets/sign_in_up/signlogo.png',
+          height: logoHeight,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return Icon(Icons.home, size: logoHeight, color: Colors.blue);
+          },
+        ),
       ),
     );
   }
@@ -322,7 +329,7 @@ class _TitleWidget extends StatelessWidget {
     return Text(
       'Sign Up as Student',
       style: TextStyle(
-        fontSize: isSmallScreen ? 24 : 28,
+        fontSize: isSmallScreen ? 18 : 20,
         fontWeight: FontWeight.bold,
         color: Colors.black87,
       ),
@@ -376,33 +383,33 @@ class _FirstNameInputWidget extends StatelessWidget {
             hintText: 'First Name',
             hintStyle: TextStyle(
               color: Colors.grey[400],
-              fontSize: 16,
+              fontSize: 15,
             ),
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[400]!),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Colors.red),
             ),
             focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Colors.red),
             ),
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
+              horizontal: 14,
+              vertical: 10,
             ),
           ),
           validator: (value) {
@@ -447,33 +454,33 @@ class _LastNameInputWidget extends StatelessWidget {
             hintText: 'Last Name',
             hintStyle: TextStyle(
               color: Colors.grey[400],
-              fontSize: 16,
+              fontSize: 15,
             ),
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[400]!),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Colors.red),
             ),
             focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Colors.red),
             ),
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
+              horizontal: 14,
+              vertical: 10,
             ),
           ),
           validator: (value) {
@@ -517,33 +524,33 @@ class _EmailInputWidget extends StatelessWidget {
             hintText: 'Email',
             hintStyle: TextStyle(
               color: Colors.grey[400],
-              fontSize: 16,
+              fontSize: 15,
             ),
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[400]!),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Colors.red),
             ),
             focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Colors.red),
             ),
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
+              horizontal: 14,
+              vertical: 10,
             ),
           ),
           validator: (value) {
@@ -593,33 +600,33 @@ class _BirthDateInputWidget extends StatelessWidget {
             hintText: 'Birth of date',
             hintStyle: TextStyle(
               color: Colors.grey[400],
-              fontSize: 16,
+              fontSize: 15,
             ),
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey[400]!),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Colors.red),
             ),
             focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Colors.red),
             ),
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
+              horizontal: 14,
+              vertical: 10,
             ),
             suffixIcon: Icon(
               Icons.calendar_today,
@@ -669,13 +676,15 @@ class _PhoneNumberInputWidget extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Country Code Dropdown
             Container(
               width: isNarrowScreen ? 80 : 100,
+              height: 48,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.grey[300]!),
               ),
               child: DropdownButtonHideUnderline(
@@ -686,23 +695,23 @@ class _PhoneNumberInputWidget extends StatelessWidget {
                   items: const [
                     DropdownMenuItem(value: '+1', child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('+1', style: TextStyle(fontSize: 16)),
+                      child: Text('+1', style: TextStyle(fontSize: 15)),
                     )),
                     DropdownMenuItem(value: '+44', child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('+44', style: TextStyle(fontSize: 16)),
+                      child: Text('+44', style: TextStyle(fontSize: 15)),
                     )),
                     DropdownMenuItem(value: '+91', child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('+91', style: TextStyle(fontSize: 16)),
+                      child: Text('+91', style: TextStyle(fontSize: 15)),
                     )),
                     DropdownMenuItem(value: '+86', child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('+86', style: TextStyle(fontSize: 16)),
+                      child: Text('+86', style: TextStyle(fontSize: 15)),
                     )),
                     DropdownMenuItem(value: '+81', child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('+81', style: TextStyle(fontSize: 16)),
+                      child: Text('+81', style: TextStyle(fontSize: 15)),
                     )),
                   ],
                   onChanged: onCountryCodeChanged,
@@ -722,33 +731,37 @@ class _PhoneNumberInputWidget extends StatelessWidget {
                   hintText: 'Phone Number',
                   hintStyle: TextStyle(
                     color: Colors.grey[400],
-                    fontSize: 16,
+                    fontSize: 15,
                   ),
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(color: Colors.grey[300]!),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(color: Colors.grey[300]!),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(color: Colors.grey[400]!),
                   ),
                   errorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: Colors.red),
                   ),
                   focusedErrorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: Colors.red),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  errorStyle: const TextStyle(
+                    fontSize: 12,
+                    height: 1.2,
                   ),
                 ),
                 validator: (value) {
@@ -784,7 +797,7 @@ class _NextButtonWidget extends StatelessWidget {
     
     return SizedBox(
       width: double.infinity,
-      height: isSmallScreen ? 44 : 48,
+      height: isSmallScreen ? 40 : 42,
       child: ElevatedButton(
         onPressed: onNext,
         style: ElevatedButton.styleFrom(
@@ -801,12 +814,12 @@ class _NextButtonWidget extends StatelessWidget {
             const Text(
               'Next',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward, size: 20),
+            const SizedBox(width: 6),
+            const Icon(Icons.arrow_forward, size: 18),
           ],
         ),
       ),
@@ -836,8 +849,12 @@ class _SignInLinkWidgetState extends State<_SignInLinkWidget> {
             const TextSpan(text: 'Already have an account? '),
             WidgetSpan(
               child: MouseRegion(
-                onEnter: (_) => setState(() => _isHovered = true),
-                onExit: (_) => setState(() => _isHovered = false),
+                onEnter: (_) {
+                  if (mounted) setState(() => _isHovered = true);
+                },
+                onExit: (_) {
+                  if (mounted) setState(() => _isHovered = false);
+                },
                 child: GestureDetector(
                   onTap: () {
                     Navigator.of(context).pushReplacement(
@@ -904,7 +921,7 @@ class _GoogleSignUpButtonWidget extends StatelessWidget {
     
     return SizedBox(
       width: double.infinity,
-      height: isSmallScreen ? 44 : 48,
+      height: isSmallScreen ? 40 : 42,
       child: OutlinedButton(
         onPressed: () {
           // Handle Google sign up
@@ -914,7 +931,7 @@ class _GoogleSignUpButtonWidget extends StatelessWidget {
           foregroundColor: Colors.black87,
           side: BorderSide(color: Colors.grey[300]!),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
         ),
         child: Row(
@@ -923,12 +940,12 @@ class _GoogleSignUpButtonWidget extends StatelessWidget {
             // Google icon from assets
             Image.asset(
               'assets/sign_in_up/google.png',
-              width: 24,
-              height: 24,
+              width: 20,
+              height: 20,
               errorBuilder: (context, error, stackTrace) {
                 return Container(
-                  width: 24,
-                  height: 24,
+                  width: 20,
+                  height: 20,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(4),
@@ -938,7 +955,7 @@ class _GoogleSignUpButtonWidget extends StatelessWidget {
                     child: Text(
                       'G',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
                         color: Colors.blue,
                       ),
@@ -947,11 +964,11 @@ class _GoogleSignUpButtonWidget extends StatelessWidget {
                 );
               },
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             const Text(
               'Sign up with Google',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
             ),

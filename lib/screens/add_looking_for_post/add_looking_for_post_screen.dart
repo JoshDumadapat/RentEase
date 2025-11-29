@@ -65,14 +65,14 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
       return;
     }
 
-    // Print values to console
-    print('=== Looking For Post Submission ===');
-    print('Preferred Location: ${_locationController.text}');
-    print('Property Type: $_propertyType');
-    print('Budget Range: ₱${_minBudgetController.text} - ₱${_maxBudgetController.text}');
-    print('Move-in Date: ${_moveInDate?.toString() ?? "Not specified"}');
-    print('Description: ${_descriptionController.text}');
-    print('===================================');
+    // Log values for debugging
+    debugPrint('=== Looking For Post Submission ===');
+    debugPrint('Preferred Location: ${_locationController.text}');
+    debugPrint('Property Type: $_propertyType');
+    debugPrint('Budget Range: ₱${_minBudgetController.text} - ₱${_maxBudgetController.text}');
+    debugPrint('Move-in Date: ${_moveInDate?.toString() ?? "Not specified"}');
+    debugPrint('Description: ${_descriptionController.text}');
+    debugPrint('===================================');
 
     // Show success message
     ScaffoldMessenger.of(context).showSnackBar(
@@ -150,7 +150,7 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
                     _buildSectionTitle('Property Type'),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: _propertyType,
+                      initialValue: _propertyType,
                       decoration: InputDecoration(
                         hintText: 'Select property type',
                         border: OutlineInputBorder(
