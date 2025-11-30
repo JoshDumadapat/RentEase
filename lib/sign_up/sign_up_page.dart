@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:rentease_app/sign_in/sign_in_page.dart';
 import 'package:rentease_app/sign_up/student_sign_up_page.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
+
 /// Sign Up Page with user type selection
 class SignUpPage extends StatefulWidget {
-  const SignUpPage({super.key});
+  final User? googleUser; // Firebase User from Google sign-in
+  
+  const SignUpPage({super.key, this.googleUser});
 
   @override
   State<SignUpPage> createState() => _SignUpPageState();
@@ -20,7 +24,7 @@ class _SignUpPageState extends State<SignUpPage> {
           _BackgroundImageWidget(),
           // White Card Background Widget
           _WhiteCardBackgroundWidget(
-            child: _SignUpContentWidget(),
+            child: _SignUpContentWidget(googleUser: widget.googleUser),
           ),
         ],
       ),
@@ -73,7 +77,7 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
     return Positioned(
       left: 0,
       right: 0,
-      top: imageHeight - 25, // Start higher to create more overlap and taller card
+      top: imageHeight - 40,
       bottom: 0,
       child: Container(
         decoration: const BoxDecoration(
@@ -91,75 +95,97 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
 
 /// Widget for the sign up content
 class _SignUpContentWidget extends StatelessWidget {
+  final User? googleUser;
+
+  const _SignUpContentWidget({this.googleUser});
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 24),
-          // Logo Widget
-          _LogoWidget(),
-          const SizedBox(height: 24),
-          // Title Widget
-          _TitleWidget(),
-          const SizedBox(height: 12),
-          // Description Widget
-          _DescriptionWidget(),
-          const SizedBox(height: 28),
-          // Sign up as header
-          _SignUpAsHeaderWidget(),
-          const SizedBox(height: 16),
-          // User Type Options
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  _UserTypeCardWidget(
-                    imagePath: 'assets/sign_in_up/student.png',
-                    title: 'Student',
-                    description: 'Register with Student ID if you don\'t have a valid ID.',
-                    backgroundColor: Colors.blue[50]!,
-                    arrowColor: Colors.blue,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        _SlideUpPageRoute(page: const StudentSignUpPage()),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _UserTypeCardWidget(
-                    imagePath: 'assets/sign_in_up/pro.png',
-                    title: 'Professional',
-                    description: 'Sign up with a valid government ID.',
-                    backgroundColor: Colors.blue[50]!,
-                    arrowColor: Colors.blue,
-                    onTap: () {
-                      // Handle professional sign up
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _UserTypeCardWidget(
-                    imagePath: 'assets/sign_in_up/guest.png',
-                    title: 'Guest',
-                    description: 'Continue as a guest and experience RentEase.',
-                    backgroundColor: Colors.orange[50]!,
-                    arrowColor: Colors.orange,
-                    onTap: () {
-                      // Handle guest sign up
-                    },
-                  ),
-                ],
-              ),
-            ),
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
+    final isNarrowScreen = screenWidth < 360;
+    
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: isNarrowScreen ? 20.0 : 24.0,
+            vertical: isVerySmallScreen ? 16.0 : 20.0,
           ),
-          const SizedBox(height: 0),
-          // Sign In Link Widget
-          _SignInLinkWidget(),
-          const SizedBox(height: 40),
-        ],
-      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Top spacing - responsive
+              SizedBox(height: isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
+              // Logo Widget
+              _LogoWidget(),
+              SizedBox(height: isVerySmallScreen ? 12 : isSmallScreen ? 15 : 18),
+              // Title Widget
+              _TitleWidget(),
+              SizedBox(height: isVerySmallScreen ? 5 : 7),
+              // Description Widget
+              _DescriptionWidget(),
+              SizedBox(height: isVerySmallScreen ? 12 : isSmallScreen ? 15 : 18),
+              // Sign up as header
+              _SignUpAsHeaderWidget(),
+              SizedBox(height: isVerySmallScreen ? 10 : 12),
+              // User Type Options
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _UserTypeCardWidget(
+                        imagePath: 'assets/sign_in_up/student.png',
+                        title: 'Student',
+                        description: 'Register with Student ID if you don\'t have a valid ID.',
+                        backgroundColor: Colors.blue[50]!,
+                        arrowColor: Colors.blue,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            _SlideUpPageRoute(
+                              page: StudentSignUpPage(googleUser: googleUser),
+                            ),
+                          );
+                        },
+                      ),
+                      SizedBox(height: isVerySmallScreen ? 8 : 10),
+                      _UserTypeCardWidget(
+                        imagePath: 'assets/sign_in_up/pro.png',
+                        title: 'Professional',
+                        description: 'Sign up with a valid government ID.',
+                        backgroundColor: Colors.blue[50]!,
+                        arrowColor: Colors.blue,
+                        onTap: () {
+                          // Handle professional sign up
+                        },
+                      ),
+                      SizedBox(height: isVerySmallScreen ? 8 : 10),
+                      _UserTypeCardWidget(
+                        imagePath: 'assets/sign_in_up/guest.png',
+                        title: 'Guest',
+                        description: 'Continue as a guest and experience RentEase.',
+                        backgroundColor: Colors.orange[50]!,
+                        arrowColor: Colors.orange,
+                        onTap: () {
+                          // Handle guest sign up
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: isVerySmallScreen ? 12 : 15),
+              // Sign In Link Widget
+              _SignInLinkWidget(),
+              // Bottom spacing - proportional to top
+              SizedBox(height: isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -169,8 +195,28 @@ class _LogoWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenHeight < 700;
-    final logoHeight = isSmallScreen ? 50.0 : 55.0;
+    final isVerySmallScreen = screenHeight < 600;
+    final isNarrowScreen = screenWidth < 360;
+    
+    // Dynamic logo size based on screen dimensions
+    double logoHeight;
+    if (isVerySmallScreen) {
+      logoHeight = screenHeight * 0.06; // 6% of screen height
+    } else if (isSmallScreen) {
+      logoHeight = screenHeight * 0.065; // 6.5% of screen height
+    } else {
+      logoHeight = screenHeight * 0.07; // 7% of screen height
+    }
+    
+    // Cap the maximum size and ensure minimum size
+    logoHeight = logoHeight.clamp(35.0, 45.0);
+    
+    // Adjust for narrow screens
+    if (isNarrowScreen) {
+      logoHeight *= 0.9;
+    }
     
     return Center(
       child: Image.asset(
@@ -189,10 +235,14 @@ class _LogoWidget extends StatelessWidget {
 class _TitleWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return const Text(
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
+    
+    return Text(
       'Get Started Now',
       style: TextStyle(
-        fontSize: 20,
+        fontSize: isVerySmallScreen ? 20 : isSmallScreen ? 22 : 24,
         fontWeight: FontWeight.bold,
         color: Colors.black87,
       ),
@@ -204,10 +254,14 @@ class _TitleWidget extends StatelessWidget {
 class _DescriptionWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
+    
     return Text(
       'Create an account or log in to explore what RentEase has to offer.',
       style: TextStyle(
-        fontSize: 14,
+        fontSize: isVerySmallScreen ? 12 : isSmallScreen ? 13 : 14,
         fontWeight: FontWeight.normal,
         color: Colors.grey[700],
         height: 1.4,
@@ -220,10 +274,14 @@ class _DescriptionWidget extends StatelessWidget {
 class _SignUpAsHeaderWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
+    
     return Text(
       'Sign up as:',
       style: TextStyle(
-        fontSize: 16,
+        fontSize: isVerySmallScreen ? 14 : isSmallScreen ? 15 : 16,
         fontWeight: FontWeight.w600,
         color: Colors.grey[800],
       ),
@@ -251,10 +309,14 @@ class _UserTypeCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
+    
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(isVerySmallScreen ? 12 : 14),
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: BorderRadius.circular(12),
@@ -263,8 +325,8 @@ class _UserTypeCardWidget extends StatelessWidget {
           children: [
             // Avatar Image
             Container(
-              width: 60,
-              height: 60,
+              width: isVerySmallScreen ? 50 : isSmallScreen ? 55 : 60,
+              height: isVerySmallScreen ? 50 : isSmallScreen ? 55 : 60,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white,
@@ -274,12 +336,16 @@ class _UserTypeCardWidget extends StatelessWidget {
                   imagePath,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
-                    return const Icon(Icons.person, size: 40, color: Colors.grey);
+                    return Icon(
+                      Icons.person,
+                      size: isVerySmallScreen ? 30 : 40,
+                      color: Colors.grey,
+                    );
                   },
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: isVerySmallScreen ? 12 : 14),
             // Title and Description
             Expanded(
               child: Column(
@@ -287,17 +353,17 @@ class _UserTypeCardWidget extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      fontSize: 16,
+                    style: TextStyle(
+                      fontSize: isVerySmallScreen ? 14 : 16,
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: isVerySmallScreen ? 3 : 4),
                   Text(
                     description,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: isVerySmallScreen ? 11 : 12,
                       fontWeight: FontWeight.normal,
                       color: Colors.grey[600],
                     ),
@@ -309,7 +375,7 @@ class _UserTypeCardWidget extends StatelessWidget {
             Text(
               '→',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: isVerySmallScreen ? 18 : 20,
                 color: arrowColor,
                 fontWeight: FontWeight.bold,
               ),
@@ -337,7 +403,7 @@ class _SignInLinkWidgetState extends State<_SignInLinkWidget> {
         textAlign: TextAlign.center,
         text: TextSpan(
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             color: Colors.grey[700],
           ),
           children: [
@@ -359,7 +425,7 @@ class _SignInLinkWidgetState extends State<_SignInLinkWidget> {
                   child: Text(
                     'Sign In here.',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w500,
                       color: _isHovered ? Colors.blue[800] : Colors.blue,
                     ),

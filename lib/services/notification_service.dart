@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:rentease_app/models/notification_model.dart';
 
-/// Notification Controller
+/// Notification Service
 /// 
 /// Manages notification state and business logic.
 /// Handles fetching, marking as read, and deleting notifications.
-class NotificationController extends ChangeNotifier {
+class NotificationService extends ChangeNotifier {
   List<NotificationModel> _notifications = [];
   bool _isLoading = false;
   String? _error;
@@ -96,7 +96,7 @@ class NotificationController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Initialize controller - fetch notifications on first load
+  /// Initialize service - fetch notifications on first load
   void initialize() {
     if (_notifications.isEmpty) {
       fetchNotifications();

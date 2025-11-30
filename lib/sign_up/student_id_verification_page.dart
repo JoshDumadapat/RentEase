@@ -1,10 +1,31 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:rentease_app/services/user_service.dart';
+import 'package:rentease_app/services/auth_service.dart';
+import 'package:rentease_app/main_app.dart';
 
 class StudentIDVerificationPage extends StatefulWidget {
-  const StudentIDVerificationPage({super.key});
+  final String firstName;
+  final String lastName;
+  final String email;
+  final String birthday;
+  final String phone;
+  final String countryCode;
+  final User? googleUser; // Firebase User from Google sign-in
+
+  const StudentIDVerificationPage({
+    super.key,
+    required this.firstName,
+    required this.lastName,
+    required this.email,
+    required this.birthday,
+    required this.phone,
+    required this.countryCode,
+    this.googleUser,
+  });
 
   @override
   State<StudentIDVerificationPage> createState() =>
@@ -13,11 +34,15 @@ class StudentIDVerificationPage extends StatefulWidget {
 
 class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
   final ImagePicker _imagePicker = ImagePicker();
+  final UserService _userService = UserService();
+  final AuthService _authService = AuthService();
 
   XFile? _frontIdImage;
   XFile? _backIdImage;
+  XFile? _faceWithIdImage;
 
   bool _isLoading = false;
+  bool _isUploading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -29,11 +54,16 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
             child: _StudentIDVerificationContentWidget(
               frontIdImage: _frontIdImage,
               backIdImage: _backIdImage,
+              faceWithIdImage: _faceWithIdImage,
               isLoading: _isLoading,
+              isUploading: _isUploading,
               onCaptureFront: () => _captureImage('front'),
               onCaptureBack: () => _captureImage('back'),
+              onCaptureFaceWithId: () => _captureImage('faceWithId'),
               onRetakeFront: () => _captureImage('front'),
               onRetakeBack: () => _captureImage('back'),
+              onRetakeFaceWithId: () => _captureImage('faceWithId'),
+              onUpload: _handleUpload,
             ),
           ),
         ],
@@ -121,18 +151,18 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
 
   Future<void> _captureImage(String imageType) async {
     if (mounted) {
-      setState(() {
-        _isLoading = true;
-      });
+    setState(() {
+      _isLoading = true;
+    });
     }
 
     try {
       final hasPermission = await _requestPermissions();
       if (!hasPermission) {
         if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+        setState(() {
+          _isLoading = false;
+        });
         }
         return;
       }
@@ -151,13 +181,15 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                      children: [
                     // Title
                     Text(
-                      'Capture ${imageType == 'front' ? 'Front' : 'Back'} ID',
+                      imageType == 'faceWithId' 
+                          ? 'Capture Face with ID'
+                          : 'Capture ${imageType == 'front' ? 'Front' : 'Back'} ID',
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
@@ -168,7 +200,7 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
                     Text(
                       'Choose an option',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         color: Colors.grey[600],
                       ),
                     ),
@@ -191,13 +223,13 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
                       title: 'Gallery',
                       subtitle: 'Choose from photos',
                       onTap: () => Navigator.of(context).pop(ImageSource.gallery),
-                    ),
+                        ),
                     const SizedBox(height: 20),
                     // Cancel Button
                     SizedBox(
                       width: double.infinity,
                       child: TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
+                          onPressed: () => Navigator.of(context).pop(),
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
@@ -212,9 +244,9 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
                             color: Colors.grey[700],
                           ),
                         ),
-                      ),
                     ),
-                  ],
+                  ),
+                ],
                 ),
               ),
             );
@@ -223,9 +255,9 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
 
         if (source == null) {
           if (mounted) {
-            setState(() {
-              _isLoading = false;
-            });
+          setState(() {
+            _isLoading = false;
+          });
           }
           return;
         }
@@ -242,28 +274,30 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
             final confirmed = await _showImagePreview(image, imageType);
             if (confirmed) {
               if (mounted) {
-                setState(() {
-                  if (imageType == 'front') {
-                    _frontIdImage = image;
-                  } else {
-                    _backIdImage = image;
-                  }
-                  _isLoading = false;
-                });
+              setState(() {
+                if (imageType == 'front') {
+                  _frontIdImage = image;
+                } else if (imageType == 'back') {
+                  _backIdImage = image;
+                } else if (imageType == 'faceWithId') {
+                  _faceWithIdImage = image;
+                }
+                _isLoading = false;
+              });
               }
             } else {
               if (mounted) {
-                setState(() {
-                  _isLoading = false;
-                });
+              setState(() {
+                _isLoading = false;
+              });
               }
             }
           }
         } else {
           if (mounted) {
-            setState(() {
-              _isLoading = false;
-            });
+          setState(() {
+            _isLoading = false;
+          });
           }
         }
       }
@@ -277,9 +311,9 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
           ),
         );
         if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+        setState(() {
+          _isLoading = false;
+        });
         }
       }
     }
@@ -380,6 +414,127 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
         ) ??
         false;
   }
+
+  Future<void> _handleUpload() async {
+    if (_frontIdImage == null || _backIdImage == null) {
+      return;
+    }
+
+    setState(() {
+      _isUploading = true;
+    });
+
+    try {
+      User? user = widget.googleUser;
+
+      // If no Google user, check if there's a current user (from email/password)
+      user ??= _authService.currentUser;
+
+      // If still no user, create account with automatic password
+      // Automatically set password to "Pass123" for all new accounts
+      const password = 'Pass123';
+      
+      if (user == null) {
+        try {
+          // Trim email to ensure consistency
+          final email = widget.email.trim().toLowerCase();
+          debugPrint('=== CREATING ACCOUNT ===');
+          debugPrint('Email: "$email" (length: ${email.length})');
+          debugPrint('Password: "${password.replaceAll(RegExp(r'.'), '*')}" (length: ${password.length})');
+          final userCredential = await _authService.signUpWithEmailAndPassword(
+            email,
+            password,
+          );
+          user = userCredential.user;
+          debugPrint('Account created successfully. UID: ${user?.uid}');
+          
+          // Verify account was created by checking current user
+          if (user != null) {
+            final currentUser = _authService.currentUser;
+            if (currentUser != null && currentUser.uid == user.uid) {
+              debugPrint('Account verified - user is authenticated in Firebase Auth');
+            } else {
+              debugPrint('WARNING: Account created but user not authenticated');
+            }
+          }
+        } catch (e) {
+          debugPrint('ERROR creating Firebase Auth account: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error creating account: $e'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            setState(() {
+              _isUploading = false;
+            });
+          }
+          return;
+        }
+      }
+
+      if (user == null) {
+        throw Exception('Failed to get user');
+      }
+
+      final uid = user.uid;
+
+      // Store password in Firestore for email/password accounts (not Google accounts)
+      final passwordToStore = widget.googleUser == null ? password : null;
+
+      // Save user data to Firestore with "TEST" for image fields
+      await _userService.createOrUpdateUser(
+        uid: uid,
+        email: widget.email,
+        fname: widget.firstName,
+        lname: widget.lastName,
+        birthday: widget.birthday,
+        phone: widget.phone,
+        countryCode: widget.countryCode,
+        idImageFrontUrl: 'TEST', // Store "TEST" as placeholder
+        idImageBackUrl: 'TEST', // Store "TEST" as placeholder
+        faceWithIdUrl: _faceWithIdImage != null ? 'TEST' : null,
+        userType: 'student',
+        password: passwordToStore, // Store password in Firestore
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Navigate to main app
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (context) => const MainApp(),
+          ),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating account: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
+    }
+  }
 }
 
 class _BackgroundImageWidget extends StatelessWidget {
@@ -442,20 +597,30 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
 class _StudentIDVerificationContentWidget extends StatelessWidget {
   final XFile? frontIdImage;
   final XFile? backIdImage;
+  final XFile? faceWithIdImage;
   final bool isLoading;
+  final bool isUploading;
   final VoidCallback onCaptureFront;
   final VoidCallback onCaptureBack;
+  final VoidCallback onCaptureFaceWithId;
   final VoidCallback onRetakeFront;
   final VoidCallback onRetakeBack;
+  final VoidCallback onRetakeFaceWithId;
+  final VoidCallback onUpload;
 
   const _StudentIDVerificationContentWidget({
     required this.frontIdImage,
     required this.backIdImage,
+    this.faceWithIdImage,
     required this.isLoading,
+    required this.isUploading,
     required this.onCaptureFront,
     required this.onCaptureBack,
+    required this.onCaptureFaceWithId,
     required this.onRetakeFront,
     required this.onRetakeBack,
+    required this.onRetakeFaceWithId,
+    required this.onUpload,
   });
 
   @override
@@ -475,10 +640,20 @@ class _StudentIDVerificationContentWidget extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(height: 0),
-            _BackButtonWidget(),
-            SizedBox(height: 0),
-            _LogoWidget(),
+            SizedBox(height: isSmallScreen ? 8 : 12),
+            // Back button and Logo aligned in same row
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                // Back button aligned to start (left) with negative margin
+                Positioned(
+                  left: -12,
+                  child: _BackButtonWidget(),
+                ),
+                // Logo centered horizontally
+                _LogoWidget(),
+              ],
+            ),
             SizedBox(height: isSmallScreen ? 14 : 16),
             _TitleWidget(),
             SizedBox(height: isSmallScreen ? 4 : 6),
@@ -499,10 +674,19 @@ class _StudentIDVerificationContentWidget extends StatelessWidget {
               onCapture: onCaptureBack,
               onRetake: onRetakeBack,
             ),
+            SizedBox(height: isSmallScreen ? 14 : 16),
+            _IDCaptureSectionWidget(
+              title: 'Face with ID (Optional)',
+              image: faceWithIdImage,
+              isLoading: isLoading,
+              onCapture: onCaptureFaceWithId,
+              onRetake: onRetakeFaceWithId,
+            ),
             SizedBox(height: isSmallScreen ? 16 : 18),
             _UploadIDButtonWidget(
               isEnabled: frontIdImage != null && backIdImage != null,
-              isLoading: isLoading,
+              isLoading: isLoading || isUploading,
+              onUpload: onUpload,
             ),
             SizedBox(height: isSmallScreen ? 8 : 16),
           ],
@@ -533,17 +717,14 @@ class _LogoWidget extends StatelessWidget {
     final isSmallScreen = screenHeight < 700;
     final logoHeight = isSmallScreen ? 50.0 : 55.0;
 
-    return Transform.translate(
-      offset: const Offset(0, -8),
-      child: Center(
-        child: Image.asset(
-          'assets/sign_in_up/signlogo.png',
-          height: logoHeight,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) {
-            return Icon(Icons.home, size: logoHeight, color: Colors.blue);
-          },
-        ),
+    return Center(
+      child: Image.asset(
+        'assets/sign_in_up/signlogo.png',
+        height: logoHeight,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Icon(Icons.home, size: logoHeight, color: Colors.blue);
+        },
       ),
     );
   }
@@ -552,13 +733,10 @@ class _LogoWidget extends StatelessWidget {
 class _TitleWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final isSmallScreen = screenHeight < 700;
-
-    return Text(
+    return const Text(
       'Sign Up as Student',
       style: TextStyle(
-        fontSize: isSmallScreen ? 18 : 20,
+        fontSize: 20,
         fontWeight: FontWeight.bold,
         color: Colors.black87,
       ),
@@ -572,7 +750,7 @@ class _DescriptionWidget extends StatelessWidget {
     return Text(
       'Provide Your ID Information for Verification.',
       style: TextStyle(
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: FontWeight.normal,
         color: Colors.grey[700],
         height: 1.4,
@@ -609,7 +787,7 @@ class _IDCaptureSectionWidgetState extends State<_IDCaptureSectionWidget> {
         Text(
           '${widget.title}:',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w500,
             color: Colors.grey[600],
           ),
@@ -627,16 +805,18 @@ class _IDCaptureSectionWidgetState extends State<_IDCaptureSectionWidget> {
             width: double.infinity,
             height: 150,
             decoration: BoxDecoration(
-              color: Colors.blue[50],
+              color: widget.title.toLowerCase().contains('face') ? Colors.orange[50] : Colors.blue[50],
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: widget.image != null ? Colors.green[400]! : Colors.blue[200]!,
+                color: widget.image != null 
+                    ? Colors.green[400]! 
+                    : (widget.title.toLowerCase().contains('face') ? Colors.orange[200]! : Colors.blue[200]!),
                 width: 1.5,
                 style: BorderStyle.solid,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
+                  color: Colors.black.withValues(alpha: 0.03),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -644,6 +824,7 @@ class _IDCaptureSectionWidgetState extends State<_IDCaptureSectionWidget> {
             ),
             child: widget.image == null
                 ? _EmptyCaptureAreaWidget(
+                    title: widget.title,
                     onTap: widget.isLoading
                         ? null
                         : () {
@@ -668,12 +849,18 @@ class _IDCaptureSectionWidgetState extends State<_IDCaptureSectionWidget> {
 }
 
 class _EmptyCaptureAreaWidget extends StatelessWidget {
+  final String? title;
   final VoidCallback? onTap;
 
-  const _EmptyCaptureAreaWidget({this.onTap});
+  const _EmptyCaptureAreaWidget({this.title, this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final isFaceWithId = title?.toLowerCase().contains('face') ?? false;
+    final iconColor = isFaceWithId ? Colors.orange[700] : Colors.blue[700];
+    final backgroundColor = isFaceWithId ? Colors.orange[100] : Colors.blue[100];
+    final icon = isFaceWithId ? Icons.face : Icons.camera_alt;
+    
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -681,17 +868,17 @@ class _EmptyCaptureAreaWidget extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.blue[100],
+              color: backgroundColor,
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.camera_alt, size: 32, color: Colors.blue[700]),
+            child: Icon(icon, size: 32, color: iconColor),
           ),
           const SizedBox(height: 10),
           Text(
             'Tap to capture',
             style: TextStyle(
               fontSize: 13,
-              color: Colors.blue[700],
+              color: iconColor,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -790,7 +977,7 @@ class _ModernDialogOption extends StatelessWidget {
           color: backgroundColor,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: iconColor.withOpacity(0.2),
+            color: iconColor.withValues(alpha: 0.2),
             width: 1,
           ),
         ),
@@ -799,7 +986,7 @@ class _ModernDialogOption extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
+                color: iconColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
@@ -847,10 +1034,12 @@ class _ModernDialogOption extends StatelessWidget {
 class _UploadIDButtonWidget extends StatelessWidget {
   final bool isEnabled;
   final bool isLoading;
+  final VoidCallback onUpload;
 
   const _UploadIDButtonWidget({
     required this.isEnabled,
     required this.isLoading,
+    required this.onUpload,
   });
 
   @override
@@ -861,38 +1050,32 @@ class _UploadIDButtonWidget extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       height: isSmallScreen ? 40 : 42,
-      child: ElevatedButton(
-        onPressed: isEnabled && !isLoading
-            ? () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('ID photos uploaded successfully!'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-            : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isEnabled ? Colors.grey[850] : Colors.grey[400],
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+      child: IgnorePointer(
+        ignoring: !isEnabled || isLoading, // Prevent clicks when disabled or loading but keep visual state
+        child: ElevatedButton(
+          onPressed: onUpload,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: isEnabled ? Colors.grey[850] : Colors.grey[400], // Always use same background color
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            elevation: 0,
           ),
-          elevation: 0,
-        ),
-        child: isLoading
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          child: isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Text(
+                  'Upload ID Photo',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
-              )
-            : const Text(
-                'Upload ID Photo',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-              ),
+        ),
       ),
     );
   }

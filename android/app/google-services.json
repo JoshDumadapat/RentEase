@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "948370771334",
+    "project_id": "renteasedb",
+    "storage_bucket": "renteasedb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:948370771334:android:e47c291d00fe1edc4bb007",
+        "android_client_info": {
+          "package_name": "com.example.rentease_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "948370771334-i4v1tpmoj936iniflvh1ldm1vpcd9iqm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.rentease_app",
+            "certificate_hash": "e68bcb3a4d64e57d80480547fb12189a3067cca9"
+          }
+        },
+        {
+          "client_id": "948370771334-k9o21p423l6mq4aq0o5cuf2v3jnmeaqe.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBz8n1axctGdVFO-VPr0wrggYGAYK6-9Ko"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "948370771334-k9o21p423l6mq4aq0o5cuf2v3jnmeaqe.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "948370771334-l1c8cr8qqub9vht9fouej46tup8qcfec.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.renteaseApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

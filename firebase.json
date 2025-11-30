@@ -1,0 +1,28 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "renteasedb",
+          "appId": "1:948370771334:android:e47c291d00fe1edc4bb007",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "renteasedb",
+          "configurations": {
+            "android": "1:948370771334:android:e47c291d00fe1edc4bb007",
+            "ios": "1:948370771334:ios:29f320f1ee0b24d44bb007",
+            "macos": "1:948370771334:ios:29f320f1ee0b24d44bb007",
+            "web": "1:948370771334:web:4b89e6583066b2dc4bb007",
+            "windows": "1:948370771334:web:178fe30df399734e4bb007"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:rentease_app/controllers/notification_controller.dart';
+import 'package:rentease_app/services/notification_service.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/models/notification_model.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
@@ -24,14 +24,14 @@ class NotificationsPage extends StatefulWidget {
 }
 
 class _NotificationsPageState extends State<NotificationsPage> with SingleTickerProviderStateMixin {
-  late final NotificationController _controller;
+  late final NotificationService _controller;
   late final TabController _tabController;
   int _selectedTabIndex = 0; // 0 = All, 1 = Unread
 
   @override
   void initState() {
     super.initState();
-    _controller = NotificationController();
+    _controller = NotificationService();
     _controller.initialize();
     _controller.addListener(_onControllerUpdate);
     _tabController = TabController(length: 2, vsync: this);

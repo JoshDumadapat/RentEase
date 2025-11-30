@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:rentease_app/sign_in/sign_in_page.dart';
 import 'package:rentease_app/sign_up/student_id_verification_page.dart';
+import 'package:rentease_app/services/auth_service.dart';
+import 'package:rentease_app/services/user_service.dart';
+import 'package:rentease_app/main_app.dart';
 
 /// Student Sign Up Page with form validation
 class StudentSignUpPage extends StatefulWidget {
-  const StudentSignUpPage({super.key});
+  final User? googleUser; // Firebase User from Google sign-in
+  
+  const StudentSignUpPage({super.key, this.googleUser});
 
   @override
   State<StudentSignUpPage> createState() => _StudentSignUpPageState();
@@ -19,8 +25,27 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
   final _birthDateController = TextEditingController();
   final _phoneNumberController = TextEditingController();
   
-  String _selectedCountryCode = '+1';
+  String _selectedCountryCode = '+63';
   DateTime? _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-fill from Google account if available
+    if (widget.googleUser != null) {
+      final displayName = widget.googleUser!.displayName ?? '';
+      if (displayName.isNotEmpty) {
+        final nameParts = displayName.split(' ');
+        if (nameParts.isNotEmpty) {
+          _firstNameController.text = nameParts[0];
+        }
+        if (nameParts.length > 1) {
+          _lastNameController.text = nameParts.sublist(1).join(' ');
+        }
+      }
+      _emailController.text = widget.googleUser!.email ?? '';
+    }
+  }
 
   @override
   void dispose() {
@@ -42,9 +67,78 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: ColorScheme.light(
-              primary: Colors.blue,
+              primary: Colors.grey[850]!,
               onPrimary: Colors.white,
               onSurface: Colors.black87,
+              surface: Colors.white,
+              onSurfaceVariant: Colors.grey[600]!,
+            ),
+            dialogTheme: DialogThemeData(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              elevation: 8,
+            ),
+            datePickerTheme: DatePickerThemeData(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              headerBackgroundColor: Colors.grey[850],
+              headerForegroundColor: Colors.white,
+              headerHeadlineStyle: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+              headerHelpStyle: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[300]!,
+              ),
+              weekdayStyle: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[700]!,
+              ),
+              dayStyle: TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+              ),
+              yearStyle: TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+              ),
+              rangeSelectionBackgroundColor: Colors.grey[200]!,
+              dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.white;
+                }
+                if (states.contains(WidgetState.disabled)) {
+                  return Colors.grey[400];
+                }
+                return Colors.black87;
+              }),
+              yearForegroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.white;
+                }
+                if (states.contains(WidgetState.disabled)) {
+                  return Colors.grey[400];
+                }
+                return Colors.black87;
+              }),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey[850],
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
             ),
           ),
           child: child!,
@@ -64,9 +158,19 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
 
   void _handleNext() {
     if (_formKey.currentState!.validate()) {
-      // Form is valid, navigate to ID verification page
+      // Form is valid, navigate to ID verification page with form data
       Navigator.of(context).push(
-        _SlideUpPageRoute(page: const StudentIDVerificationPage()),
+        _SlideUpPageRoute(
+          page: StudentIDVerificationPage(
+            firstName: _firstNameController.text.trim(),
+            lastName: _lastNameController.text.trim(),
+            email: _emailController.text.trim(),
+            birthday: _birthDateController.text.trim(),
+            phone: _phoneNumberController.text.trim(),
+            countryCode: _selectedCountryCode,
+            googleUser: widget.googleUser,
+          ),
+        ),
       );
     }
   }
@@ -214,12 +318,20 @@ class _StudentSignUpContentWidget extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(height: 0),
-              // Back button
-              _BackButtonWidget(),
-              SizedBox(height: 0),
-              // Logo Widget
-              _LogoWidget(),
+              SizedBox(height: isSmallScreen ? 8 : 12),
+              // Back button and Logo aligned in same row
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Back button aligned to start (left) with negative margin
+                  Positioned(
+                    left: -12,
+                    child: _BackButtonWidget(),
+                  ),
+                  // Logo centered horizontally
+                  _LogoWidget(),
+                ],
+              ),
               SizedBox(height: isSmallScreen ? 14 : 16),
               // Title Widget
               _TitleWidget(),
@@ -265,10 +377,10 @@ class _StudentSignUpContentWidget extends StatelessWidget {
               SizedBox(height: isSmallScreen ? 12 : 16),
               // Sign In Link Widget
               _SignInLinkWidget(),
-              SizedBox(height: isSmallScreen ? 16 : 18),
+              SizedBox(height: isSmallScreen ? 20 : 24),
               // Divider Widget
               _DividerWidget(),
-              SizedBox(height: isSmallScreen ? 16 : 18),
+              SizedBox(height: isSmallScreen ? 20 : 24),
               // Google Sign Up Button Widget
               _GoogleSignUpButtonWidget(),
               SizedBox(height: isSmallScreen ? 8 : 16),
@@ -285,7 +397,7 @@ class _BackButtonWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: const Icon(Icons.arrow_back, color: Colors.black87),
+      icon: const Icon(Icons.arrow_back, color: Colors.black87, size: 20),
       onPressed: () {
         Navigator.of(context).pop();
       },
@@ -300,20 +412,37 @@ class _LogoWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenHeight < 700;
-    final logoHeight = isSmallScreen ? 50.0 : 55.0;
+    final isVerySmallScreen = screenHeight < 600;
+    final isNarrowScreen = screenWidth < 360;
     
-    return Transform.translate(
-      offset: const Offset(0, -8),
-      child: Center(
-        child: Image.asset(
-          'assets/sign_in_up/signlogo.png',
-          height: logoHeight,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) {
-            return Icon(Icons.home, size: logoHeight, color: Colors.blue);
-          },
-        ),
+    // Dynamic logo size based on screen dimensions
+    double logoHeight;
+    if (isVerySmallScreen) {
+      logoHeight = screenHeight * 0.06; // 6% of screen height
+    } else if (isSmallScreen) {
+      logoHeight = screenHeight * 0.065; // 6.5% of screen height
+    } else {
+      logoHeight = screenHeight * 0.07; // 7% of screen height
+    }
+    
+    // Cap the maximum size and ensure minimum size
+    logoHeight = logoHeight.clamp(35.0, 45.0);
+    
+    // Adjust for narrow screens
+    if (isNarrowScreen) {
+      logoHeight *= 0.9;
+    }
+    
+    return Center(
+      child: Image.asset(
+        'assets/sign_in_up/signlogo.png',
+        height: logoHeight,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Icon(Icons.home, size: logoHeight, color: Colors.blue);
+        },
       ),
     );
   }
@@ -325,11 +454,12 @@ class _TitleWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
     
     return Text(
       'Sign Up as Student',
       style: TextStyle(
-        fontSize: isSmallScreen ? 18 : 20,
+        fontSize: isVerySmallScreen ? 20 : isSmallScreen ? 22 : 24,
         fontWeight: FontWeight.bold,
         color: Colors.black87,
       ),
@@ -341,10 +471,14 @@ class _TitleWidget extends StatelessWidget {
 class _DescriptionWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
+    
     return Text(
       'Fill in your personal information to continue.',
       style: TextStyle(
-        fontSize: 14,
+        fontSize: isVerySmallScreen ? 12 : isSmallScreen ? 13 : 14,
         fontWeight: FontWeight.normal,
         color: Colors.grey[700],
         height: 1.4,
@@ -363,13 +497,17 @@ class _FirstNameInputWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'First Name',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: isVerySmallScreen ? 11 : isSmallScreen ? 12 : 13,
             fontWeight: FontWeight.w500,
             color: Colors.grey[600],
           ),
@@ -379,11 +517,15 @@ class _FirstNameInputWidget extends StatelessWidget {
           controller: controller,
           keyboardType: TextInputType.name,
           textCapitalization: TextCapitalization.words,
+          style: TextStyle(
+            color: Colors.black87,
+            fontSize: isVerySmallScreen ? 13 : isSmallScreen ? 14 : 15,
+          ),
           decoration: InputDecoration(
             hintText: 'First Name',
             hintStyle: TextStyle(
               color: Colors.grey[400],
-              fontSize: 15,
+              fontSize: 14,
             ),
             filled: true,
             fillColor: Colors.white,
@@ -434,13 +576,17 @@ class _LastNameInputWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Last Name',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: isVerySmallScreen ? 11 : isSmallScreen ? 12 : 13,
             fontWeight: FontWeight.w500,
             color: Colors.grey[600],
           ),
@@ -450,11 +596,15 @@ class _LastNameInputWidget extends StatelessWidget {
           controller: controller,
           keyboardType: TextInputType.name,
           textCapitalization: TextCapitalization.words,
+          style: TextStyle(
+            color: Colors.black87,
+            fontSize: isVerySmallScreen ? 13 : isSmallScreen ? 14 : 15,
+          ),
           decoration: InputDecoration(
             hintText: 'Last Name',
             hintStyle: TextStyle(
               color: Colors.grey[400],
-              fontSize: 15,
+              fontSize: 14,
             ),
             filled: true,
             fillColor: Colors.white,
@@ -505,13 +655,17 @@ class _EmailInputWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Email',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: isVerySmallScreen ? 11 : isSmallScreen ? 12 : 13,
             fontWeight: FontWeight.w500,
             color: Colors.grey[600],
           ),
@@ -520,11 +674,15 @@ class _EmailInputWidget extends StatelessWidget {
         TextFormField(
           controller: controller,
           keyboardType: TextInputType.emailAddress,
+          style: TextStyle(
+            color: Colors.black87,
+            fontSize: isVerySmallScreen ? 13 : isSmallScreen ? 14 : 15,
+          ),
           decoration: InputDecoration(
             hintText: 'Email',
             hintStyle: TextStyle(
               color: Colors.grey[400],
-              fontSize: 15,
+              fontSize: 14,
             ),
             filled: true,
             fillColor: Colors.white,
@@ -580,13 +738,17 @@ class _BirthDateInputWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Birth of date',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: isVerySmallScreen ? 11 : isSmallScreen ? 12 : 13,
             fontWeight: FontWeight.w500,
             color: Colors.grey[600],
           ),
@@ -596,11 +758,15 @@ class _BirthDateInputWidget extends StatelessWidget {
           controller: controller,
           readOnly: true,
           onTap: onTap,
+          style: TextStyle(
+            color: Colors.black87,
+            fontSize: isVerySmallScreen ? 13 : isSmallScreen ? 14 : 15,
+          ),
           decoration: InputDecoration(
             hintText: 'Birth of date',
             hintStyle: TextStyle(
               color: Colors.grey[400],
-              fontSize: 15,
+              fontSize: 14,
             ),
             filled: true,
             fillColor: Colors.white,
@@ -660,7 +826,10 @@ class _PhoneNumberInputWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
     final isNarrowScreen = screenWidth < 360;
     
     return Column(
@@ -669,7 +838,7 @@ class _PhoneNumberInputWidget extends StatelessWidget {
         Text(
           'Phone Number',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: isVerySmallScreen ? 11 : isSmallScreen ? 12 : 13,
             fontWeight: FontWeight.w500,
             color: Colors.grey[600],
           ),
@@ -680,7 +849,7 @@ class _PhoneNumberInputWidget extends StatelessWidget {
           children: [
             // Country Code Dropdown
             Container(
-              width: isNarrowScreen ? 80 : 100,
+              width: isNarrowScreen ? 90 : 110,
               height: 48,
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -693,26 +862,90 @@ class _PhoneNumberInputWidget extends StatelessWidget {
                   isExpanded: true,
                   icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
                   items: const [
-                    DropdownMenuItem(value: '+1', child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('+1', style: TextStyle(fontSize: 15)),
-                    )),
-                    DropdownMenuItem(value: '+44', child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('+44', style: TextStyle(fontSize: 15)),
-                    )),
-                    DropdownMenuItem(value: '+91', child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('+91', style: TextStyle(fontSize: 15)),
-                    )),
-                    DropdownMenuItem(value: '+86', child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('+86', style: TextStyle(fontSize: 15)),
-                    )),
-                    DropdownMenuItem(value: '+81', child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('+81', style: TextStyle(fontSize: 15)),
-                    )),
+                    DropdownMenuItem(
+                      value: '+63',
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('🇵🇭', style: TextStyle(fontSize: 18)),
+                            SizedBox(width: 6),
+                            Text('+63', style: TextStyle(fontSize: 14)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: '+1',
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('🇺🇸', style: TextStyle(fontSize: 18)),
+                            SizedBox(width: 6),
+                            Text('+1', style: TextStyle(fontSize: 14)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: '+44',
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('🇬🇧', style: TextStyle(fontSize: 18)),
+                            SizedBox(width: 6),
+                            Text('+44', style: TextStyle(fontSize: 14)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: '+91',
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('🇮🇳', style: TextStyle(fontSize: 18)),
+                            SizedBox(width: 6),
+                            Text('+91', style: TextStyle(fontSize: 14)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: '+86',
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('🇨🇳', style: TextStyle(fontSize: 18)),
+                            SizedBox(width: 6),
+                            Text('+86', style: TextStyle(fontSize: 14)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: '+81',
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('🇯🇵', style: TextStyle(fontSize: 18)),
+                            SizedBox(width: 6),
+                            Text('+81', style: TextStyle(fontSize: 14)),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                   onChanged: onCountryCodeChanged,
                 ),
@@ -727,11 +960,15 @@ class _PhoneNumberInputWidget extends StatelessWidget {
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                 ],
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontSize: isVerySmallScreen ? 13 : isSmallScreen ? 14 : 15,
+                ),
                 decoration: InputDecoration(
                   hintText: 'Phone Number',
                   hintStyle: TextStyle(
                     color: Colors.grey[400],
-                    fontSize: 15,
+                    fontSize: 14,
                   ),
                   filled: true,
                   fillColor: Colors.white,
@@ -804,7 +1041,7 @@ class _NextButtonWidget extends StatelessWidget {
           backgroundColor: Colors.grey[850],
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
           elevation: 0,
         ),
@@ -814,7 +1051,7 @@ class _NextButtonWidget extends StatelessWidget {
             const Text(
               'Next',
               style: TextStyle(
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -842,7 +1079,7 @@ class _SignInLinkWidgetState extends State<_SignInLinkWidget> {
       child: RichText(
         text: TextSpan(
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             color: Colors.grey[700],
           ),
           children: [
@@ -864,7 +1101,7 @@ class _SignInLinkWidgetState extends State<_SignInLinkWidget> {
                   child: Text(
                     'Sign In here.',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w500,
                       color: _isHovered ? Colors.blue[800] : Colors.blue,
                     ),
@@ -896,7 +1133,7 @@ class _DividerWidget extends StatelessWidget {
           child: Text(
             'Or sign up with',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               color: Colors.grey[600],
             ),
           ),
@@ -913,7 +1150,119 @@ class _DividerWidget extends StatelessWidget {
 }
 
 /// Widget for Google Sign Up button
-class _GoogleSignUpButtonWidget extends StatelessWidget {
+class _GoogleSignUpButtonWidget extends StatefulWidget {
+  @override
+  State<_GoogleSignUpButtonWidget> createState() => _GoogleSignUpButtonWidgetState();
+}
+
+class _GoogleSignUpButtonWidgetState extends State<_GoogleSignUpButtonWidget> {
+  final AuthService _authService = AuthService();
+  final UserService _userService = UserService();
+  bool _isLoading = false;
+
+  Future<void> _handleGoogleSignUp() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      debugPrint('Starting Google Sign-In...');
+      final userCredential = await _authService.signInWithGoogle();
+      debugPrint('Google Sign-In completed, userCredential: ${userCredential != null}');
+      
+      if (userCredential != null && userCredential.user != null && mounted) {
+        final user = userCredential.user!;
+        final uid = user.uid;
+        debugPrint('User authenticated: $uid');
+        
+        // Check if user exists in Firestore (with timeout and error handling)
+        bool userExists = false;
+        try {
+          debugPrint('Checking if user exists in Firestore...');
+          userExists = await _userService.userExists(uid).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              debugPrint('User exists check timed out, assuming new user');
+              return false;
+            },
+          );
+          debugPrint('User exists in Firestore: $userExists');
+        } catch (e) {
+          debugPrint('Error checking user exists: $e');
+          // Assume new user on error - will redirect to sign up
+          userExists = false;
+        }
+        
+        if (userExists && mounted) {
+          debugPrint('User exists, navigating to MainApp');
+          // User already exists, navigate to main app
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => const MainApp(),
+            ),
+          );
+        } else if (mounted) {
+          debugPrint('User does not exist, creating user record...');
+          // User doesn't exist, create basic user record and redirect to sign up
+          try {
+            // Create a basic user record with Google account info
+            final displayName = user.displayName;
+            final nameParts = displayName != null ? displayName.split(' ') : <String>[];
+            debugPrint('Creating user with name: $displayName, email: ${user.email}');
+            await _userService.createOrUpdateUser(
+              uid: uid,
+              email: user.email ?? '',
+              fname: nameParts.isNotEmpty ? nameParts.first : null,
+              lname: nameParts.length > 1 
+                  ? nameParts.sublist(1).join(' ')
+                  : null,
+              userType: 'student',
+            );
+            debugPrint('User record created successfully');
+          } catch (e) {
+            debugPrint('Error creating user record: $e');
+            // Continue anyway - user can complete sign up manually
+          }
+          
+          // Navigate to sign up page with Google user info to auto-fill
+          if (mounted) {
+            debugPrint('Navigating to StudentSignUpPage with Google user info');
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => StudentSignUpPage(
+                  googleUser: user,
+                ),
+              ),
+            );
+          }
+        }
+      } else if (mounted) {
+        debugPrint('User canceled sign up or userCredential is null');
+        // User canceled sign up
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Error in Google Sign-Up flow: $e');
+      debugPrint('Stack trace: $stackTrace');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        // Show error message with better formatting
+        final errorMessage = e.toString().replaceAll('Exception: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sign up failed: $errorMessage'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
@@ -923,9 +1272,7 @@ class _GoogleSignUpButtonWidget extends StatelessWidget {
       width: double.infinity,
       height: isSmallScreen ? 40 : 42,
       child: OutlinedButton(
-        onPressed: () {
-          // Handle Google sign up
-        },
+        onPressed: _isLoading ? null : _handleGoogleSignUp,
         style: OutlinedButton.styleFrom(
           backgroundColor: Colors.white,
           foregroundColor: Colors.black87,
@@ -934,46 +1281,55 @@ class _GoogleSignUpButtonWidget extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
           ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Google icon from assets
-            Image.asset(
-              'assets/sign_in_up/google.png',
-              width: 20,
-              height: 20,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.grey[300]!),
+        child: _isLoading
+            ? SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[600]!),
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Google icon from assets
+                  Image.asset(
+                    'assets/sign_in_up/google.png',
+                    width: 20,
+                    height: 20,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'G',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                  child: const Center(
-                    child: Text(
-                      'G',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue,
-                      ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Sign up with Google',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                );
-              },
-            ),
-            const SizedBox(width: 10),
-            const Text(
-              'Sign up with Google',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
