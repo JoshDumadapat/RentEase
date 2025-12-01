@@ -417,6 +417,13 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
 
   Future<void> _handleUpload() async {
     if (_frontIdImage == null || _backIdImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please capture both front and back ID images'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
       return;
     }
 
@@ -427,78 +434,112 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
     try {
       User? user = widget.googleUser;
 
-      // If no Google user, check if there's a current user (from email/password)
-      user ??= _authService.currentUser;
-
-      // If still no user, create account with automatic password
-      // Automatically set password to "Pass123" for all new accounts
-      const password = 'Pass123';
-      
+      // If no Google user, try to create email/password account
       if (user == null) {
         try {
-          // Trim email to ensure consistency
+          const password = 'Pass123'; // Default password
           final email = widget.email.trim().toLowerCase();
-          debugPrint('=== CREATING ACCOUNT ===');
-          debugPrint('Email: "$email" (length: ${email.length})');
-          debugPrint('Password: "${password.replaceAll(RegExp(r'.'), '*')}" (length: ${password.length})');
-          final userCredential = await _authService.signUpWithEmailAndPassword(
-            email,
-            password,
-          );
-          user = userCredential.user;
-          debugPrint('Account created successfully. UID: ${user?.uid}');
           
-          // Verify account was created by checking current user
-          if (user != null) {
-            final currentUser = _authService.currentUser;
-            if (currentUser != null && currentUser.uid == user.uid) {
-              debugPrint('Account verified - user is authenticated in Firebase Auth');
+          debugPrint('=== EMAIL/PASSWORD SIGN UP ===');
+          debugPrint('Email: "$email"');
+          debugPrint('Password length: ${password.length}');
+
+          // Check if email is already in use FIRST
+          try {
+            final signInMethods = await FirebaseAuth.instance.fetchSignInMethodsForEmail(email);
+            if (signInMethods.isNotEmpty) {
+              debugPrint('Email already exists. Signing in instead...');
+              // Try to sign in with the default password
+              try {
+                final userCredential = await _authService.signInWithEmailAndPassword(
+                  email,
+                  password,
+                );
+                user = userCredential.user;
+                debugPrint('Signed in existing user: ${user?.uid}');
+              } catch (signInError) {
+                debugPrint('Failed to sign in: $signInError');
+                // Email exists but password is wrong - ask user to reset
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Account already exists. Please use "Forgot Password" or sign in.'),
+                      backgroundColor: Colors.red,
+                      duration: Duration(seconds: 4),
+                    ),
+                  );
+                  setState(() { _isUploading = false; });
+                  return;
+                }
+              }
             } else {
-              debugPrint('WARNING: Account created but user not authenticated');
+              // Create new account
+              debugPrint('Creating new account...');
+              final userCredential = await _authService.signUpWithEmailAndPassword(
+                email,
+                password,
+              );
+              user = userCredential.user;
+              debugPrint('Account created: ${user?.uid}');
+              
+              // Verify the account was actually created
+              await user?.reload();
+              final currentUser = FirebaseAuth.instance.currentUser;
+              if (currentUser != null && currentUser.uid == user?.uid) {
+                debugPrint('✅ Account verified in Firebase Auth');
+              } else {
+                debugPrint('⚠️ Account created but not current user');
+              }
             }
+          } catch (fetchError) {
+            debugPrint('Error checking email: $fetchError');
+            // Proceed with account creation anyway
+            final userCredential = await _authService.signUpWithEmailAndPassword(
+              email,
+              password,
+            );
+            user = userCredential.user;
           }
         } catch (e) {
-          debugPrint('ERROR creating Firebase Auth account: $e');
+          debugPrint('ERROR creating account: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Error creating account: $e'),
+                content: Text('Error creating account: ${e.toString()}'),
                 backgroundColor: Colors.red,
-                duration: const Duration(seconds: 3),
+                duration: const Duration(seconds: 4),
               ),
             );
-            setState(() {
-              _isUploading = false;
-            });
+            setState(() { _isUploading = false; });
           }
           return;
         }
       }
 
       if (user == null) {
-        throw Exception('Failed to get user');
+        throw Exception('Failed to authenticate user');
       }
 
       final uid = user.uid;
+      debugPrint('✅ User authenticated with UID: $uid');
 
-      // Store password in Firestore for email/password accounts (not Google accounts)
-      final passwordToStore = widget.googleUser == null ? password : null;
-
-      // Save user data to Firestore with "TEST" for image fields
+      // Save user data to Firestore
       await _userService.createOrUpdateUser(
         uid: uid,
-        email: widget.email,
-        fname: widget.firstName,
-        lname: widget.lastName,
+        email: widget.email.trim().toLowerCase(),
+        fname: widget.firstName.trim(),
+        lname: widget.lastName.trim(),
         birthday: widget.birthday,
-        phone: widget.phone,
+        phone: widget.phone.trim(),
         countryCode: widget.countryCode,
-        idImageFrontUrl: 'TEST', // Store "TEST" as placeholder
-        idImageBackUrl: 'TEST', // Store "TEST" as placeholder
-        faceWithIdUrl: _faceWithIdImage != null ? 'TEST' : null,
+        idImageFrontUrl: 'PENDING', // Mark as pending until images uploaded
+        idImageBackUrl: 'PENDING',
+        faceWithIdUrl: _faceWithIdImage != null ? 'PENDING' : null,
         userType: 'student',
-        password: passwordToStore, // Store password in Firestore
+        password: widget.googleUser == null ? 'Pass123' : null,
       );
+
+      debugPrint('✅ User data saved to Firestore');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -518,12 +559,13 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
         );
       }
     } catch (e) {
+      debugPrint('❌ Final error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error creating account: $e'),
+            content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
+            duration: const Duration(seconds: 4),
           ),
         );
       }

@@ -166,84 +166,96 @@ class AuthService {
 
   /// Sign in with email and password
   Future<UserCredential> signInWithEmailAndPassword(
-    String email,
-    String password,
-  ) async {
-    try {
-      // Trim email and convert to lowercase for consistency
-      final trimmedEmail = email.trim().toLowerCase();
-      // Trim password to remove any whitespace
-      final trimmedPassword = password.trim();
-      
-      debugPrint('=== SIGN IN ATTEMPT ===');
-      debugPrint('AuthService: Signing in with email: "$trimmedEmail"');
-      debugPrint('AuthService: Password length: ${trimmedPassword.length}');
-      debugPrint('AuthService: Expected password: "Pass123" (length: 7)');
-      
-      // First, check if account exists by trying to fetch sign-in methods
+      String email,
+      String password,
+    ) async {
       try {
-        debugPrint('Checking if account exists for email: $trimmedEmail');
-        final methods = await _auth.fetchSignInMethodsForEmail(trimmedEmail);
-        debugPrint('Sign-in methods found: $methods');
-        if (methods.isEmpty) {
-          debugPrint('⚠️ WARNING: No sign-in methods found. Account may not exist in Firebase Auth.');
-          throw Exception('No account found with this email. Please sign up first.');
+        final trimmedEmail = email.trim().toLowerCase();
+        final trimmedPassword = password.trim();
+        
+        debugPrint('=== DEBUG SIGN IN ATTEMPT ===');
+        debugPrint('Email: "$trimmedEmail"');
+        debugPrint('Password entered: "${maskPassword(trimmedPassword)}" (length: ${trimmedPassword.length})');
+        debugPrint('Firebase Auth instance hash: ${_auth.hashCode}');
+        debugPrint('Firebase Auth app name: ${_auth.app.name}');
+
+        try {
+          debugPrint('Checking Firebase Auth state before sign-in...');
+          final currentUser = _auth.currentUser;
+          debugPrint('Current user before sign-in: ${currentUser?.uid}');
+          debugPrint('Current user email: ${currentUser?.email}');
+        } catch (e) {
+          debugPrint('Error checking current user: $e');
+        }
+        
+        debugPrint('Calling Firebase Auth signInWithEmailAndPassword...');
+        final userCredential = await _auth.signInWithEmailAndPassword(
+          email: trimmedEmail,
+          password: trimmedPassword,
+        );
+        
+        debugPrint('✅ SIGN IN SUCCESSFUL');
+        debugPrint('✅ User UID: ${userCredential.user?.uid}');
+        debugPrint('✅ User email: ${userCredential.user?.email}');
+        debugPrint('✅ Email verified: ${userCredential.user?.emailVerified}');
+        debugPrint('✅ Provider data: ${userCredential.user?.providerData}');
+        
+        return userCredential;
+      } on FirebaseAuthException catch (e) {
+        debugPrint('❌ FIREBASE AUTH EXCEPTION');
+        debugPrint('❌ Code: ${e.code}');
+        debugPrint('❌ Message: ${e.message}');
+        debugPrint('❌ Details: $e');
+        
+        try {
+          final trimmedEmail = email.trim().toLowerCase();
+          debugPrint('=== POST-ERROR DIAGNOSTICS ===');
+          debugPrint('Attempting to fetch sign-in methods for: $trimmedEmail');
+          final methods = await _auth.fetchSignInMethodsForEmail(trimmedEmail);
+          debugPrint('Sign-in methods found: $methods');
+          
+          if (methods.isEmpty) {
+            debugPrint('🔍 NO SIGN-IN METHODS FOUND - Account may not exist in Firebase Auth');
+            debugPrint('🔍 Check: Go to Firebase Console → Authentication → Users tab');
+            debugPrint('🔍 Search for email: $trimmedEmail');
+          } else if (methods.contains('password')) {
+            debugPrint('🔍 PASSWORD SIGN-IN IS ENABLED for this account');
+            debugPrint('🔍 The error is likely password-related');
+          }
+        } catch (fetchError) {
+          debugPrint('Could not fetch sign-in methods: $fetchError');
+        }
+        
+        switch (e.code) {
+          case 'user-not-found':
+            throw Exception('No account found with this email. Please check the email or sign up.');
+          case 'wrong-password':
+          case 'invalid-credential':
+            throw Exception('Incorrect password. Please try again or use "Forgot Password".');
+          case 'invalid-email':
+            throw Exception('Invalid email format.');
+          case 'user-disabled':
+            throw Exception('This account has been disabled.');
+          case 'too-many-requests':
+            throw Exception('Too many attempts. Try again later.');
+          case 'operation-not-allowed':
+            throw Exception('Email/password sign-in is not enabled. Contact support.');
+          default:
+            throw Exception('Sign-in failed: ${e.message}');
         }
       } catch (e) {
-        if (e.toString().contains('No account found')) {
-          rethrow;
-        }
-        debugPrint('Could not check sign-in methods: $e');
-        // Continue anyway - will fail with proper error if account doesn't exist
+        debugPrint('❌ GENERAL SIGN-IN ERROR: $e');
+        debugPrint('❌ Error type: ${e.runtimeType}');
+        debugPrint('❌ Stack trace: ${e.toString()}');
+        
+        throw Exception('Sign-in error: $e');
       }
-      
-      debugPrint('Attempting Firebase Auth sign-in...');
-      final credential = await _auth.signInWithEmailAndPassword(
-        email: trimmedEmail,
-        password: trimmedPassword,
-      );
-      
-      debugPrint('✅ AuthService: Firebase Auth sign-in successful');
-      debugPrint('✅ User UID: ${credential.user?.uid}');
-      return credential;
-    } on FirebaseAuthException catch (e) {
-      debugPrint('❌ === FIREBASE AUTH ERROR ===');
-      debugPrint('❌ Error Code: ${e.code}');
-      debugPrint('❌ Error Message: ${e.message}');
-      debugPrint('❌ Full error: $e');
-      
-      // Provide more specific error messages
-      String errorMessage;
-      if (e.code == 'user-not-found') {
-        errorMessage = 'No account found with email "$email". Please sign up first.';
-      } else if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
-        errorMessage = 'Incorrect password. Make sure you are using: Pass123 (case-sensitive, no spaces).';
-      } else if (e.code == 'invalid-email') {
-        errorMessage = 'Invalid email address format.';
-      } else if (e.code == 'user-disabled') {
-        errorMessage = 'This account has been disabled.';
-      } else if (e.code == 'too-many-requests') {
-        errorMessage = 'Too many failed attempts. Please try again later.';
-      } else if (e.code == 'operation-not-allowed') {
-        errorMessage = 'Email/Password authentication is not enabled. Please enable it in Firebase Console.';
-      } else {
-        errorMessage = _handleAuthException(e);
-      }
-      
-      throw Exception(errorMessage);
-    } catch (e) {
-      debugPrint('❌ Sign in exception: $e');
-      debugPrint('❌ Exception type: ${e.runtimeType}');
-      
-      // If it's already an Exception with a message, rethrow it
-      if (e is Exception) {
-        rethrow;
-      }
-      
-      // Re-throw with a user-friendly message
-      throw Exception('An error occurred during sign in: $e');
     }
-  }
+
+    String maskPassword(String password) {
+      if (password.isEmpty) return '[empty]';
+      return password.replaceAll(RegExp(r'.'), '*');
+    }
 
   /// Sign up with email and password
   Future<UserCredential> signUpWithEmailAndPassword(
