@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:rentease_app/sign_up/sign_up_page.dart';
 import 'package:rentease_app/main_app.dart';
 import 'package:rentease_app/services/auth_service.dart';
@@ -21,22 +22,25 @@ class _SignInPageState extends State<SignInPage> {
   bool _rememberMe = false;
   String? _emailError;
   String? _passwordError;
+  String? _authError; // Generic auth error (invalid email or password)
 
   @override
   void initState() {
     super.initState();
     // Clear errors when user starts typing
     _emailController.addListener(() {
-      if (_emailError != null) {
+      if (_emailError != null || _authError != null) {
         setState(() {
           _emailError = null;
+          _authError = null;
         });
       }
     });
     _passwordController.addListener(() {
-      if (_passwordError != null) {
+      if (_passwordError != null || _authError != null) {
         setState(() {
           _passwordError = null;
+          _authError = null;
         });
       }
     });
@@ -53,6 +57,7 @@ class _SignInPageState extends State<SignInPage> {
     setState(() {
       _emailError = null;
       _passwordError = null;
+      _authError = null;
     });
   }
 
@@ -65,6 +70,12 @@ class _SignInPageState extends State<SignInPage> {
   void _setPasswordError(String? error) {
     setState(() {
       _passwordError = error;
+    });
+  }
+
+  void _setAuthError(String? error) {
+    setState(() {
+      _authError = error;
     });
   }
 
@@ -85,6 +96,7 @@ class _SignInPageState extends State<SignInPage> {
               rememberMe: _rememberMe,
               emailError: _emailError,
               passwordError: _passwordError,
+              authError: _authError,
               onPasswordToggle: () {
                 setState(() {
                   _obscurePassword = !_obscurePassword;
@@ -98,6 +110,7 @@ class _SignInPageState extends State<SignInPage> {
               onClearErrors: _clearErrors,
               onSetEmailError: _setEmailError,
               onSetPasswordError: _setPasswordError,
+              onSetAuthError: _setAuthError,
             ),
           ),
         ],
@@ -178,9 +191,11 @@ class _SignInContentWidget extends StatelessWidget {
   final ValueChanged<bool?> onRememberMeChanged;
   final String? emailError;
   final String? passwordError;
+  final String? authError;
   final VoidCallback onClearErrors;
   final ValueChanged<String?> onSetEmailError;
   final ValueChanged<String?> onSetPasswordError;
+  final ValueChanged<String?> onSetAuthError;
 
   const _SignInContentWidget({
     required this.formKey,
@@ -192,9 +207,11 @@ class _SignInContentWidget extends StatelessWidget {
     required this.onRememberMeChanged,
     this.emailError,
     this.passwordError,
+    this.authError,
     required this.onClearErrors,
     required this.onSetEmailError,
     required this.onSetPasswordError,
+    required this.onSetAuthError,
   });
 
   @override
@@ -246,6 +263,18 @@ class _SignInContentWidget extends StatelessWidget {
                       onToggle: onPasswordToggle,
                       errorText: passwordError,
                     ),
+                    if (authError != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        authError!,
+                        style: TextStyle(
+                          fontSize: isVerySmallScreen ? 11 : isSmallScreen ? 12 : 13,
+                          color: Colors.red[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.start,
+                      ),
+                    ],
                     SizedBox(height: isVerySmallScreen ? 5 : 7),
                     // Remember Me and Forgot Password Widget
                     _RememberMeAndForgotPasswordWidget(
@@ -261,6 +290,7 @@ class _SignInContentWidget extends StatelessWidget {
                       onClearErrors: onClearErrors,
                       onSetEmailError: onSetEmailError,
                       onSetPasswordError: onSetPasswordError,
+                      onSetAuthError: onSetAuthError,
                     ),
                     SizedBox(height: isVerySmallScreen ? 8 : 10),
                     // Sign Up Link Widget
@@ -612,6 +642,7 @@ class _SignInButtonWidget extends StatefulWidget {
   final VoidCallback onClearErrors;
   final ValueChanged<String?> onSetEmailError;
   final ValueChanged<String?> onSetPasswordError;
+  final ValueChanged<String?> onSetAuthError;
 
   const _SignInButtonWidget({
     required this.emailController,
@@ -620,6 +651,7 @@ class _SignInButtonWidget extends StatefulWidget {
     required this.onClearErrors,
     required this.onSetEmailError,
     required this.onSetPasswordError,
+    required this.onSetAuthError,
   });
 
   @override
@@ -671,6 +703,7 @@ class _SignInButtonWidgetState extends State<_SignInButtonWidget> {
   Future<void> _handleSignIn() async {
     // Clear previous errors
     widget.onClearErrors();
+    widget.onSetAuthError(null);
 
     // Validate form
     if (!widget.formKey.currentState!.validate()) {
@@ -750,30 +783,10 @@ class _SignInButtonWidgetState extends State<_SignInButtonWidget> {
         final errorMessage = e.toString();
         debugPrint('Sign in error: $errorMessage');
         final friendlyError = _getUserFriendlyError(errorMessage);
-        
-        // Determine which field the error relates to
-        if (errorMessage.contains('email') || 
-            errorMessage.contains('user-not-found') ||
-            errorMessage.contains('invalid-email') ||
-            errorMessage.contains('user-not-found')) {
-          widget.onSetEmailError(friendlyError);
-        } else if (errorMessage.contains('password') || 
-                   errorMessage.contains('wrong-password') ||
-                   errorMessage.contains('Wrong password')) {
-          widget.onSetPasswordError(friendlyError);
-        } else {
-          // Show general error in snackbar with more details
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(friendlyError),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
-        
-        // Trigger validation to show errors
-        widget.formKey.currentState!.validate();
+        debugPrint('User-facing auth error (not shown directly): $friendlyError');
+
+        // Show a single generic message under the password field
+        widget.onSetAuthError('Invalid email or password');
       }
     } finally {
       if (mounted) {
@@ -929,13 +942,61 @@ class _GoogleSignInButtonWidgetState extends State<_GoogleSignInButtonWidget> {
     });
 
     try {
-      final userCredential = await _authService.signInWithGoogle();
-      
-      if (userCredential != null && userCredential.user != null && mounted) {
-        final user = userCredential.user!;
-        final uid = user.uid;
-        
-        // Check if user exists in Firestore (with timeout protection)
+      // Step 1: Let user pick a Google account, but DO NOT create Firebase user yet
+      final googleData = await _authService.signInWithGoogleAccountOnly();
+
+      if (googleData == null) {
+        // User canceled sign in
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      // Step 2: Try signing in with the Google credential.
+      // Use additionalUserInfo.isNewUser to decide if this is a brand new account.
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleData.idToken,
+        accessToken: googleData.accessToken,
+      );
+
+      final userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+
+      final isNewUser = userCredential.additionalUserInfo?.isNewUser ?? false;
+
+      if (isNewUser) {
+        // Brand new Google account in Firebase Auth.
+        // We DON'T want to keep this user yet because registration is not complete.
+        // 1) Delete the just-created Firebase user
+        // 2) Sign out
+        // 3) Redirect to sign-up with the temporary Google data
+        try {
+          await userCredential.user?.delete();
+        } catch (e) {
+          debugPrint('Warning: failed to delete newly created Google user: $e');
+        }
+        await FirebaseAuth.instance.signOut();
+
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => SignUpPage(
+                googleData: googleData,
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Existing user → ensure Firestore record exists and navigate to main app
+      if (userCredential.user != null && mounted) {
+        final uid = userCredential.user!.uid;
+        final email = userCredential.user!.email ?? googleData.email;
+
         bool userExists = false;
         try {
           userExists = await _userService.userExists(uid).timeout(
@@ -947,53 +1008,44 @@ class _GoogleSignInButtonWidgetState extends State<_GoogleSignInButtonWidget> {
           );
         } catch (e) {
           debugPrint('Error checking user exists: $e');
-          // Assume new user on error
           userExists = false;
         }
-        
-        if (!userExists && mounted) {
-          // User authenticated but not in Firestore - create basic record and redirect to sign up
+
+        if (!userExists) {
           try {
-            // Create a basic user record with Google account info
-            final displayName = user.displayName;
-            final nameParts = displayName != null ? displayName.split(' ') : <String>[];
+            final displayName = userCredential.user!.displayName;
+            String? firstName;
+            String? lastName;
+            if (displayName != null && displayName.trim().isNotEmpty) {
+              final parts = displayName.trim().split(RegExp(r'\s+'));
+              if (parts.length == 1) {
+                firstName = parts[0];
+              } else if (parts.length == 2) {
+                firstName = parts[0];
+                lastName = parts[1];
+              } else {
+                lastName = parts.last;
+                firstName = parts.sublist(0, parts.length - 1).join(' ');
+              }
+            }
+
             await _userService.createOrUpdateUser(
               uid: uid,
-              email: user.email ?? '',
-              fname: nameParts.isNotEmpty ? nameParts.first : null,
-              lname: nameParts.length > 1 
-                  ? nameParts.sublist(1).join(' ')
-                  : null,
+              email: email,
+              fname: firstName,
+              lname: lastName,
               userType: 'student',
             );
           } catch (e) {
-            debugPrint('Error creating user record: $e');
-            // Continue anyway - user can complete sign up manually
+            debugPrint('Error creating user record for existing Google user: $e');
           }
-          
-          // Redirect to sign up page with Google account info
-          if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => SignUpPage(
-                  googleUser: user,
-                ),
-              ),
-            );
-          }
-        } else if (mounted) {
-          // User exists in Firestore, navigate to main app
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) => const MainApp(),
-            ),
-          );
         }
-      } else if (mounted) {
-        // User canceled sign in
-        setState(() {
-          _isLoading = false;
-        });
+
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => const MainApp(),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {

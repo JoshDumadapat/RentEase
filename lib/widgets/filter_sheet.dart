@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:rentease_app/models/filter_model.dart';
 
+// Theme color constants
+const Color _themeColor = Color(0xFF00D1FF);
+const Color _themeColorLight = Color(0xFFE5F9FF); // Light background (like blue[50])
+const Color _themeColorDark = Color(0xFF00B8E6); // Darker shade for text (like blue[700])
+
 class FilterSheet extends StatefulWidget {
   final FilterModel filterModel;
 
@@ -117,8 +122,8 @@ class _FilterSheetState extends State<FilterSheet> {
                     Navigator.of(context).pop();
                   },
                   style: FilledButton.styleFrom(
-                    backgroundColor: colorScheme.primary,
-                    foregroundColor: colorScheme.onPrimary,
+                    backgroundColor: _themeColorDark,
+                    foregroundColor: Colors.white,
                   ),
                   child: const Text('Apply'),
                 ),
@@ -145,21 +150,30 @@ class _FilterSheetState extends State<FilterSheet> {
           ),
         ),
         const SizedBox(height: 16),
-        RangeSlider(
-          values: RangeValues(
-            _filterModel.currentMinPrice,
-            _filterModel.currentMaxPrice,
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: _themeColorDark,
+            inactiveTrackColor: Colors.grey[300],
+            thumbColor: _themeColorDark,
+            overlayColor: _themeColorDark.withValues(alpha: 0.2),
+            rangeThumbShape: const RoundRangeSliderThumbShape(enabledThumbRadius: 8),
           ),
-          min: 0,
-          max: 50000,
-          divisions: 50,
-          labels: RangeLabels(
-            '₱${_filterModel.currentMinPrice.toStringAsFixed(0)}',
-            '₱${_filterModel.currentMaxPrice.toStringAsFixed(0)}',
+          child: RangeSlider(
+            values: RangeValues(
+              _filterModel.currentMinPrice,
+              _filterModel.currentMaxPrice,
+            ),
+            min: 0,
+            max: 50000,
+            divisions: 50,
+            labels: RangeLabels(
+              '₱${_filterModel.currentMinPrice.toStringAsFixed(0)}',
+              '₱${_filterModel.currentMaxPrice.toStringAsFixed(0)}',
+            ),
+            onChanged: (values) {
+              _filterModel.setPriceRange(values.start, values.end);
+            },
           ),
-          onChanged: (values) {
-            _filterModel.setPriceRange(values.start, values.end);
-          },
         ),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -210,11 +224,11 @@ class _FilterSheetState extends State<FilterSheet> {
               onSelected: (selected) {
                 _filterModel.setBedrooms(selected ? bedroom : null);
               },
-              selectedColor: colorScheme.primaryContainer,
-              checkmarkColor: colorScheme.onPrimaryContainer,
+              selectedColor: _themeColorLight,
+              checkmarkColor: _themeColorDark,
               labelStyle: TextStyle(
                 color: isSelected
-                    ? colorScheme.onPrimaryContainer
+                    ? _themeColorDark
                     : colorScheme.onSurface,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
@@ -253,11 +267,11 @@ class _FilterSheetState extends State<FilterSheet> {
               onSelected: (selected) {
                 _filterModel.setBathrooms(selected ? bathroom : null);
               },
-              selectedColor: colorScheme.primaryContainer,
-              checkmarkColor: colorScheme.onPrimaryContainer,
+              selectedColor: _themeColorLight,
+              checkmarkColor: _themeColorDark,
               labelStyle: TextStyle(
                 color: isSelected
-                    ? colorScheme.onPrimaryContainer
+                    ? _themeColorDark
                     : colorScheme.onSurface,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
@@ -296,11 +310,11 @@ class _FilterSheetState extends State<FilterSheet> {
               onSelected: (selected) {
                 _filterModel.setPropertyType(selected ? type : null);
               },
-              selectedColor: colorScheme.primaryContainer,
-              checkmarkColor: colorScheme.onPrimaryContainer,
+              selectedColor: _themeColorLight,
+              checkmarkColor: _themeColorDark,
               labelStyle: TextStyle(
                 color: isSelected
-                    ? colorScheme.onPrimaryContainer
+                    ? _themeColorDark
                     : colorScheme.onSurface,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
@@ -346,11 +360,11 @@ class _FilterSheetState extends State<FilterSheet> {
               onSelected: (selected) {
                 _filterModel.toggleAmenity(amenity);
               },
-              selectedColor: colorScheme.primaryContainer,
-              checkmarkColor: colorScheme.onPrimaryContainer,
+              selectedColor: _themeColorLight,
+              checkmarkColor: _themeColorDark,
               labelStyle: TextStyle(
                 color: isSelected
-                    ? colorScheme.onPrimaryContainer
+                    ? _themeColorDark
                     : colorScheme.onSurface,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),

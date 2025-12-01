@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:share_plus/share_plus.dart';
@@ -11,6 +10,13 @@ import 'package:rentease_app/screens/posts/posts_page.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
 import 'package:rentease_app/screens/looking_for_post_detail/looking_for_post_detail_page.dart';
 import 'package:rentease_app/screens/home/widgets/home_skeleton.dart';
+import 'package:rentease_app/screens/home/widgets/threedots.dart';
+
+// Theme color constants
+const Color _themeColor = Color(0xFF00D1FF);
+const Color _themeColorLight = Color(0xFFE5F9FF); // Light background (like blue[50])
+const Color _themeColorLight2 = Color(0xFFB3F0FF); // Light background (like blue[100])
+const Color _themeColorDark = Color(0xFF00B8E6); // Darker shade for text (like blue[700])
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -23,10 +29,10 @@ class _HomePageState extends State<HomePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
-  bool _showTabs = true;
+  bool _showTabs = false; // Initially hidden when welcome section is visible
   final ScrollController _listingsScrollController = ScrollController();
   final ScrollController _lookingForScrollController = ScrollController();
-  final ValueNotifier<bool> _tabsVisibilityNotifier = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> _tabsVisibilityNotifier = ValueNotifier<bool>(false);
 
   final List<CategoryModel> _categories = CategoryModel.getMockCategories();
   final List<ListingModel> _listings = ListingModel.getMockListings();
@@ -44,7 +50,19 @@ class _HomePageState extends State<HomePage>
 
   void _onTabChanged() {
     if (mounted) {
-      _handleScroll();
+      // When switching tabs, update tab visibility
+      if (_tabController.index == 1) {
+        // Always show tabs on "Looking For" tab
+        if (!_showTabs) {
+          setState(() {
+            _showTabs = true;
+          });
+          _tabsVisibilityNotifier.value = true;
+        }
+      } else {
+        // For "Listings" tab, check scroll position
+        _handleScroll();
+      }
     }
   }
 
@@ -61,11 +79,28 @@ class _HomePageState extends State<HomePage>
 
     if (!activeController.hasClients) return;
 
-    final double currentScrollPosition = activeController.position.pixels;
-    final direction = activeController.position.userScrollDirection;
+    // Always show tabs when on "Looking For" tab (index 1)
+    if (_tabController.index == 1) {
+      if (!_showTabs) {
+        setState(() {
+          _showTabs = true;
+        });
+        _tabsVisibilityNotifier.value = true;
+      }
+      return;
+    }
 
-    final bool shouldShow =
-        currentScrollPosition <= 0 || direction == ScrollDirection.forward;
+    final double currentScrollPosition = activeController.position.pixels;
+    
+    // Approximate height of welcome section + featured categories section
+    // Welcome section: ~80px (text + padding)
+    // Featured categories: ~400px (large card + small cards)
+    // Spacing: ~32px
+    const double welcomeAndCategoriesHeight = 512.0;
+    
+    // Hide tabs when welcome section and categories are visible (only for Listings tab)
+    // Show tabs only when scrolled past these sections
+    final bool shouldShow = currentScrollPosition >= welcomeAndCategoriesHeight;
 
     if (_showTabs != shouldShow) {
       setState(() {
@@ -105,42 +140,47 @@ class _HomePageState extends State<HomePage>
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: NestedScrollView(
-        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
-          return [
-            SliverAppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              pinned: true,
-              floating: false,
-              leading: Padding(
-                padding: const EdgeInsets.only(left: 16.0),
-                child: Image.asset(
-                  'assets/logo.png',
-                  height: 40,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Icon(Icons.home, color: Colors.blue);
-                  },
-                ),
+      body: Column(
+        children: [
+          // Fixed App Bar
+          AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            leadingWidth: 200,
+            leading: Container(
+              padding: const EdgeInsets.only(left: 16.0),
+              alignment: Alignment.centerLeft,
+              child: Image.asset(
+                'assets/sign_in_up/signlogo.png',
+                height: 38,
+                width: 120,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(Icons.home, color: _themeColor, size: 32);
+                },
               ),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.menu, color: Colors.black87),
-                  onPressed: () {},
-                ),
-                const SizedBox(width: 8),
-              ],
             ),
-
-            SliverPersistentHeader(
-              pinned: false,
-              floating: false,
-              delegate: _ScrollBasedTabBarDelegate(
+            actions: [
+              const ThreeDotsMenu(),
+              const SizedBox(width: 8),
+            ],
+          ),
+          // Fixed Tabs below App Bar - completely hidden when welcome is visible
+          ValueListenableBuilder<bool>(
+            valueListenable: _tabsVisibilityNotifier,
+            builder: (context, isVisible, child) {
+              // Completely remove tabs from widget tree when not visible (zero space)
+              if (!isVisible) {
+                return const SizedBox(height: 0, width: double.infinity);
+              }
+              return _AnimatedTabBar(
+                visibilityNotifier: _tabsVisibilityNotifier,
+                height: 36.0,
                 tabBar: TabBar(
                   controller: _tabController,
-                  labelColor: Colors.blue[700],
+                  labelColor: _themeColorDark,
                   unselectedLabelColor: Colors.grey[600],
-                  indicatorColor: Colors.blue[700],
+                  indicatorColor: _themeColorDark,
                   indicatorWeight: 2.5,
                   labelStyle: const TextStyle(
                     fontSize: 15,
@@ -155,16 +195,17 @@ class _HomePageState extends State<HomePage>
                     Tab(text: 'Looking For'),
                   ],
                 ),
-                visibilityNotifier: _tabsVisibilityNotifier,
-                height: 40.0,
-              ),
+              );
+            },
+          ),
+          // Scrollable Content
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [_buildListingsTab(), _buildLookingForTab()],
             ),
-          ];
-        },
-        body: TabBarView(
-          controller: _tabController,
-          children: [_buildListingsTab(), _buildLookingForTab()],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -175,7 +216,7 @@ class _HomePageState extends State<HomePage>
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+            padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
             child: _WelcomeSection(),
           ),
         ),
@@ -249,7 +290,7 @@ class _WelcomeSection extends StatelessWidget {
               TextSpan(
                 text: 'journey',
                 style: TextStyle(
-                  color: Colors.blue[400],
+                  color: _themeColor,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -257,7 +298,7 @@ class _WelcomeSection extends StatelessWidget {
               TextSpan(
                 text: 'property preference.',
                 style: TextStyle(
-                  color: Colors.blue[400],
+                  color: _themeColor,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -404,9 +445,9 @@ class _LargeCategoryCard extends StatelessWidget {
                 height: double.infinity,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
-                    color: Colors.blue[100],
+                    color: _themeColorLight2,
                     child: const Center(
-                      child: Icon(Icons.home, size: 60, color: Colors.blue),
+                      child: Icon(Icons.home, size: 60, color: _themeColor),
                     ),
                   );
                 },
@@ -490,9 +531,9 @@ class _TallCategoryCard extends StatelessWidget {
                 height: double.infinity,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
-                    color: Colors.blue[100],
+                    color: _themeColorLight2,
                     child: const Center(
-                      child: Icon(Icons.home, size: 50, color: Colors.blue),
+                      child: Icon(Icons.home, size: 50, color: _themeColor),
                     ),
                   );
                 },
@@ -576,9 +617,9 @@ class _SmallCategoryCard extends StatelessWidget {
                 height: double.infinity,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
-                    color: Colors.blue[100],
+                    color: _themeColorLight2,
                     child: const Center(
-                      child: Icon(Icons.home, size: 40, color: Colors.blue),
+                      child: Icon(Icons.home, size: 40, color: _themeColor),
                     ),
                   );
                 },
@@ -704,8 +745,8 @@ class _ModernListingCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
-        splashColor: Colors.blue.withValues(alpha: 0.1),
-        highlightColor: Colors.blue.withValues(alpha: 0.05),
+        splashColor: _themeColor.withValues(alpha: 0.1),
+        highlightColor: _themeColor.withValues(alpha: 0.05),
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -832,14 +873,14 @@ class _ModernListingCard extends StatelessWidget {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.blue[50],
+                        color: _themeColorLight,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         listing.category,
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.blue[700],
+                          color: _themeColorDark,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 0.5,
                         ),
@@ -894,7 +935,7 @@ class _ModernListingCard extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.blue[700],
+                                color: _themeColorDark,
                                 letterSpacing: -0.5,
                               ),
                             ),
@@ -923,13 +964,13 @@ class _ModernListingCard extends StatelessWidget {
                               Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue[50],
+                                  color: _themeColorLight,
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   Icons.verified,
                                   size: 14,
-                                  color: Colors.blue[700],
+                                  color: _themeColorDark,
                                 ),
                               ),
                             ],
@@ -945,7 +986,7 @@ class _ModernListingCard extends StatelessWidget {
                       children: [
                         _HeartActionIcon(likeCount: 24),
                         _ModernActionIcon(
-                          assetPath: 'assets/icons/navbar/message_outlined.svg',
+                          assetPath: 'assets/icons/navbar/comment_outlined.svg',
                           count: 8,
                           onTap: () {},
                         ),
@@ -996,7 +1037,7 @@ class _ModernListingCard extends StatelessWidget {
                     ),
                   ),
                   _ShareOption(
-                    icon: Icons.link,
+                    iconPath: 'assets/icons/navbar/share_outlined.svg',
                     title: 'Copy link',
                     onTap: () {
                       Clipboard.setData(ClipboardData(text: postLink));
@@ -1012,7 +1053,7 @@ class _ModernListingCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   _ShareOption(
-                    icon: Icons.share,
+                    iconPath: 'assets/icons/navbar/share_outlined.svg',
                     title: 'Share to other apps',
                     onTap: () async {
                       Navigator.pop(context);
@@ -1079,8 +1120,8 @@ class _HeartActionIconState extends State<_HeartActionIcon>
       child: InkWell(
         onTap: _handleTap,
         borderRadius: BorderRadius.circular(12),
-        splashColor: Colors.blue.withValues(alpha: 0.1),
-        highlightColor: Colors.blue.withValues(alpha: 0.05),
+        splashColor: _themeColor.withValues(alpha: 0.1),
+        highlightColor: _themeColor.withValues(alpha: 0.05),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
@@ -1142,8 +1183,8 @@ class _ModernActionIcon extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        splashColor: Colors.blue.withValues(alpha: 0.1),
-        highlightColor: Colors.blue.withValues(alpha: 0.05),
+        splashColor: _themeColor.withValues(alpha: 0.1),
+        highlightColor: _themeColor.withValues(alpha: 0.05),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
@@ -1176,12 +1217,12 @@ class _ModernActionIcon extends StatelessWidget {
 }
 
 class _ShareOption extends StatelessWidget {
-  final IconData icon;
+  final String iconPath;
   final String title;
   final VoidCallback onTap;
 
   const _ShareOption({
-    required this.icon,
+    required this.iconPath,
     required this.title,
     required this.onTap,
   });
@@ -1197,7 +1238,15 @@ class _ShareOption extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           child: Row(
             children: [
-              Icon(icon, size: 24, color: Colors.black87),
+              SvgPicture.asset(
+                iconPath,
+                width: 24,
+                height: 24,
+                colorFilter: const ColorFilter.mode(
+                  Colors.black87,
+                  BlendMode.srcIn,
+                ),
+              ),
               const SizedBox(width: 16),
               Text(
                 title,
@@ -1514,13 +1563,13 @@ class _PostHeader extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: Colors.blue[50],
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.verified,
-                            size: 14,
-                            color: Colors.blue[700],
+                                  color: _themeColorLight,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.verified,
+                                  size: 14,
+                                  color: _themeColorDark,
                           ),
                         ),
                       ],
@@ -1637,7 +1686,9 @@ class _PostActionBar extends StatelessWidget {
         children: [
           // Like Button
           _ActionButton(
-            icon: isLiked ? Icons.favorite : Icons.favorite_border,
+            iconPath: isLiked 
+                ? 'assets/icons/navbar/heart_filled.svg'
+                : 'assets/icons/navbar/heart_outlined.svg',
             count: likeCount,
             isActive: isLiked,
             onTap: onLikeTap,
@@ -1646,7 +1697,7 @@ class _PostActionBar extends StatelessWidget {
           
           // Comment Button
           _ActionButton(
-            icon: Icons.chat_bubble_outline,
+            iconPath: 'assets/icons/navbar/comment_outlined.svg',
             count: commentCount,
             onTap: onCommentTap,
           ),
@@ -1657,13 +1708,13 @@ class _PostActionBar extends StatelessWidget {
 }
 
 class _ActionButton extends StatelessWidget {
-  final IconData icon;
+  final String iconPath;
   final int count;
   final bool isActive;
   final VoidCallback onTap;
 
   const _ActionButton({
-    required this.icon,
+    required this.iconPath,
     required this.count,
     this.isActive = false,
     required this.onTap,
@@ -1681,12 +1732,16 @@ class _ActionButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: 20,
-                color: isActive
-                    ? const Color(0xFFE91E63)
-                    : Colors.grey[600],
+              SvgPicture.asset(
+                iconPath,
+                width: 20,
+                height: 20,
+                colorFilter: ColorFilter.mode(
+                  isActive
+                      ? const Color(0xFFE91E63)
+                      : Colors.grey[600]!,
+                  BlendMode.srcIn,
+                ),
               ),
               const SizedBox(width: 8),
               Text(
@@ -1715,6 +1770,7 @@ class _ActionButton extends StatelessWidget {
 }
 
 
+// ignore: unused_element
 class _ScrollBasedTabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;
   final ValueNotifier<bool> visibilityNotifier;
@@ -1723,11 +1779,12 @@ class _ScrollBasedTabBarDelegate extends SliverPersistentHeaderDelegate {
   _ScrollBasedTabBarDelegate({
     required this.tabBar,
     required this.visibilityNotifier,
-    this.height = 40.0,
+    // ignore: unused_element_parameter
+    this.height = 36.0,
   });
 
   @override
-  double get minExtent => height;
+  double get minExtent => 0.0; // Can shrink to 0 when hidden
 
   @override
   double get maxExtent => height;
@@ -1738,19 +1795,10 @@ class _ScrollBasedTabBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: visibilityNotifier,
-      builder: (context, isVisible, child) {
-        return Container(
-          height: height,
-          color: Colors.white,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 250),
-            opacity: isVisible ? 1.0 : 0.0,
-            child: tabBar,
-          ),
-        );
-      },
+    return _AnimatedTabBar(
+      visibilityNotifier: visibilityNotifier,
+      height: height,
+      tabBar: tabBar,
     );
   }
 
@@ -1759,5 +1807,124 @@ class _ScrollBasedTabBarDelegate extends SliverPersistentHeaderDelegate {
     return tabBar != oldDelegate.tabBar ||
         height != oldDelegate.height ||
         visibilityNotifier != oldDelegate.visibilityNotifier;
+  }
+}
+
+/// Animated tab bar widget with smooth slide down and fade in effect
+class _AnimatedTabBar extends StatefulWidget {
+  final ValueNotifier<bool> visibilityNotifier;
+  final double height;
+  final TabBar tabBar;
+
+  const _AnimatedTabBar({
+    required this.visibilityNotifier,
+    required this.height,
+    required this.tabBar,
+  });
+
+  @override
+  State<_AnimatedTabBar> createState() => _AnimatedTabBarState();
+}
+
+class _AnimatedTabBarState extends State<_AnimatedTabBar>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _slideAnimation;
+  bool _isVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 3000),
+      vsync: this,
+    );
+
+    // Very slow and smooth fade animation with easeInOut curve
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    // Very slow and smooth slide down animation with easeInOut curve
+    _slideAnimation = Tween<double>(
+      begin: -30.0,
+      end: 0.0,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    // Listen to visibility changes
+    widget.visibilityNotifier.addListener(_onVisibilityChanged);
+    _isVisible = widget.visibilityNotifier.value;
+    if (_isVisible) {
+      _controller.value = 1.0;
+    }
+  }
+
+  void _onVisibilityChanged() {
+    final newVisibility = widget.visibilityNotifier.value;
+    if (newVisibility != _isVisible) {
+      setState(() {
+        _isVisible = newVisibility;
+      });
+      if (_isVisible) {
+        _controller.forward();
+      } else {
+        _controller.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.visibilityNotifier.removeListener(_onVisibilityChanged);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // If not visible and animation is at 0, return zero-height widget
+    if (!_isVisible && _controller.value == 0.0) {
+      return const SizedBox(height: 0, width: double.infinity);
+    }
+    
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        // Return zero-height widget if animation is at 0
+        if (_fadeAnimation.value <= 0) {
+          return const SizedBox(height: 0, width: double.infinity);
+        }
+        
+        return ClipRect(
+          child: SizeTransition(
+            sizeFactor: _fadeAnimation,
+            axisAlignment: -1.0,
+            child: Container(
+              height: widget.height,
+              color: Colors.white,
+              child: Transform.translate(
+                offset: Offset(0, _slideAnimation.value),
+                child: Opacity(
+                  opacity: _fadeAnimation.value,
+                  child: widget.tabBar,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/models/notification_model.dart';
 import 'package:rentease_app/utils/time_ago.dart';
 
@@ -153,10 +154,14 @@ class NotificationTile extends StatelessWidget {
             style: const TextStyle(fontSize: 14),
           );
         }
-        return Icon(
-          Icons.favorite,
-          size: 14,
-          color: Colors.red,
+        return SvgPicture.asset(
+          'assets/icons/navbar/heart_filled.svg',
+          width: 14,
+          height: 14,
+          colorFilter: const ColorFilter.mode(
+            Colors.red,
+            BlendMode.srcIn,
+          ),
         );
       case NotificationType.friendRequest:
         return Icon(
@@ -166,10 +171,14 @@ class NotificationTile extends StatelessWidget {
         );
       case NotificationType.comment:
       case NotificationType.mention:
-        return Icon(
-          Icons.comment,
-          size: 14,
-          color: isDark ? Colors.green[300] : Colors.green[600],
+        return SvgPicture.asset(
+          'assets/icons/navbar/comment_filled.svg',
+          width: 14,
+          height: 14,
+          colorFilter: ColorFilter.mode(
+            isDark ? Colors.green[300]! : Colors.green[600]!,
+            BlendMode.srcIn,
+          ),
         );
     }
   }

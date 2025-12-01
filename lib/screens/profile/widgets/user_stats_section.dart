@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/models/user_model.dart';
 
 /// User Stats Section Widget
@@ -56,7 +57,7 @@ class UserStatsSection extends StatelessWidget {
                 child: _StatTile(
                   label: 'Favorites',
                   value: user.favoritesCount.toString(),
-                  icon: Icons.favorite_outline,
+                  iconPath: 'assets/icons/navbar/heart_outlined.svg',
                   isDark: isDark,
                 ),
               ),
@@ -157,13 +158,15 @@ class UserStatsSection extends StatelessWidget {
 class _StatTile extends StatelessWidget {
   final String label;
   final String value;
-  final IconData icon;
+  final String? iconPath;
+  final IconData? icon;
   final bool isDark;
 
   const _StatTile({
     required this.label,
     required this.value,
-    required this.icon,
+    this.iconPath,
+    this.icon,
     required this.isDark,
   });
 
@@ -181,11 +184,21 @@ class _StatTile extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(
-            icon,
-            size: 28,
-            color: Colors.blue[700],
-          ),
+          iconPath != null
+              ? SvgPicture.asset(
+                  iconPath!,
+                  width: 28,
+                  height: 28,
+                  colorFilter: ColorFilter.mode(
+                    Colors.blue[700]!,
+                    BlendMode.srcIn,
+                  ),
+                )
+              : Icon(
+                  icon,
+                  size: 28,
+                  color: Colors.blue[700],
+                ),
           const SizedBox(height: 8),
           Text(
             value,

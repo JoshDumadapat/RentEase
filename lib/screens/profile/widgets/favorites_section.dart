@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/profile/widgets/property_tile.dart';
 
@@ -107,10 +108,14 @@ class _EmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
         children: [
-          Icon(
-            Icons.favorite_outline,
-            size: 64,
-            color: isDark ? Colors.grey[700] : Colors.grey[300],
+          SvgPicture.asset(
+            'assets/icons/navbar/heart_outlined.svg',
+            width: 64,
+            height: 64,
+            colorFilter: ColorFilter.mode(
+              isDark ? Colors.grey[700]! : Colors.grey[300]!,
+              BlendMode.srcIn,
+            ),
           ),
           const SizedBox(height: 16),
           Text(

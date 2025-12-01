@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/models/looking_for_post_model.dart';
 import 'package:rentease_app/models/comment_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
@@ -380,7 +381,9 @@ class _PostActionBar extends StatelessWidget {
         children: [
           // Like Button
           _ActionButton(
-            icon: isLiked ? Icons.favorite : Icons.favorite_border,
+            iconPath: isLiked 
+                ? 'assets/icons/navbar/heart_filled.svg'
+                : 'assets/icons/navbar/heart_outlined.svg',
             count: likeCount,
             isActive: isLiked,
             onTap: onLikeTap,
@@ -389,7 +392,7 @@ class _PostActionBar extends StatelessWidget {
           
           // Comment Button
           _ActionButton(
-            icon: Icons.chat_bubble_outline,
+            iconPath: 'assets/icons/navbar/comment_outlined.svg',
             count: commentCount,
             onTap: () {},
           ),
@@ -400,13 +403,13 @@ class _PostActionBar extends StatelessWidget {
 }
 
 class _ActionButton extends StatelessWidget {
-  final IconData icon;
+  final String iconPath;
   final int count;
   final bool isActive;
   final VoidCallback onTap;
 
   const _ActionButton({
-    required this.icon,
+    required this.iconPath,
     required this.count,
     this.isActive = false,
     required this.onTap,
@@ -424,12 +427,16 @@ class _ActionButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: 20,
-                color: isActive
-                    ? const Color(0xFFE91E63)
-                    : Colors.grey[600],
+              SvgPicture.asset(
+                iconPath,
+                width: 20,
+                height: 20,
+                colorFilter: ColorFilter.mode(
+                  isActive
+                      ? const Color(0xFFE91E63)
+                      : Colors.grey[600]!,
+                  BlendMode.srcIn,
+                ),
               ),
               const SizedBox(width: 8),
               Text(

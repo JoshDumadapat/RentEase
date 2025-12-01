@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:rentease_app/sign_in/sign_in_page.dart';
-import 'package:rentease_app/sign_up/student_sign_up_page.dart';
-
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:rentease_app/sign_up/sign_up_form_page.dart';
+import 'package:rentease_app/services/auth_service.dart';
 
 /// Sign Up Page with user type selection
 class SignUpPage extends StatefulWidget {
-  final User? googleUser; // Firebase User from Google sign-in
+  final GoogleSignInTempData? googleData; // Google account data (no Firebase user yet)
   
-  const SignUpPage({super.key, this.googleUser});
+  const SignUpPage({super.key, this.googleData});
 
   @override
   State<SignUpPage> createState() => _SignUpPageState();
 }
 
 class _SignUpPageState extends State<SignUpPage> {
+  GoogleSignInTempData? _googleData;
+
+  @override
+  void initState() {
+    super.initState();
+    _googleData = widget.googleData;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -24,7 +31,14 @@ class _SignUpPageState extends State<SignUpPage> {
           _BackgroundImageWidget(),
           // White Card Background Widget
           _WhiteCardBackgroundWidget(
-            child: _SignUpContentWidget(googleUser: widget.googleUser),
+            child: _SignUpContentWidget(
+              googleData: _googleData,
+              onGoogleDataChanged: (value) {
+                setState(() {
+                  _googleData = value;
+                });
+              },
+            ),
           ),
         ],
       ),
@@ -95,9 +109,13 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
 
 /// Widget for the sign up content
 class _SignUpContentWidget extends StatelessWidget {
-  final User? googleUser;
+  final GoogleSignInTempData? googleData;
+  final ValueChanged<GoogleSignInTempData?> onGoogleDataChanged;
 
-  const _SignUpContentWidget({this.googleUser});
+  const _SignUpContentWidget({
+    this.googleData,
+    required this.onGoogleDataChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -143,12 +161,19 @@ class _SignUpContentWidget extends StatelessWidget {
                         description: 'Register with Student ID if you don\'t have a valid ID.',
                         backgroundColor: Colors.blue[50]!,
                         arrowColor: Colors.blue,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            _SlideUpPageRoute(
-                              page: StudentSignUpPage(googleUser: googleUser),
+                        onTap: () async {
+                          final discarded = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute<bool>(
+                              builder: (context) => StudentSignUpPage(
+                                googleData: googleData,
+                                userType: 'student',
+                              ),
                             ),
                           );
+
+                          if (discarded == true) {
+                            onGoogleDataChanged(null);
+                          }
                         },
                       ),
                       SizedBox(height: isVerySmallScreen ? 8 : 10),
@@ -158,8 +183,19 @@ class _SignUpContentWidget extends StatelessWidget {
                         description: 'Sign up with a valid government ID.',
                         backgroundColor: Colors.blue[50]!,
                         arrowColor: Colors.blue,
-                        onTap: () {
-                          // Handle professional sign up
+                        onTap: () async {
+                          final discarded = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute<bool>(
+                              builder: (context) => StudentSignUpPage(
+                                googleData: googleData,
+                                userType: 'professional',
+                              ),
+                            ),
+                          );
+
+                          if (discarded == true) {
+                            onGoogleDataChanged(null);
+                          }
                         },
                       ),
                       SizedBox(height: isVerySmallScreen ? 8 : 10),

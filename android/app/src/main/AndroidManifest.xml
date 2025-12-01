@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Internet permission (required for Google Sign-In and Firebase) -->
     <uses-permission android:name="android.permission.INTERNET" />
     
@@ -10,7 +11,8 @@
                      android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
                      android:maxSdkVersion="32" 
-                     android:requestLegacyExternalStorage="true" />
+                     android:requestLegacyExternalStorage="true"
+                     tools:replace="android:maxSdkVersion" />
     
     <!-- Photos permission for Android 13+ -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />

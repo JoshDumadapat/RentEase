@@ -3,6 +3,12 @@ import 'package:rentease_app/models/filter_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
 import 'package:rentease_app/widgets/filter_sheet.dart';
+import 'package:rentease_app/screens/home/widgets/threedots.dart';
+
+// Theme color constants
+const Color _themeColor = Color(0xFF00D1FF);
+const Color _themeColorLight = Color(0xFFE5F9FF); // Light background (like blue[50])
+const Color _themeColorDark = Color(0xFF00B8E6); // Darker shade for text (like blue[700])
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -151,22 +157,25 @@ class _SearchPageState extends State<SearchPage> {
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
       elevation: 0,
-      leading: Padding(
+      scrolledUnderElevation: 0,
+      leadingWidth: 200,
+      leading: Container(
         padding: const EdgeInsets.only(left: 16.0),
+        alignment: Alignment.centerLeft,
         child: Image.asset(
-          'assets/logo.png',
-          height: 40,
+          'assets/sign_in_up/signlogo.png',
+          height: 38,
+          width: 120,
+          fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) {
-            return const Icon(Icons.home, color: Colors.blue);
+            return const Icon(Icons.home, color: _themeColor, size: 32);
           },
         ),
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.menu, color: Colors.black87),
-          onPressed: () {},
-        ),
+        const ThreeDotsMenu(),
         const SizedBox(width: 8),
       ],
     );
@@ -207,95 +216,79 @@ class _SearchPageState extends State<SearchPage> {
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    spreadRadius: 0,
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search',
-                  hintStyle: TextStyle(color: Colors.grey[400], fontSize: 16),
-                  prefixIcon: Icon(
-                    Icons.search,
-                    color: Colors.grey[600],
-                    size: 24,
-                  ),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: Icon(Icons.clear, color: Colors.grey[600]),
-                          onPressed: () {
-                            setState(() {
-                              _searchController.clear();
-                            });
-                          },
-                        )
-                      : null,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
-                  ),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search',
+                hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: Colors.grey[600],
+                  size: 20,
                 ),
-                onChanged: (value) {
-                  setState(() {});
-                },
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.clear, color: Colors.grey[600], size: 20),
+                        onPressed: () {
+                          setState(() {
+                            _searchController.clear();
+                          });
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _themeColorDark, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                isDense: true,
               ),
+              onChanged: (value) {
+                setState(() {});
+              },
             ),
           ),
           const SizedBox(width: 12),
           // Filter button
-          Builder(
-            builder: (context) {
-              final colorScheme = Theme.of(context).colorScheme;
-              return Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      spreadRadius: 0,
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: _themeColorDark,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(
+                Icons.tune,
+                color: Colors.white,
+                size: 20,
+              ),
+              padding: EdgeInsets.zero,
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  useSafeArea: true,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(16),
                     ),
-                  ],
-                ),
-                child: IconButton(
-                  icon: Icon(
-                    Icons.tune,
-                    color: colorScheme.onPrimary,
-                    size: 24,
                   ),
-                  onPressed: () {
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      useSafeArea: true,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(16),
-                        ),
-                      ),
-                      builder: (_) => FilterSheet(filterModel: _filterModel),
-                    );
-                  },
-                ),
-              );
-            },
+                  builder: (_) => FilterSheet(filterModel: _filterModel),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -324,34 +317,26 @@ class _SearchPageState extends State<SearchPage> {
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
+                  horizontal: 16,
+                  vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: isSelected ? colorScheme.primary : colorScheme.surface,
-                  borderRadius: BorderRadius.circular(20),
+                  color: isSelected ? _themeColorDark : colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isSelected
-                        ? colorScheme.primary
+                        ? _themeColorDark
                         : colorScheme.outline.withValues(alpha: 0.3),
                     width: 1,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      spreadRadius: 0,
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
                 ),
                 child: Text(
                   category,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: isSelected
-                        ? colorScheme.onPrimary
+                        ? Colors.white
                         : colorScheme.onSurface,
                   ),
                 ),
@@ -386,7 +371,7 @@ class _SearchPageState extends State<SearchPage> {
         ),
         const SizedBox(height: 16),
         SizedBox(
-          height: 280,
+          height: 320,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -440,7 +425,7 @@ class _SearchPageState extends State<SearchPage> {
                   'See all',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.blue[700],
+                    color: _themeColorDark,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -572,66 +557,69 @@ class _FeaturedListingCard extends StatelessWidget {
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.blue[50],
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      listing.category,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.blue[700],
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    listing.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                      height: 1.3,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.location_on_rounded,
-                        size: 14,
-                        color: Colors.grey[500],
+                      decoration: BoxDecoration(
+                        color: _themeColorLight,
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          listing.location,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w400,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      child: Text(
+                        listing.category,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: _themeColorDark,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      listing.title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                        height: 1.3,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_rounded,
+                          size: 14,
+                          color: Colors.grey[500],
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            listing.location,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w400,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -654,8 +642,8 @@ class _NearbyListingCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        splashColor: Colors.blue.withValues(alpha: 0.1),
-        highlightColor: Colors.blue.withValues(alpha: 0.05),
+        splashColor: _themeColor.withValues(alpha: 0.1),
+        highlightColor: _themeColor.withValues(alpha: 0.05),
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -721,14 +709,14 @@ class _NearbyListingCard extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.blue[50],
+                          color: _themeColorLight,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           listing.category,
                           style: TextStyle(
                             fontSize: 10,
-                            color: Colors.blue[700],
+                            color: _themeColorDark,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.5,
                           ),
@@ -775,7 +763,7 @@ class _NearbyListingCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.blue[700],
+                          color: _themeColorDark,
                         ),
                       ),
                     ],

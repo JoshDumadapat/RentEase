@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:rentease_app/services/user_service.dart';
 import 'package:rentease_app/services/auth_service.dart';
 import 'package:rentease_app/main_app.dart';
+import 'package:rentease_app/widgets/id_camera_capture_page.dart';
 
 class StudentIDVerificationPage extends StatefulWidget {
   final String firstName;
@@ -14,7 +15,8 @@ class StudentIDVerificationPage extends StatefulWidget {
   final String birthday;
   final String phone;
   final String countryCode;
-  final User? googleUser; // Firebase User from Google sign-in
+  final GoogleSignInTempData? googleData; // Google account data (no Firebase user yet)
+  final String userType; // 'student' or 'professional'
 
   const StudentIDVerificationPage({
     super.key,
@@ -24,7 +26,8 @@ class StudentIDVerificationPage extends StatefulWidget {
     required this.birthday,
     required this.phone,
     required this.countryCode,
-    this.googleUser,
+    this.googleData,
+    this.userType = 'student',
   });
 
   @override
@@ -64,6 +67,7 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
               onRetakeBack: () => _captureImage('back'),
               onRetakeFaceWithId: () => _captureImage('faceWithId'),
               onUpload: _handleUpload,
+              userType: widget.userType,
             ),
           ),
         ],
@@ -262,18 +266,32 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
           return;
         }
 
-        final XFile? image = await _imagePicker.pickImage(
-          source: source,
-          imageQuality: 85,
-          maxWidth: 1920,
-          maxHeight: 1920,
-        );
+        XFile? image;
 
-        if (image != null) {
+        // If camera is selected, use custom camera UI
+        if (source == ImageSource.camera) {
+          final String title = imageType == 'faceWithId' 
+              ? 'Face with ID'
+              : imageType == 'front' 
+                  ? 'Front ID' 
+                  : 'Back ID';
+          
+          final result = await Navigator.of(context).push<XFile>(
+            MaterialPageRoute(
+              builder: (context) => IDCameraCapturePage(title: title),
+            ),
+          );
+
           if (mounted) {
-            final confirmed = await _showImagePreview(image, imageType);
-            if (confirmed) {
-              if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+          }
+
+          if (result != null) {
+            image = result;
+            // Image is already confirmed in the camera page, so directly assign it
+            if (mounted) {
               setState(() {
                 if (imageType == 'front') {
                   _frontIdImage = image;
@@ -282,22 +300,48 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
                 } else if (imageType == 'faceWithId') {
                   _faceWithIdImage = image;
                 }
-                _isLoading = false;
               });
-              }
-            } else {
-              if (mounted) {
-              setState(() {
-                _isLoading = false;
-              });
-              }
             }
           }
         } else {
-          if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+          // Gallery option - use image picker as before
+          image = await _imagePicker.pickImage(
+            source: source,
+            imageQuality: 85,
+            maxWidth: 1920,
+            maxHeight: 1920,
+          );
+
+          if (image != null) {
+            if (mounted) {
+              final confirmed = await _showImagePreview(image, imageType);
+              if (confirmed) {
+                if (mounted) {
+                setState(() {
+                  if (imageType == 'front') {
+                    _frontIdImage = image;
+                  } else if (imageType == 'back') {
+                    _backIdImage = image;
+                  } else if (imageType == 'faceWithId') {
+                    _faceWithIdImage = image;
+                  }
+                  _isLoading = false;
+                });
+                }
+              } else {
+                if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                });
+                }
+              }
+            }
+          } else {
+            if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+            }
           }
         }
       }
@@ -416,10 +460,10 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
   }
 
   Future<void> _handleUpload() async {
-    if (_frontIdImage == null || _backIdImage == null) {
+    if (_frontIdImage == null || _backIdImage == null || _faceWithIdImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please capture both front and back ID images'),
+          content: Text('Please capture all required photos: Front ID, Back ID, and Face with ID'),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 2),
         ),
@@ -432,10 +476,39 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
     });
 
     try {
-      User? user = widget.googleUser;
+      User? user;
 
-      // If no Google user, try to create email/password account
-      if (user == null) {
+      // If Google account data is present, create/sign in the Firebase user **now** using Google credential.
+      // This ensures the Firebase Auth user is ONLY created after the full registration (ID upload) is completed.
+      if (widget.googleData != null) {
+        try {
+          debugPrint('=== GOOGLE FINAL ACCOUNT CREATION ===');
+          final credential = GoogleAuthProvider.credential(
+            idToken: widget.googleData!.idToken,
+            accessToken: widget.googleData!.accessToken,
+          );
+          final userCredential =
+              await FirebaseAuth.instance.signInWithCredential(credential);
+          user = userCredential.user;
+          debugPrint('Google account created/signed in: ${user?.uid}');
+        } catch (e) {
+          debugPrint('ERROR creating Google account at final step: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error creating Google account: ${e.toString()}'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+            setState(() {
+              _isUploading = false;
+            });
+          }
+          return;
+        }
+      } else {
+        // No Google data → email/password flow
         try {
           const password = 'Pass123'; // Default password
           final email = widget.email.trim().toLowerCase();
@@ -444,10 +517,18 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
           debugPrint('Email: "$email"');
           debugPrint('Password length: ${password.length}');
 
-          // Check if email is already in use FIRST
+          // Check if email is already in use FIRST by trying to create the user
           try {
-            final signInMethods = await FirebaseAuth.instance.fetchSignInMethodsForEmail(email);
-            if (signInMethods.isNotEmpty) {
+            // Try to create the user - if email exists, we'll get email-already-in-use error
+            final userCredential = await _authService.signUpWithEmailAndPassword(
+              email,
+              password,
+            );
+            user = userCredential.user;
+            debugPrint('Created new user: ${user?.uid}');
+          } on Exception catch (signUpError) {
+            final errorMessage = signUpError.toString();
+            if (errorMessage.contains('already exists') || errorMessage.contains('email-already-in-use')) {
               debugPrint('Email already exists. Signing in instead...');
               // Try to sign in with the default password
               try {
@@ -516,11 +597,12 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
         }
       }
 
-      if (user == null) {
+      if (widget.googleData == null && user == null) {
         throw Exception('Failed to authenticate user');
       }
 
-      final uid = user.uid;
+      // At this point, user must be non-null (either from Google or email/password flow)
+      final uid = user!.uid;
       debugPrint('✅ User authenticated with UID: $uid');
 
       // Save user data to Firestore
@@ -535,8 +617,8 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
         idImageFrontUrl: 'PENDING', // Mark as pending until images uploaded
         idImageBackUrl: 'PENDING',
         faceWithIdUrl: _faceWithIdImage != null ? 'PENDING' : null,
-        userType: 'student',
-        password: widget.googleUser == null ? 'Pass123' : null,
+        userType: widget.userType,
+        password: widget.googleData == null ? 'Pass123' : null,
       );
 
       debugPrint('✅ User data saved to Firestore');
@@ -649,6 +731,7 @@ class _StudentIDVerificationContentWidget extends StatelessWidget {
   final VoidCallback onRetakeBack;
   final VoidCallback onRetakeFaceWithId;
   final VoidCallback onUpload;
+  final String userType;
 
   const _StudentIDVerificationContentWidget({
     required this.frontIdImage,
@@ -663,6 +746,7 @@ class _StudentIDVerificationContentWidget extends StatelessWidget {
     required this.onRetakeBack,
     required this.onRetakeFaceWithId,
     required this.onUpload,
+    required this.userType,
   });
 
   @override
@@ -697,7 +781,7 @@ class _StudentIDVerificationContentWidget extends StatelessWidget {
               ],
             ),
             SizedBox(height: isSmallScreen ? 14 : 16),
-            _TitleWidget(),
+            _TitleWidget(userType: userType),
             SizedBox(height: isSmallScreen ? 4 : 6),
             _DescriptionWidget(),
             SizedBox(height: isSmallScreen ? 16 : 18),
@@ -718,7 +802,7 @@ class _StudentIDVerificationContentWidget extends StatelessWidget {
             ),
             SizedBox(height: isSmallScreen ? 14 : 16),
             _IDCaptureSectionWidget(
-              title: 'Face with ID (Optional)',
+              title: 'Face with ID',
               image: faceWithIdImage,
               isLoading: isLoading,
               onCapture: onCaptureFaceWithId,
@@ -726,7 +810,7 @@ class _StudentIDVerificationContentWidget extends StatelessWidget {
             ),
             SizedBox(height: isSmallScreen ? 16 : 18),
             _UploadIDButtonWidget(
-              isEnabled: frontIdImage != null && backIdImage != null,
+              isEnabled: frontIdImage != null && backIdImage != null && faceWithIdImage != null,
               isLoading: isLoading || isUploading,
               onUpload: onUpload,
             ),
@@ -773,11 +857,19 @@ class _LogoWidget extends StatelessWidget {
 }
 
 class _TitleWidget extends StatelessWidget {
+  final String userType;
+
+  const _TitleWidget({required this.userType});
+
   @override
   Widget build(BuildContext context) {
-    return const Text(
-      'Sign Up as Student',
-      style: TextStyle(
+    final isStudent = userType.toLowerCase() == 'student';
+    final titleText =
+        isStudent ? 'Sign Up as Student' : 'Sign Up as Professional';
+
+    return Text(
+      titleText,
+      style: const TextStyle(
         fontSize: 20,
         fontWeight: FontWeight.bold,
         color: Colors.black87,

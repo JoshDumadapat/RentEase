@@ -8,6 +8,8 @@ import 'package:rentease_app/screens/profile/widgets/user_stats_section.dart';
 import 'package:rentease_app/screens/profile/widgets/property_list_section.dart';
 import 'package:rentease_app/screens/profile/widgets/favorites_section.dart';
 import 'package:rentease_app/screens/profile/widgets/settings_section.dart';
+import 'package:rentease_app/services/auth_service.dart';
+import 'package:rentease_app/sign_in/sign_in_page.dart';
 
 /// Profile Page
 /// 
@@ -128,11 +130,23 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
 
-    if (confirmed == true && mounted) {
-      // Note: Actual logout logic will be implemented when authentication is integrated
-      // For now, just show a message
+    if (confirmed != true || !mounted) return;
+
+    try {
+      // Sign out from Firebase Auth and Google
+      await AuthService().signOut();
+
+      if (!mounted) return;
+
+      // Navigate back to the sign-in page and clear the navigation stack
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const SignInPage()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Logged out successfully')),
+        SnackBar(content: Text('Logout failed: $e')),
       );
     }
   }

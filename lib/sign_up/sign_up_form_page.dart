@@ -6,12 +6,34 @@ import 'package:rentease_app/sign_up/student_id_verification_page.dart';
 import 'package:rentease_app/services/auth_service.dart';
 import 'package:rentease_app/services/user_service.dart';
 import 'package:rentease_app/main_app.dart';
+import 'package:rentease_app/utils/confirmation_dialog_utils.dart';
 
-/// Student Sign Up Page with form validation
+/// Format a name so that each word has an uppercase first letter
+/// and the remaining letters are lowercase.
+String _formatName(String input) {
+  final trimmed = input.trim();
+  if (trimmed.isEmpty) return '';
+
+  final words = trimmed.split(RegExp(r'\s+'));
+  final formattedWords = words.map((word) {
+    if (word.isEmpty) return '';
+    if (word.length == 1) return word.toUpperCase();
+    return word[0].toUpperCase() + word.substring(1).toLowerCase();
+  }).toList();
+
+  return formattedWords.join(' ');
+}
+
+/// Student / Professional Sign Up Page with form validation
 class StudentSignUpPage extends StatefulWidget {
-  final User? googleUser; // Firebase User from Google sign-in
+  final GoogleSignInTempData? googleData; // Google account data (no Firebase user yet)
+  final String userType; // 'student' or 'professional'
   
-  const StudentSignUpPage({super.key, this.googleUser});
+  const StudentSignUpPage({
+    super.key,
+    this.googleData,
+    String? userType,
+  }) : userType = userType ?? 'student';
 
   @override
   State<StudentSignUpPage> createState() => _StudentSignUpPageState();
@@ -28,22 +50,45 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
   String _selectedCountryCode = '+63';
   DateTime? _selectedDate;
 
+  /// Helper to split a Google display name into first name and last name.
+  ///
+  /// Rules:
+  /// - 1 part: firstName = full, lastName = null
+  /// - 2 parts: firstName = first, lastName = second
+  /// - 3+ parts: firstName = all but last, lastName = last
+  Map<String, String?> _splitDisplayName(String displayName) {
+    final parts = displayName.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty) {
+      return {'firstName': null, 'lastName': null};
+    } else if (parts.length == 1) {
+      return {'firstName': parts[0], 'lastName': null};
+    } else if (parts.length == 2) {
+      return {'firstName': parts[0], 'lastName': parts[1]};
+    } else {
+      final lastName = parts.last;
+      final firstName = parts.sublist(0, parts.length - 1).join(' ');
+      return {'firstName': firstName, 'lastName': lastName};
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     // Auto-fill from Google account if available
-    if (widget.googleUser != null) {
-      final displayName = widget.googleUser!.displayName ?? '';
+    if (widget.googleData != null) {
+      final displayName = widget.googleData!.displayName ?? '';
       if (displayName.isNotEmpty) {
-        final nameParts = displayName.split(' ');
-        if (nameParts.isNotEmpty) {
-          _firstNameController.text = nameParts[0];
+        final split = _splitDisplayName(displayName);
+        final firstName = split['firstName'];
+        final lastName = split['lastName'];
+        if (firstName != null) {
+          _firstNameController.text = firstName;
         }
-        if (nameParts.length > 1) {
-          _lastNameController.text = nameParts.sublist(1).join(' ');
+        if (lastName != null) {
+          _lastNameController.text = lastName;
         }
       }
-      _emailController.text = widget.googleUser!.email ?? '';
+      _emailController.text = widget.googleData!.email;
     }
   }
 
@@ -99,11 +144,11 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
                 fontWeight: FontWeight.w500,
                 color: Colors.grey[700]!,
               ),
-              dayStyle: TextStyle(
+              dayStyle: const TextStyle(
                 fontSize: 14,
                 color: Colors.black87,
               ),
-              yearStyle: TextStyle(
+              yearStyle: const TextStyle(
                 fontSize: 14,
                 color: Colors.black87,
               ),
@@ -168,7 +213,8 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
             birthday: _birthDateController.text.trim(),
             phone: _phoneNumberController.text.trim(),
             countryCode: _selectedCountryCode,
-            googleUser: widget.googleUser,
+            googleData: widget.googleData,
+            userType: widget.userType,
           ),
         ),
       );
@@ -177,34 +223,71 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          // Background Image Widget at the top
-          _BackgroundImageWidget(),
-          // White Card Background Widget
-          _WhiteCardBackgroundWidget(
-            child: _StudentSignUpContentWidget(
-              formKey: _formKey,
-              firstNameController: _firstNameController,
-              lastNameController: _lastNameController,
-              emailController: _emailController,
-              birthDateController: _birthDateController,
-              phoneNumberController: _phoneNumberController,
-              selectedCountryCode: _selectedCountryCode,
-              selectedDate: _selectedDate,
-              onCountryCodeChanged: (value) {
-                if (mounted) {
-                  setState(() {
-                    _selectedCountryCode = value!;
-                  });
-                }
-              },
-              onDateTap: () => _selectDate(context),
-              onNext: _handleNext,
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (bool didPop) async {
+        if (didPop) return;
+
+        final hasInput =
+            _firstNameController.text.trim().isNotEmpty ||
+            _lastNameController.text.trim().isNotEmpty ||
+            _emailController.text.trim().isNotEmpty ||
+            _birthDateController.text.trim().isNotEmpty ||
+            _phoneNumberController.text.trim().isNotEmpty ||
+            _selectedDate != null;
+
+        if (!hasInput) {
+          if (mounted) Navigator.of(context).pop(false);
+          return;
+        }
+
+        if (!mounted) return;
+        final discard = await showDiscardChangesDialog(
+          context,
+          title: 'Discard sign up?',
+          message:
+              'If you go back now, all information you have entered on this page will be cleared.',
+          confirmText: 'Discard',
+          cancelText: 'Stay',
+        );
+
+        if (discard) {
+          if (mounted) {
+            Navigator.of(context).pop(true);
+          }
+        }
+      },
+      child: Scaffold(
+        body: Stack(
+          children: [
+            // Background Image Widget at the top
+            _BackgroundImageWidget(),
+            // White Card Background Widget
+            _WhiteCardBackgroundWidget(
+              child: _StudentSignUpContentWidget(
+                userType: widget.userType,
+                formKey: _formKey,
+                firstNameController: _firstNameController,
+                lastNameController: _lastNameController,
+                emailController: _emailController,
+                birthDateController: _birthDateController,
+                phoneNumberController: _phoneNumberController,
+                selectedCountryCode: _selectedCountryCode,
+                selectedDate: _selectedDate,
+                onBack: () => Navigator.of(context).maybePop(),
+                onCountryCodeChanged: (value) {
+                  if (mounted) {
+                    setState(() {
+                      _selectedCountryCode = value!;
+                    });
+                  }
+                },
+                onDateTap: () => _selectDate(context),
+                onNext: _handleNext,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -273,6 +356,7 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
 
 /// Widget for the student sign up content
 class _StudentSignUpContentWidget extends StatelessWidget {
+  final String userType;
   final GlobalKey<FormState> formKey;
   final TextEditingController firstNameController;
   final TextEditingController lastNameController;
@@ -284,8 +368,10 @@ class _StudentSignUpContentWidget extends StatelessWidget {
   final ValueChanged<String?> onCountryCodeChanged;
   final VoidCallback onDateTap;
   final VoidCallback onNext;
+  final VoidCallback onBack;
 
   const _StudentSignUpContentWidget({
+    required this.userType,
     required this.formKey,
     required this.firstNameController,
     required this.lastNameController,
@@ -297,6 +383,7 @@ class _StudentSignUpContentWidget extends StatelessWidget {
     required this.onCountryCodeChanged,
     required this.onDateTap,
     required this.onNext,
+    required this.onBack,
   });
 
   @override
@@ -326,7 +413,7 @@ class _StudentSignUpContentWidget extends StatelessWidget {
                   // Back button aligned to start (left) with negative margin
                   Positioned(
                     left: -12,
-                    child: _BackButtonWidget(),
+                    child: _BackButtonWidget(onBack: onBack),
                   ),
                   // Logo centered horizontally
                   _LogoWidget(),
@@ -334,7 +421,7 @@ class _StudentSignUpContentWidget extends StatelessWidget {
               ),
               SizedBox(height: isSmallScreen ? 14 : 16),
               // Title Widget
-              _TitleWidget(),
+              _TitleWidget(userType: userType),
               SizedBox(height: isSmallScreen ? 4 : 6),
               // Description Widget
               _DescriptionWidget(),
@@ -382,7 +469,7 @@ class _StudentSignUpContentWidget extends StatelessWidget {
               _DividerWidget(),
               SizedBox(height: isSmallScreen ? 20 : 24),
               // Google Sign Up Button Widget
-              _GoogleSignUpButtonWidget(),
+              _GoogleSignUpButtonWidget(userType: userType),
               SizedBox(height: isSmallScreen ? 8 : 16),
             ],
           ),
@@ -394,13 +481,15 @@ class _StudentSignUpContentWidget extends StatelessWidget {
 
 /// Widget for back button
 class _BackButtonWidget extends StatelessWidget {
+  final VoidCallback onBack;
+
+  const _BackButtonWidget({required this.onBack});
+
   @override
   Widget build(BuildContext context) {
     return IconButton(
       icon: const Icon(Icons.arrow_back, color: Colors.black87, size: 20),
-      onPressed: () {
-        Navigator.of(context).pop();
-      },
+      onPressed: onBack,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(),
     );
@@ -448,16 +537,23 @@ class _LogoWidget extends StatelessWidget {
   }
 }
 
-/// Widget for the Sign Up as Student title
+/// Widget for the Sign Up title (Student or Professional)
 class _TitleWidget extends StatelessWidget {
+  final String userType;
+
+  const _TitleWidget({required this.userType});
+
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
     final isVerySmallScreen = screenHeight < 600;
+
+    final isStudent = userType.toLowerCase() == 'student';
+    final titleText = isStudent ? 'Sign Up as Student' : 'Sign Up as Professional';
     
     return Text(
-      'Sign Up as Student',
+      titleText,
       style: TextStyle(
         fontSize: isVerySmallScreen ? 20 : isSmallScreen ? 22 : 24,
         fontWeight: FontWeight.bold,
@@ -521,6 +617,16 @@ class _FirstNameInputWidget extends StatelessWidget {
             color: Colors.black87,
             fontSize: isVerySmallScreen ? 13 : isSmallScreen ? 14 : 15,
           ),
+          onChanged: (value) {
+            final formatted = _formatName(value);
+            if (formatted != value) {
+              controller.value = controller.value.copyWith(
+                text: formatted,
+                selection: TextSelection.collapsed(offset: formatted.length),
+                composing: TextRange.empty,
+              );
+            }
+          },
           decoration: InputDecoration(
             hintText: 'First Name',
             hintStyle: TextStyle(
@@ -600,6 +706,16 @@ class _LastNameInputWidget extends StatelessWidget {
             color: Colors.black87,
             fontSize: isVerySmallScreen ? 13 : isSmallScreen ? 14 : 15,
           ),
+          onChanged: (value) {
+            final formatted = _formatName(value);
+            if (formatted != value) {
+              controller.value = controller.value.copyWith(
+                text: formatted,
+                selection: TextSelection.collapsed(offset: formatted.length),
+                composing: TextRange.empty,
+              );
+            }
+          },
           decoration: InputDecoration(
             hintText: 'Last Name',
             hintStyle: TextStyle(
@@ -1047,16 +1163,16 @@ class _NextButtonWidget extends StatelessWidget {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
+          children: const [
+            Text(
               'Next',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(width: 6),
-            const Icon(Icons.arrow_forward, size: 18),
+            SizedBox(width: 6),
+            Icon(Icons.arrow_forward, size: 18),
           ],
         ),
       ),
@@ -1151,6 +1267,10 @@ class _DividerWidget extends StatelessWidget {
 
 /// Widget for Google Sign Up button
 class _GoogleSignUpButtonWidget extends StatefulWidget {
+  final String userType;
+  
+  const _GoogleSignUpButtonWidget({required this.userType});
+  
   @override
   State<_GoogleSignUpButtonWidget> createState() => _GoogleSignUpButtonWidgetState();
 }
@@ -1166,19 +1286,67 @@ class _GoogleSignUpButtonWidgetState extends State<_GoogleSignUpButtonWidget> {
     });
 
     try {
-      debugPrint('Starting Google Sign-In...');
-      final userCredential = await _authService.signInWithGoogle();
-      debugPrint('Google Sign-In completed, userCredential: ${userCredential != null}');
-      
-      if (userCredential != null && userCredential.user != null && mounted) {
-        final user = userCredential.user!;
-        final uid = user.uid;
-        debugPrint('User authenticated: $uid');
-        
-        // Check if user exists in Firestore (with timeout and error handling)
+      debugPrint('Starting Google account selection for sign-up (no Firebase user yet)...');
+      final googleData = await _authService.signInWithGoogleAccountOnly();
+      debugPrint('Google account selection completed, googleData: ${googleData != null}');
+
+      if (googleData == null) {
+        // User canceled Google sign up
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      // Try to sign in with Google credential once, and use additionalUserInfo.isNewUser
+      // to decide whether this Google account already exists in Firebase Auth.
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleData.idToken,
+        accessToken: googleData.accessToken,
+      );
+
+      final userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+
+      final isNewUser = userCredential.additionalUserInfo?.isNewUser ?? false;
+
+      if (isNewUser) {
+        // Brand new Firebase Auth user just created here.
+        // For the sign-up flow we DON'T want to keep this user yet.
+        // 1) Delete the just-created Firebase user
+        // 2) Sign out
+        // 3) Redirect to StudentSignUpPage with Google data to fill fields.
+        try {
+          await userCredential.user?.delete();
+        } catch (e) {
+          debugPrint('Warning: failed to delete newly created Google user (sign-up button): $e');
+        }
+        await FirebaseAuth.instance.signOut();
+
+        if (mounted) {
+          debugPrint('New Google user – navigating to StudentSignUpPage for full registration');
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => StudentSignUpPage(
+                googleData: googleData,
+                userType: widget.userType,
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Existing Firebase Auth Google user → sign in and go straight to app.
+      if (userCredential.user != null && mounted) {
+        final uid = userCredential.user!.uid;
+        final email = userCredential.user!.email ?? googleData.email;
+
+        // Ensure Firestore record exists
         bool userExists = false;
         try {
-          debugPrint('Checking if user exists in Firestore...');
           userExists = await _userService.userExists(uid).timeout(
             const Duration(seconds: 5),
             onTimeout: () {
@@ -1186,62 +1354,47 @@ class _GoogleSignUpButtonWidgetState extends State<_GoogleSignUpButtonWidget> {
               return false;
             },
           );
-          debugPrint('User exists in Firestore: $userExists');
         } catch (e) {
           debugPrint('Error checking user exists: $e');
-          // Assume new user on error - will redirect to sign up
           userExists = false;
         }
-        
-        if (userExists && mounted) {
-          debugPrint('User exists, navigating to MainApp');
-          // User already exists, navigate to main app
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) => const MainApp(),
-            ),
-          );
-        } else if (mounted) {
-          debugPrint('User does not exist, creating user record...');
-          // User doesn't exist, create basic user record and redirect to sign up
+
+        if (!userExists) {
           try {
-            // Create a basic user record with Google account info
-            final displayName = user.displayName;
-            final nameParts = displayName != null ? displayName.split(' ') : <String>[];
-            debugPrint('Creating user with name: $displayName, email: ${user.email}');
+            final displayName = userCredential.user!.displayName;
+            String? firstName;
+            String? lastName;
+            if (displayName != null && displayName.trim().isNotEmpty) {
+              final parts = displayName.trim().split(RegExp(r'\s+'));
+              if (parts.length == 1) {
+                firstName = parts[0];
+              } else if (parts.length == 2) {
+                firstName = parts[0];
+                lastName = parts[1];
+              } else {
+                lastName = parts.last;
+                firstName = parts.sublist(0, parts.length - 1).join(' ');
+              }
+            }
+
             await _userService.createOrUpdateUser(
               uid: uid,
-              email: user.email ?? '',
-              fname: nameParts.isNotEmpty ? nameParts.first : null,
-              lname: nameParts.length > 1 
-                  ? nameParts.sublist(1).join(' ')
-                  : null,
+              email: email,
+              fname: firstName,
+              lname: lastName,
               userType: 'student',
             );
-            debugPrint('User record created successfully');
           } catch (e) {
-            debugPrint('Error creating user record: $e');
-            // Continue anyway - user can complete sign up manually
-          }
-          
-          // Navigate to sign up page with Google user info to auto-fill
-          if (mounted) {
-            debugPrint('Navigating to StudentSignUpPage with Google user info');
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => StudentSignUpPage(
-                  googleUser: user,
-                ),
-              ),
-            );
+            debugPrint('Error creating user record for existing Google user (sign-up button): $e');
           }
         }
-      } else if (mounted) {
-        debugPrint('User canceled sign up or userCredential is null');
-        // User canceled sign up
-        setState(() {
-          _isLoading = false;
-        });
+
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const MainApp()),
+            (route) => false,
+          );
+        }
       }
     } catch (e, stackTrace) {
       debugPrint('Error in Google Sign-Up flow: $e');

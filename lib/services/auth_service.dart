@@ -2,6 +2,26 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
 
+/// Temporary container for Google account selection data without creating a Firebase user yet.
+///
+/// This allows you to:
+/// - Let the user pick a Google account
+/// - Collect the ID / access tokens
+/// - Postpone creating the Firebase Auth user until after registration is complete.
+class GoogleSignInTempData {
+  final String email;
+  final String idToken;
+  final String accessToken;
+  final String? displayName;
+
+  GoogleSignInTempData({
+    required this.email,
+    required this.idToken,
+    required this.accessToken,
+    this.displayName,
+  });
+}
+
 /// Service class for handling authentication operations
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -21,14 +41,106 @@ class AuthService {
   /// Stream of authentication state changes
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
+  /// Start Google Sign-In but **do NOT** create a Firebase Auth user yet.
+  ///
+  /// This:
+  /// - Shows the Google account picker
+  /// - Returns Google tokens + basic profile info
+  /// - Leaves Firebase Auth untouched (no user created)
+  Future<GoogleSignInTempData?> signInWithGoogleAccountOnly() async {
+    try {
+      debugPrint('=== GOOGLE ACCOUNT SELECTION (NO FIREBASE USER) START ===');
+
+      // Always clear any previously selected Google account so the account picker shows.
+      // This prevents Google from silently reusing the last account.
+      try {
+        debugPrint('Step 0 (account-only): Signing out any existing Google session...');
+        await _googleSignIn.signOut();
+        debugPrint('Step 0 Result: Google session cleared');
+      } catch (e) {
+        debugPrint('Step 0 Warning: Failed to sign out previous Google session: $e');
+      }
+
+      // Trigger Google Sign-In UI
+      debugPrint('Step 1 (account-only): Triggering Google Sign-In UI...');
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      debugPrint('Step 1 Result: ${googleUser != null ? "User selected account" : "User canceled"}');
+
+      if (googleUser == null) {
+        // User canceled the sign-in
+        debugPrint('User canceled Google account selection');
+        return null;
+      }
+
+      debugPrint('Step 2 (account-only): Getting Google authentication tokens...');
+      debugPrint('User email: ${googleUser.email}');
+      debugPrint('User ID: ${googleUser.id}');
+
+      GoogleSignInAuthentication googleAuth;
+      try {
+        googleAuth = await googleUser.authentication;
+        debugPrint('Step 2 Result: Authentication tokens obtained (account-only)');
+        debugPrint('Has access token: ${googleAuth.accessToken != null}');
+        debugPrint('Has ID token: ${googleAuth.idToken != null}');
+      } catch (e) {
+        debugPrint('❌ ERROR in Step 2 (account-only): Failed to get Google authentication');
+        debugPrint('Error: $e');
+        await _googleSignIn.signOut();
+        throw Exception('Failed to get Google authentication: $e');
+      }
+
+      if (googleAuth.accessToken == null || googleAuth.idToken == null) {
+        debugPrint('❌ ERROR (account-only): Missing authentication tokens');
+        await _googleSignIn.signOut();
+        throw Exception('Google Sign-In failed: Missing authentication tokens');
+      }
+
+      debugPrint('=== GOOGLE ACCOUNT SELECTION (NO FIREBASE USER) SUCCESS ===');
+
+      return GoogleSignInTempData(
+        email: googleUser.email,
+        idToken: googleAuth.idToken!,
+        accessToken: googleAuth.accessToken!,
+        displayName: googleUser.displayName,
+      );
+    } catch (e, stackTrace) {
+      debugPrint('❌ === GOOGLE ACCOUNT SELECTION ERROR (NO FIREBASE USER) ===');
+      debugPrint('❌ Error details: $e');
+      debugPrint('❌ Error type: ${e.runtimeType}');
+      debugPrint('❌ Stack trace: $stackTrace');
+
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
+
+      throw Exception('Google account selection failed: $e');
+    }
+  }
+
   /// Check if email/password authentication is enabled (by attempting a test)
   /// This will help diagnose if Email/Password is not enabled in Firebase
   Future<bool> checkEmailPasswordEnabled() async {
     try {
-      // Try to fetch sign-in methods for a test email
-      // This will fail if Email/Password is not enabled
-      await _auth.fetchSignInMethodsForEmail('test@example.com');
-      return true; // If we get here, Email/Password is likely enabled
+      // Try to create a test user to check if Email/Password is enabled
+      // We'll immediately delete it if creation succeeds
+      // This will fail with 'operation-not-allowed' if Email/Password is not enabled
+      final testEmail = 'test_${DateTime.now().millisecondsSinceEpoch}@example.com';
+      final testPassword = 'Test123!@#';
+      try {
+        final credential = await _auth.createUserWithEmailAndPassword(
+          email: testEmail,
+          password: testPassword,
+        );
+        // Delete the test user immediately
+        await credential.user?.delete();
+        return true; // If we get here, Email/Password is enabled
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'operation-not-allowed') {
+          return false;
+        }
+        // Other errors might indicate it's enabled but something else went wrong
+        return true;
+      }
     } catch (e) {
       debugPrint('Error checking Email/Password status: $e');
       return false;
@@ -40,8 +152,17 @@ class AuthService {
     try {
       debugPrint('=== GOOGLE SIGN-IN START ===');
       debugPrint('Server Client ID: 948370771334-k9o21p423l6mq4aq0o5cuf2v3jnmeaqe.apps.googleusercontent.com');
-      
-      // Trigger the Google Sign In flow
+
+      // Always clear any previously selected Google account so the account picker shows.
+      try {
+        debugPrint('Step 0: Signing out any existing Google session...');
+        await _googleSignIn.signOut();
+        debugPrint('Step 0 Result: Google session cleared');
+      } catch (e) {
+        debugPrint('Step 0 Warning: Failed to sign out previous Google session: $e');
+      }
+
+      // Trigger the Google Sign In flow (will now show account chooser)
       debugPrint('Step 1: Triggering Google Sign-In UI...');
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       debugPrint('Step 1 Result: ${googleUser != null ? "User selected account" : "User canceled"}');
@@ -210,20 +331,29 @@ class AuthService {
         try {
           final trimmedEmail = email.trim().toLowerCase();
           debugPrint('=== POST-ERROR DIAGNOSTICS ===');
-          debugPrint('Attempting to fetch sign-in methods for: $trimmedEmail');
-          final methods = await _auth.fetchSignInMethodsForEmail(trimmedEmail);
-          debugPrint('Sign-in methods found: $methods');
-          
-          if (methods.isEmpty) {
-            debugPrint('🔍 NO SIGN-IN METHODS FOUND - Account may not exist in Firebase Auth');
-            debugPrint('🔍 Check: Go to Firebase Console → Authentication → Users tab');
-            debugPrint('🔍 Search for email: $trimmedEmail');
-          } else if (methods.contains('password')) {
-            debugPrint('🔍 PASSWORD SIGN-IN IS ENABLED for this account');
-            debugPrint('🔍 The error is likely password-related');
+          debugPrint('Attempting to check if account exists for: $trimmedEmail');
+          // Try to create a user with the email to check if it exists
+          // We'll catch the email-already-in-use error
+          try {
+            final testPassword = 'Test123!@#${DateTime.now().millisecondsSinceEpoch}';
+            await _auth.createUserWithEmailAndPassword(
+              email: trimmedEmail,
+              password: testPassword,
+            );
+            // If we get here, the account was created (shouldn't happen in normal flow)
+            debugPrint('🔍 Account was created (unexpected)');
+          } on FirebaseAuthException catch (createError) {
+            if (createError.code == 'email-already-in-use') {
+              debugPrint('🔍 ACCOUNT EXISTS - Email is already in use');
+              debugPrint('🔍 The error is likely password-related');
+            } else if (createError.code == 'operation-not-allowed') {
+              debugPrint('🔍 Email/Password authentication is not enabled');
+            } else {
+              debugPrint('🔍 Account may not exist or other error: ${createError.code}');
+            }
           }
         } catch (fetchError) {
-          debugPrint('Could not fetch sign-in methods: $fetchError');
+          debugPrint('Could not check account status: $fetchError');
         }
         
         switch (e.code) {
