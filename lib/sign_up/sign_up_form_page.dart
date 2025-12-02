@@ -225,6 +225,7 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
+      // ignore: deprecated_member_use
       onPopInvoked: (bool didPop) async {
         if (didPop) return;
 
@@ -253,6 +254,7 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
 
         if (discard) {
           if (mounted) {
+            // ignore: use_build_context_synchronously
             Navigator.of(context).pop(true);
           }
         }
