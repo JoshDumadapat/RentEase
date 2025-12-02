@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/add_property/widgets/property_media_section.dart';
 import 'package:rentease_app/screens/add_property/widgets/property_basic_info_section.dart';
 import 'package:rentease_app/screens/add_property/widgets/pricing_section.dart';
@@ -7,6 +8,12 @@ import 'package:rentease_app/screens/add_property/widgets/location_section.dart'
 import 'package:rentease_app/screens/add_property/widgets/amenities_section.dart';
 import 'package:rentease_app/screens/add_property/widgets/availability_section.dart';
 import 'package:rentease_app/screens/add_property/widgets/contact_section.dart';
+
+// Light blue theme constants aligned with HomePage
+const Color _themeColor = Color(0xFF00D1FF);
+const Color _themeColorLight = Color(0xFFE5F9FF);
+const Color _themeColorLight2 = Color(0xFFB3F0FF);
+const Color _themeColorDark = Color(0xFF00B8E6);
 
 /// Main Add Property page for listing rental properties
 /// 
@@ -26,6 +33,8 @@ class AddPropertyPage extends StatefulWidget {
 class _AddPropertyPageState extends State<AddPropertyPage> {
   final _formKey = GlobalKey<FormState>();
   final _scrollController = ScrollController();
+  static const int _totalSteps = 3;
+  int _currentStep = 0;
 
   // Controllers
   final _titleController = TextEditingController();
@@ -276,22 +285,47 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       // Note: API call implementation will be added when backend is ready
       // await PropertyService.createProperty(...);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isDraft
-                  ? 'Property saved as draft'
-                  : 'Property published successfully!',
-            ),
-            backgroundColor: Colors.green,
-          ),
-        );
+      if (!mounted) return;
 
-        // Navigate back or reset form
-        if (!isDraft) {
-          Navigator.of(context).pop();
-        }
+      // Simulate creating a new listing at the top of the home feed
+      final newListing = ListingModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: _titleController.text.isEmpty
+            ? 'New Property Listing'
+            : _titleController.text,
+        category: _propertyType ?? 'Apartment',
+        location: _addressController.text.isEmpty
+            ? 'Location to be updated'
+            : _addressController.text,
+        price: double.tryParse(_monthlyRentController.text) ?? 0,
+        ownerName: 'You',
+        isOwnerVerified: true,
+        imagePaths: _images.isNotEmpty
+            ? _images.map((xfile) => xfile.path).toList()
+            : ListingModel.getMockListings().first.imagePaths,
+        description: _descriptionController.text.isEmpty
+            ? 'Description will be updated soon.'
+            : _descriptionController.text,
+        bedrooms: 1,
+        bathrooms: 1,
+        area: 20,
+        postedDate: DateTime.now(),
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isDraft
+                ? 'Property saved as draft'
+                : 'Property published! Showing on your home feed.',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Navigate back to Home and insert the new listing at the top via route result
+      if (!isDraft) {
+        Navigator.of(context).pop<ListingModel>(newListing);
       }
     } catch (e) {
       if (mounted) {
@@ -337,250 +371,392 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         ),
         centerTitle: true,
       ),
-      body: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            // Progress indicator when submitting
-            if (_isSubmitting)
-              LinearProgressIndicator(
-                value: _uploadProgress,
-                backgroundColor: colorScheme.surfaceContainerHighest,
-                valueColor: AlwaysStoppedAnimation<Color>(colorScheme.primary),
-              ),
-            // Scrollable form content
-            Expanded(
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(24),
+      body: Theme(
+        data: theme.copyWith(
+          colorScheme: theme.colorScheme.copyWith(
+            primary: _themeColorDark,
+            secondary: _themeColor,
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: _themeColorLight,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: _themeColorLight2),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: _themeColorLight2),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: _themeColorDark, width: 1.5),
+            ),
+            hintStyle: textTheme.bodyMedium?.copyWith(
+              color: Colors.grey[500],
+            ),
+          ),
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              // Progress indicator when submitting
+              if (_isSubmitting)
+                LinearProgressIndicator(
+                  value: _uploadProgress,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(_themeColorDark),
+                ),
+              // Step progress indicator
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Property Media Section
-                    PropertyMediaSection(
-                      images: _images,
-                      coverImageIndex: _coverImageIndex,
-                      onPickImages: _pickImages,
-                      onRemoveImage: _removeImage,
-                      onSetCoverImage: _setCoverImage,
-                      onReorderImage: _reorderImage,
+                    LinearProgressIndicator(
+                      value: (_currentStep + 1) / _totalSteps,
+                      backgroundColor: colorScheme.surfaceContainerHighest,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        _themeColorDark,
+                      ),
+                      minHeight: 6,
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                    const SizedBox(height: 32),
-
-                    // Basic Info Section
-                    PropertyBasicInfoSection(
-                      titleController: _titleController,
-                      descriptionController: _descriptionController,
-                      propertyType: _propertyType,
-                      onPropertyTypeChanged: (type) {
-                        setState(() {
-                          _propertyType = type;
-                        });
-                      },
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildStepLabel('Details', 0),
+                        _buildStepLabel('Pricing & Location', 1),
+                        _buildStepLabel('Amenities & Contact', 2),
+                      ],
                     ),
-                    const SizedBox(height: 32),
-
-                    // Pricing Section
-                    PricingSection(
-                      monthlyRentController: _monthlyRentController,
-                      depositController: _depositController,
-                      advanceController: _advanceController,
-                      electricityIncluded: _electricityIncluded,
-                      waterIncluded: _waterIncluded,
-                      internetIncluded: _internetIncluded,
-                      onElectricityChanged: (value) {
-                        setState(() {
-                          _electricityIncluded = value;
-                        });
-                      },
-                      onWaterChanged: (value) {
-                        setState(() {
-                          _waterIncluded = value;
-                        });
-                      },
-                      onInternetChanged: (value) {
-                        setState(() {
-                          _internetIncluded = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Location Section
-                    LocationSection(
-                      addressController: _addressController,
-                      landmarkController: _landmarkController,
-                      onMapPicker: () {
-                        // Note: Map picker implementation will be added when location services are integrated
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Map picker coming soon'),
-                          ),
-                        );
-                      },
-                      onGPSFill: () {
-                        // Note: GPS auto-fill implementation will be added when location services are integrated
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('GPS auto-fill coming soon'),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Amenities Section
-                    AmenitiesSection(
-                      privateCR: _privateCR,
-                      sharedCR: _sharedCR,
-                      kitchenAccess: _kitchenAccess,
-                      wifi: _wifi,
-                      laundry: _laundry,
-                      parking: _parking,
-                      security: _security,
-                      aircon: _aircon,
-                      petFriendly: _petFriendly,
-                      curfewController: _curfewController,
-                      onPrivateCRChanged: (value) {
-                        setState(() {
-                          _privateCR = value;
-                        });
-                      },
-                      onSharedCRChanged: (value) {
-                        setState(() {
-                          _sharedCR = value;
-                        });
-                      },
-                      onKitchenAccessChanged: (value) {
-                        setState(() {
-                          _kitchenAccess = value;
-                        });
-                      },
-                      onWifiChanged: (value) {
-                        setState(() {
-                          _wifi = value;
-                        });
-                      },
-                      onLaundryChanged: (value) {
-                        setState(() {
-                          _laundry = value;
-                        });
-                      },
-                      onParkingChanged: (value) {
-                        setState(() {
-                          _parking = value;
-                        });
-                      },
-                      onSecurityChanged: (value) {
-                        setState(() {
-                          _security = value;
-                        });
-                      },
-                      onAirconChanged: (value) {
-                        setState(() {
-                          _aircon = value;
-                        });
-                      },
-                      onPetFriendlyChanged: (value) {
-                        setState(() {
-                          _petFriendly = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Availability Section
-                    AvailabilitySection(
-                      availableFrom: _availableFrom,
-                      maxOccupantsController: _maxOccupantsController,
-                      onDateSelected: _selectDate,
-                      onMaxOccupantsChanged: (value) {
-                        // Max occupants value is handled by the AvailabilitySection widget
-                        setState(() {});
-                      },
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Contact Section
-                    ContactSection(
-                      phoneController: _phoneController,
-                      messengerController: _messengerController,
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Submit Buttons
-                    _buildSubmitButtons(colorScheme, textTheme),
-                    const SizedBox(height: 24),
                   ],
                 ),
               ),
-            ),
-          ],
+              // Scrollable form content
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: _buildStepContent(colorScheme, textTheme),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildSubmitButtons(ColorScheme colorScheme, TextTheme textTheme) {
-    return Column(
-      children: [
-        // Publish Button
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            onPressed: _isSubmitting
-                ? null
-                : () => _submitForm(isDraft: false),
-            style: FilledButton.styleFrom(
-              backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.onPrimary,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: _isSubmitting
-                ? SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        colorScheme.onPrimary,
-                      ),
-                    ),
-                  )
-                : Text(
-                    'Publish',
-                    style: textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton(
+        onPressed: _isSubmitting ? null : () => _submitForm(isDraft: false),
+        style: FilledButton.styleFrom(
+          backgroundColor: _themeColorDark,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
-        const SizedBox(height: 12),
-        // Save as Draft Button
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton(
-            onPressed: _isSubmitting
-                ? null
-                : () => _submitForm(isDraft: true),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: colorScheme.onSurface,
-              side: BorderSide(color: colorScheme.outline),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+        child: _isSubmitting
+            ? SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    Colors.white,
+                  ),
+                ),
+              )
+            : Text(
+                'Publish Listing',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+      ),
+    );
+  }
+
+  Widget _buildStepLabel(String label, int stepIndex) {
+    final theme = Theme.of(context);
+    final isActive = stepIndex == _currentStep;
+    final isCompleted = stepIndex < _currentStep;
+    final ColorScheme colorScheme = theme.colorScheme;
+
+    Color textColor;
+    FontWeight fontWeight;
+
+    if (isActive) {
+      textColor = colorScheme.primary;
+      fontWeight = FontWeight.w700;
+    } else if (isCompleted) {
+      textColor = colorScheme.onSurfaceVariant;
+      fontWeight = FontWeight.w600;
+    } else {
+      textColor = colorScheme.onSurfaceVariant;
+      fontWeight = FontWeight.w400;
+    }
+
+    return Expanded(
+      child: Text(
+        label,
+        textAlign: stepIndex == 0
+            ? TextAlign.left
+            : stepIndex == _totalSteps - 1
+                ? TextAlign.right
+                : TextAlign.center,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: textColor,
+          fontWeight: fontWeight,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepContent(
+      ColorScheme colorScheme, TextTheme textTheme) {
+    switch (_currentStep) {
+      case 0:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 8),
+            PropertyMediaSection(
+              images: _images,
+              coverImageIndex: _coverImageIndex,
+              onPickImages: _pickImages,
+              onRemoveImage: _removeImage,
+              onSetCoverImage: _setCoverImage,
+              onReorderImage: _reorderImage,
             ),
-            child: Text(
-              'Save as Draft',
-              style: textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+            const SizedBox(height: 24),
+            PropertyBasicInfoSection(
+              titleController: _titleController,
+              descriptionController: _descriptionController,
+              propertyType: _propertyType,
+              onPropertyTypeChanged: (type) {
+                setState(() {
+                  _propertyType = type;
+                });
+              },
+            ),
+            const SizedBox(height: 32),
+            _buildStepNavigation(colorScheme, textTheme),
+            const SizedBox(height: 24),
+          ],
+        );
+      case 1:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 16),
+            PricingSection(
+              monthlyRentController: _monthlyRentController,
+              depositController: _depositController,
+              advanceController: _advanceController,
+              electricityIncluded: _electricityIncluded,
+              waterIncluded: _waterIncluded,
+              internetIncluded: _internetIncluded,
+              onElectricityChanged: (value) {
+                setState(() {
+                  _electricityIncluded = value;
+                });
+              },
+              onWaterChanged: (value) {
+                setState(() {
+                  _waterIncluded = value;
+                });
+              },
+              onInternetChanged: (value) {
+                setState(() {
+                  _internetIncluded = value;
+                });
+              },
+            ),
+            const SizedBox(height: 24),
+            LocationSection(
+              addressController: _addressController,
+              landmarkController: _landmarkController,
+              onMapPicker: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Map picker coming soon'),
+                  ),
+                );
+              },
+              onGPSFill: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('GPS auto-fill coming soon'),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 32),
+            _buildStepNavigation(colorScheme, textTheme),
+            const SizedBox(height: 24),
+          ],
+        );
+      case 2:
+      default:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 16),
+            AmenitiesSection(
+              privateCR: _privateCR,
+              sharedCR: _sharedCR,
+              kitchenAccess: _kitchenAccess,
+              wifi: _wifi,
+              laundry: _laundry,
+              parking: _parking,
+              security: _security,
+              aircon: _aircon,
+              petFriendly: _petFriendly,
+              curfewController: _curfewController,
+              onPrivateCRChanged: (value) {
+                setState(() {
+                  _privateCR = value;
+                });
+              },
+              onSharedCRChanged: (value) {
+                setState(() {
+                  _sharedCR = value;
+                });
+              },
+              onKitchenAccessChanged: (value) {
+                setState(() {
+                  _kitchenAccess = value;
+                });
+              },
+              onWifiChanged: (value) {
+                setState(() {
+                  _wifi = value;
+                });
+              },
+              onLaundryChanged: (value) {
+                setState(() {
+                  _laundry = value;
+                });
+              },
+              onParkingChanged: (value) {
+                setState(() {
+                  _parking = value;
+                });
+              },
+              onSecurityChanged: (value) {
+                setState(() {
+                  _security = value;
+                });
+              },
+              onAirconChanged: (value) {
+                setState(() {
+                  _aircon = value;
+                });
+              },
+              onPetFriendlyChanged: (value) {
+                setState(() {
+                  _petFriendly = value;
+                });
+              },
+            ),
+            const SizedBox(height: 24),
+            AvailabilitySection(
+              availableFrom: _availableFrom,
+              maxOccupantsController: _maxOccupantsController,
+              onDateSelected: _selectDate,
+              onMaxOccupantsChanged: (value) {
+                setState(() {});
+              },
+            ),
+            const SizedBox(height: 24),
+            ContactSection(
+              phoneController: _phoneController,
+              messengerController: _messengerController,
+            ),
+            const SizedBox(height: 32),
+            _buildStepNavigation(colorScheme, textTheme, isFinalStep: true),
+            const SizedBox(height: 24),
+          ],
+        );
+    }
+  }
+
+  Widget _buildStepNavigation(
+    ColorScheme colorScheme,
+    TextTheme textTheme, {
+    bool isFinalStep = false,
+  }) {
+    return Row(
+      children: [
+        if (_currentStep > 0)
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _isSubmitting
+                  ? null
+                  : () {
+                      setState(() {
+                        _currentStep =
+                            (_currentStep - 1).clamp(0, _totalSteps);
+                      });
+                      _scrollController.animateTo(
+                        0,
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeOut,
+                      );
+                    },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _themeColorDark,
+                side: const BorderSide(color: _themeColorLight2),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
+              child: const Text('Back'),
             ),
           ),
+        if (_currentStep > 0) const SizedBox(width: 12),
+        Expanded(
+          child: isFinalStep
+              ? _buildSubmitButtons(colorScheme, textTheme)
+              : FilledButton(
+                  onPressed: _isSubmitting
+                      ? null
+                      : () {
+                          setState(() {
+                            _currentStep =
+                                (_currentStep + 1).clamp(0, _totalSteps - 1);
+                          });
+                          _scrollController.animateTo(
+                            0,
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeOut,
+                          );
+                        },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _themeColorDark,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'Next',
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
         ),
       ],
     );

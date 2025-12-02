@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rentease_app/models/looking_for_post_model.dart';
 
 class AddLookingForPostScreen extends StatefulWidget {
   const AddLookingForPostScreen({super.key});
@@ -74,16 +75,35 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
     debugPrint('Description: ${_descriptionController.text}');
     debugPrint('===================================');
 
+    final now = DateTime.now();
+    final budget =
+        '₱${_minBudgetController.text}-${_maxBudgetController.text}';
+
+    final newPost = LookingForPostModel(
+      id: now.millisecondsSinceEpoch.toString(),
+      username: 'You',
+      description: _descriptionController.text,
+      location: _locationController.text,
+      budget: budget,
+      date: '${now.month}/${now.day}',
+      propertyType: _propertyType ?? 'Apartment',
+      moveInDate: _moveInDate,
+      postedDate: now,
+      isVerified: true,
+      likeCount: 0,
+      commentCount: 0,
+    );
+
     // Show success message
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Post created successfully!'),
+        content: Text('Post created! Showing on your feed.'),
         backgroundColor: Colors.green,
       ),
     );
 
-    // Navigate back
-    Navigator.of(context).pop();
+    // Navigate back with the new post so Home can insert it at the top
+    Navigator.of(context).pop<LookingForPostModel>(newPost);
   }
 
   @override

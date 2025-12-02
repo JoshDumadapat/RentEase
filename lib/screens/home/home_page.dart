@@ -35,9 +35,10 @@ class _HomePageState extends State<HomePage>
   final ValueNotifier<bool> _tabsVisibilityNotifier = ValueNotifier<bool>(false);
 
   final List<CategoryModel> _categories = CategoryModel.getMockCategories();
-  final List<ListingModel> _listings = ListingModel.getMockListings();
-  final List<LookingForPostModel> _lookingForPosts =
-      LookingForPostModel.getMockLookingForPosts();
+  final List<ListingModel> _listings = [...ListingModel.getMockListings()];
+  final List<LookingForPostModel> _lookingForPosts = [
+    ...LookingForPostModel.getMockLookingForPosts()
+  ];
 
   @override
   void initState() {
@@ -118,6 +119,22 @@ class _HomePageState extends State<HomePage>
         _isLoading = false;
       });
     }
+  }
+
+  // Exposed for children (e.g., post creation screens) to add new content to the top of feeds.
+  void addNewListing(ListingModel listing) {
+    setState(() {
+      _listings.insert(0, listing);
+    });
+    // Ensure Listings tab is active so the user sees the new post, similar to Facebook.
+    _tabController.animateTo(0);
+  }
+
+  void addNewLookingForPost(LookingForPostModel post) {
+    setState(() {
+      _lookingForPosts.insert(0, post);
+    });
+    _tabController.animateTo(1);
   }
 
   @override
