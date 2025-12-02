@@ -5,6 +5,12 @@ import 'package:rentease_app/models/comment_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
 
+// Theme colors aligned with Home and Listing details review cards
+const Color _themeColor = Color(0xFF00D1FF);
+const Color _themeColorLight = Color(0xFFE5F9FF);
+const Color _themeColorLight2 = Color(0xFFB3F0FF);
+const Color _themeColorDark = Color(0xFF00B8E6);
+
 class LookingForPostDetailPage extends StatefulWidget {
   final LookingForPostModel post;
 
@@ -74,22 +80,22 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: colorScheme.surface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Post',
-          style: TextStyle(
-            color: Colors.black87,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
         ),
         centerTitle: true,
       ),
@@ -101,82 +107,105 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Post Header
-                  _PostHeader(
-                    post: widget.post,
-                    onMoreTap: _showPostOptions,
-                  ),
-                  
-                  // Post Body
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: Text(
-                      widget.post.description,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w400,
-                        color: Colors.black87,
-                        height: 1.5,
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    padding: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _themeColorLight2.withValues(alpha: 0.7),
                       ),
-                    ),
-                  ),
-                  
-                  // Tags Section
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _ModernTag(
-                          icon: Icons.location_on_outlined,
-                          text: widget.post.location,
-                          color: const Color(0xFF6C63FF),
-                        ),
-                        _ModernTag(
-                          icon: Icons.home_outlined,
-                          text: widget.post.propertyType,
-                          color: const Color(0xFF4CAF50),
-                        ),
-                        _ModernTag(
-                          icon: Icons.attach_money_outlined,
-                          text: widget.post.budget,
-                          color: const Color(0xFF2196F3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(
+                            alpha: colorScheme.brightness == Brightness.dark ? 0.4 : 0.06,
+                          ),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
                         ),
                       ],
                     ),
-                  ),
-                  
-                  // Action Bar
-                  _PostActionBar(
-                    likeCount: _likeCount,
-                    commentCount: _commentCount,
-                    isLiked: _isLiked,
-                    onLikeTap: () {
-                      setState(() {
-                        _isLiked = !_isLiked;
-                        _likeCount += _isLiked ? 1 : -1;
-                      });
-                    },
-                  ),
-
-                  // Comments List (scrollable)
-                  _CommentsList(
-                    comments: _comments,
-                    onPropertyTap: (listingId) {
-                      final allListings = ListingModel.getMockListings();
-                      final listing = allListings.firstWhere(
-                        (l) => l.id == listingId,
-                        orElse: () => allListings.first,
-                      );
-                      
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ListingDetailsPage(listing: listing),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Post Header
+                        _PostHeader(
+                          post: widget.post,
+                          onMoreTap: _showPostOptions,
                         ),
-                      );
-                    },
+
+                        // Post Body
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: Text(
+                            widget.post.description,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  height: 1.5,
+                                ),
+                          ),
+                        ),
+
+                        // Tags Section
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _ModernTag(
+                                icon: Icons.location_on_outlined,
+                                text: widget.post.location,
+                                color: const Color(0xFF6C63FF),
+                              ),
+                              _ModernTag(
+                                icon: Icons.home_outlined,
+                                text: widget.post.propertyType,
+                                color: const Color(0xFF4CAF50),
+                              ),
+                              _ModernTag(
+                                icon: Icons.attach_money_outlined,
+                                text: widget.post.budget,
+                                color: const Color(0xFF2196F3),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Action Bar
+                        _PostActionBar(
+                          likeCount: _likeCount,
+                          commentCount: _commentCount,
+                          isLiked: _isLiked,
+                          onLikeTap: () {
+                            setState(() {
+                              _isLiked = !_isLiked;
+                              _likeCount += _isLiked ? 1 : -1;
+                            });
+                          },
+                        ),
+
+                        // Comments List (now visually part of the same card)
+                        _CommentsList(
+                          comments: _comments,
+                          onPropertyTap: (listingId) {
+                            final allListings = ListingModel.getMockListings();
+                            final listing = allListings.firstWhere(
+                              (l) => l.id == listingId,
+                              orElse: () => allListings.first,
+                            );
+
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ListingDetailsPage(listing: listing),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -218,6 +247,8 @@ class _PostHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
       child: Row(
@@ -228,12 +259,7 @@ class _PostHeader extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [
-                  const Color(0xFF6C63FF).withValues(alpha: 0.15),
-                  const Color(0xFF4CAF50).withValues(alpha: 0.15),
-                ],
-              ),
+              color: _themeColorLight,
             ),
             child: Center(
               child: Text(
@@ -241,7 +267,7 @@ class _PostHeader extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF6C63FF),
+                  color: _themeColorDark,
                 ),
               ),
             ),
@@ -254,10 +280,10 @@ class _PostHeader extends StatelessWidget {
                 children: [
                   Text(
                     post.username,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                      color: colorScheme.onSurface,
                     ),
                   ),
                   if (post.isVerified) ...[
@@ -265,13 +291,13 @@ class _PostHeader extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
-                        color: Colors.blue[50],
+                        color: _themeColorLight,
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         Icons.verified,
                         size: 14,
-                        color: Colors.blue[700],
+                        color: _themeColorDark,
                       ),
                     ),
                   ],
@@ -280,7 +306,7 @@ class _PostHeader extends StatelessWidget {
                     post.timeAgo,
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey[600],
+                      color: colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
@@ -298,7 +324,7 @@ class _PostHeader extends StatelessWidget {
                 child: Icon(
                   Icons.more_horiz,
                   size: 20,
-                  color: Colors.grey[700],
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -476,54 +502,49 @@ class _CommentsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     if (comments.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(16),
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
         child: Text(
           'No comments yet',
           style: TextStyle(
             fontSize: 14,
-            color: Colors.grey[600],
+            color: colorScheme.onSurfaceVariant,
           ),
         ),
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        border: Border(
-          top: BorderSide(color: Colors.grey[200]!, width: 0.5),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              'Comments',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text(
+            'Comments',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface,
             ),
           ),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount: comments.length,
-            itemBuilder: (context, index) {
-              return _CommentItem(
-                comment: comments[index],
-                onPropertyTap: onPropertyTap,
-              );
-            },
-          ),
-        ],
-      ),
+        ),
+        const Divider(height: 1),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          itemCount: comments.length,
+          itemBuilder: (context, index) {
+            return _CommentItem(
+              comment: comments[index],
+              onPropertyTap: onPropertyTap,
+            );
+          },
+        ),
+      ],
     );
   }
 }

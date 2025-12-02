@@ -1401,8 +1401,18 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!, width: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _themeColorLight2.withValues(alpha: 0.7),
+          width: 0.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
