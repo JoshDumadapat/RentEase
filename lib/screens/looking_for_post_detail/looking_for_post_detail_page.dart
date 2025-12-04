@@ -83,19 +83,21 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        backgroundColor: colorScheme.surface,
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
+        title: const Text(
           'Post',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
         ),
         centerTitle: true,
       ),
@@ -108,21 +110,17 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    padding: const EdgeInsets.only(bottom: 12),
+                    margin: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+                    padding: const EdgeInsets.only(bottom: 0),
                     decoration: BoxDecoration(
-                      color: colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: _themeColorLight2.withValues(alpha: 0.7),
-                      ),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: colorScheme.brightness == Brightness.dark ? 0.4 : 0.06,
-                          ),
-                          blurRadius: 18,
-                          offset: const Offset(0, 6),
+                          color: Colors.black.withValues(alpha: 0.04),
+                          spreadRadius: 0,
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
@@ -137,21 +135,24 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
 
                         // Post Body
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                           child: Text(
                             widget.post.description,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  height: 1.5,
-                                ),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w400,
+                              color: Colors.black87,
+                              height: 1.6,
+                            ),
                           ),
                         ),
 
                         // Tags Section
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                           child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
+                            spacing: 10,
+                            runSpacing: 10,
                             children: [
                               _ModernTag(
                                 icon: Icons.location_on_outlined,
@@ -171,7 +172,6 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 8),
 
                         // Action Bar
                         _PostActionBar(
@@ -186,7 +186,7 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
                           },
                         ),
 
-                        // Comments List (now visually part of the same card)
+                        // Comments List (inside same card)
                         _CommentsList(
                           comments: _comments,
                           onPropertyTap: (listingId) {
@@ -207,7 +207,7 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -250,69 +250,74 @@ class _PostHeader extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+      padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
       child: Row(
         children: [
           // Profile Picture
           Container(
-            width: 44,
-            height: 44,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: _themeColorLight,
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF6C63FF).withValues(alpha: 0.15),
+                  const Color(0xFF4CAF50).withValues(alpha: 0.15),
+                ],
+              ),
             ),
             child: Center(
               child: Text(
                 post.username[0].toUpperCase(),
                 style: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: _themeColorDark,
+                  color: Color(0xFF6C63FF),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           
-            // Username and Time
-            Expanded(
-              child: Row(
-                children: [
-                  Text(
-                    post.username,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
-                    ),
+          // Username and Time
+          Expanded(
+            child: Row(
+              children: [
+                Text(
+                  post.username,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
                   ),
-                  if (post.isVerified) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: _themeColorLight,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.verified,
-                        size: 14,
-                        color: _themeColorDark,
-                      ),
-                    ),
-                  ],
+                ),
+                if (post.isVerified) ...[
                   const SizedBox(width: 6),
-                  Text(
-                    post.timeAgo,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w400,
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: _themeColorLight,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.verified,
+                      size: 16,
+                      color: _themeColorDark,
                     ),
                   ),
                 ],
-              ),
+                const SizedBox(width: 8),
+                Text(
+                  post.timeAgo,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
             ),
+          ),
           // Three dots menu
           Material(
             color: Colors.transparent,
@@ -323,8 +328,8 @@ class _PostHeader extends StatelessWidget {
                 padding: const EdgeInsets.all(8),
                 child: Icon(
                   Icons.more_horiz,
-                  size: 20,
-                  color: colorScheme.onSurfaceVariant,
+                  size: 22,
+                  color: Colors.grey[600],
                 ),
               ),
             ),
@@ -349,9 +354,9 @@ class _ModernTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -359,17 +364,16 @@ class _ModernTag extends StatelessWidget {
         children: [
           Icon(
             icon,
-            size: 14,
+            size: 16,
             color: color,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Text(
             text,
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
               color: color,
-              letterSpacing: 0.1,
             ),
           ),
         ],
@@ -394,7 +398,7 @@ class _PostActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(
@@ -506,13 +510,14 @@ class _CommentsList extends StatelessWidget {
 
     if (comments.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
         child: Text(
           'No comments yet',
           style: TextStyle(
             fontSize: 14,
-            color: colorScheme.onSurfaceVariant,
+            color: Colors.grey[600],
           ),
+          textAlign: TextAlign.center,
         ),
       );
     }
@@ -521,26 +526,31 @@ class _CommentsList extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
           child: Text(
             'Comments',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: colorScheme.onSurface,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
             ),
           ),
         ),
-        const Divider(height: 1),
+        const Divider(height: 1, thickness: 0.5),
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           itemCount: comments.length,
           itemBuilder: (context, index) {
-            return _CommentItem(
-              comment: comments[index],
-              onPropertyTap: onPropertyTap,
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: index == comments.length - 1 ? 0 : 16,
+              ),
+              child: _CommentItem(
+                comment: comments[index],
+                onPropertyTap: onPropertyTap,
+              ),
             );
           },
         ),
@@ -563,139 +573,141 @@ class _CommentItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasPropertyLink = comment.propertyListingId != null;
     
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Profile Picture
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.blue[100],
-            ),
-            child: Center(
-              child: Text(
-                comment.username[0].toUpperCase(),
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue[700],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Comment Content
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      comment.username,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    if (comment.isVerified) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.verified,
-                          size: 14,
-                          color: Colors.blue[700],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(width: 6),
-                    Text(
-                      comment.timeAgo,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  comment.text,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.black87,
-                    height: 1.4,
-                  ),
-                ),
-                // Property Link Button
-                if (hasPropertyLink) ...[
-                  const SizedBox(height: 8),
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {
-                        if (onPropertyTap != null) {
-                          onPropertyTap!(comment.propertyListingId!);
-                        }
-                      },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.blue[200]!,
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.home,
-                              size: 16,
-                              color: Colors.blue[700],
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'View Property Listing',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.blue[700],
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.arrow_forward,
-                              size: 14,
-                              color: Colors.blue[700],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Profile Picture
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF6C63FF).withValues(alpha: 0.15),
+                const Color(0xFF4CAF50).withValues(alpha: 0.15),
               ],
             ),
           ),
-        ],
-      ),
+          child: Center(
+            child: Text(
+              comment.username[0].toUpperCase(),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF6C63FF),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        // Comment Content
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    comment.username,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  if (comment.isVerified) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: _themeColorLight,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.verified,
+                        size: 14,
+                        color: _themeColorDark,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: 8),
+                  Text(
+                    comment.timeAgo,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                comment.text,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black87,
+                  height: 1.5,
+                ),
+              ),
+              // Property Link Button
+              if (hasPropertyLink) ...[
+                const SizedBox(height: 12),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      if (onPropertyTap != null) {
+                        onPropertyTap!(comment.propertyListingId!);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00B8E6).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFF00B8E6).withValues(alpha: 0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.home_outlined,
+                            size: 18,
+                            color: _themeColorDark,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'View Property Listing',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: _themeColorDark,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.arrow_forward,
+                            size: 16,
+                            color: _themeColorDark,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -768,10 +780,10 @@ class _FixedCommentInputState extends State<_FixedCommentInput> {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.only(
-        left: 12,
-        right: 12,
-        top: 8,
-        bottom: MediaQuery.of(context).padding.bottom + 8,
+        left: 24,
+        right: 24,
+        top: 12,
+        bottom: MediaQuery.of(context).padding.bottom + 12,
       ),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -780,8 +792,8 @@ class _FixedCommentInputState extends State<_FixedCommentInput> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 4,
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
             offset: const Offset(0, -2),
           ),
         ],
@@ -800,20 +812,20 @@ class _FixedCommentInputState extends State<_FixedCommentInput> {
                     color: Colors.grey[500],
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide(color: Colors.grey[300]!),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide(color: Colors.grey[300]!),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide(color: Colors.blue[700]!),
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide(color: _themeColorDark, width: 1.5),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
+                    horizontal: 18,
+                    vertical: 12,
                   ),
                   filled: true,
                   fillColor: Colors.grey[50],
@@ -823,21 +835,21 @@ class _FixedCommentInputState extends State<_FixedCommentInput> {
                 onSubmitted: (_) => _addComment(),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 12),
             Material(
               color: Colors.transparent,
               child: InkWell(
                 onTap: _addComment,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(24),
                 child: Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue[700],
+                    color: _themeColorDark,
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
                     Icons.send,
-                    size: 18,
+                    size: 20,
                     color: Colors.white,
                   ),
                 ),

@@ -1295,30 +1295,29 @@ class _LookingForSection extends StatelessWidget {
         // Header Section
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
             child: Row(
               children: [
                 const Text(
                   'Looking For',
                   style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
                     color: Colors.black87,
-                    letterSpacing: -0.3,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '${posts.length} posts',
                     style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                       color: Color(0xFF6C63FF),
                     ),
                   ),
@@ -1329,12 +1328,12 @@ class _LookingForSection extends StatelessWidget {
         ),
         // Posts List
         SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate((context, index) {
               return Padding(
                 padding: EdgeInsets.only(
-                  bottom: index == posts.length - 1 ? 24 : 0,
+                  bottom: index == posts.length - 1 ? 32 : 16,
                 ),
                 child: _LookingForPostCard(post: posts[index]),
               );
@@ -1415,19 +1414,15 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _themeColorLight2.withValues(alpha: 0.7),
-          width: 0.8,
-        ),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            spreadRadius: 0,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -1459,14 +1454,14 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                     child: Text(
                       widget.post.description,
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w400,
                         color: Colors.black87,
-                        height: 1.5,
+                        height: 1.6,
                       ),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
@@ -1475,10 +1470,10 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
                   
                   // Tags Section
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                     child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                      spacing: 10,
+                      runSpacing: 10,
                       children: [
                         _ModernTag(
                           icon: Icons.location_on_outlined,
@@ -1541,13 +1536,13 @@ class _PostHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+        padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
         child: Row(
           children: [
             // Profile Picture
             Container(
-              width: 44,
-              height: 44,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
@@ -1561,14 +1556,14 @@ class _PostHeader extends StatelessWidget {
                 child: Text(
                   post.username[0].toUpperCase(),
                   style: const TextStyle(
-                    fontSize: 20,
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF6C63FF),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             
             // Username and Time
             Expanded(
@@ -1580,7 +1575,7 @@ class _PostHeader extends StatelessWidget {
                       Text(
                         post.username,
                         style: const TextStyle(
-                          fontSize: 15,
+                          fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: Colors.black87,
                         ),
@@ -1588,23 +1583,23 @@ class _PostHeader extends StatelessWidget {
                       if (post.isVerified) ...[
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.all(4),
+                          padding: const EdgeInsets.all(3),
                           decoration: BoxDecoration(
-                                  color: _themeColorLight,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.verified,
-                                  size: 14,
-                                  color: _themeColorDark,
+                            color: _themeColorLight,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.verified,
+                            size: 16,
+                            color: _themeColorDark,
                           ),
                         ),
                       ],
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       Text(
                         post.timeAgo,
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           color: Colors.grey[600],
                           fontWeight: FontWeight.w400,
                         ),
@@ -1616,19 +1611,17 @@ class _PostHeader extends StatelessWidget {
             ),
             // Three dots menu
             if (onMoreTap != null)
-              GestureDetector(
-                onTap: onMoreTap,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Icon(
-                        Icons.more_horiz,
-                        size: 20,
-                        color: Colors.grey[700],
-                      ),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onMoreTap,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(
+                      Icons.more_horiz,
+                      size: 22,
+                      color: Colors.grey[600],
                     ),
                   ),
                 ),
@@ -1653,9 +1646,9 @@ class _ModernTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -1663,15 +1656,15 @@ class _ModernTag extends StatelessWidget {
         children: [
           Icon(
             icon,
-            size: 14,
+            size: 16,
             color: color,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Text(
             text,
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
               color: color,
               letterSpacing: 0.1,
             ),
@@ -1700,7 +1693,7 @@ class _PostActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(

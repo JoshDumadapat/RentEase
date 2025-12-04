@@ -37,10 +37,7 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
 
   double get _averageRating {
     if (_reviews.isEmpty) return 0;
-    final total = _reviews.fold<int>(
-      0,
-      (sum, review) => sum + review.rating,
-    );
+    final total = _reviews.fold<int>(0, (sum, review) => sum + review.rating);
     return total / _reviews.length;
   }
 
@@ -107,9 +104,7 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                                 ),
                                 child: Text(
                                   widget.listing.category,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelMedium
+                                  style: Theme.of(context).textTheme.labelMedium
                                       ?.copyWith(color: _themeColorDark),
                                 ),
                               ),
@@ -122,9 +117,7 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                               const SizedBox(width: 4),
                               Text(
                                 '${_reviews.length} reviews',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
+                                style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(color: Colors.grey[600]),
                               ),
                               const SizedBox(width: 12),
@@ -145,12 +138,8 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                           const SizedBox(height: 16),
                           Text(
                             widget.listing.title,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
                           Row(
@@ -158,9 +147,7 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                             children: [
                               Text(
                                 '₱${widget.listing.price.toStringAsFixed(2)}',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineSmall
+                                style: Theme.of(context).textTheme.headlineSmall
                                     ?.copyWith(
                                       fontWeight: FontWeight.bold,
                                       color: _themeColorDark,
@@ -169,9 +156,7 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                               const SizedBox(width: 4),
                               Text(
                                 '/month',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
+                                style: Theme.of(context).textTheme.bodyMedium
                                     ?.copyWith(color: Colors.grey[600]),
                               ),
                             ],
@@ -188,9 +173,7 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                               Expanded(
                                 child: Text(
                                   widget.listing.location,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
+                                  style: Theme.of(context).textTheme.bodyMedium
                                       ?.copyWith(color: Colors.grey[700]),
                                 ),
                               ),
@@ -345,9 +328,9 @@ class _PropertyDetailsSection extends StatelessWidget {
       children: [
         Text(
           'Property Details',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
         Row(
@@ -399,16 +382,16 @@ class _DetailItem extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           value,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 4),
         Text(
           label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.grey[600],
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
         ),
       ],
     );
@@ -427,17 +410,17 @@ class _DescriptionSection extends StatelessWidget {
       children: [
         Text(
           'Description',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         Text(
           description,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[700],
-                height: 1.5,
-              ),
+            color: Colors.grey[700],
+            height: 1.5,
+          ),
         ),
       ],
     );
@@ -479,9 +462,9 @@ class _OwnerSection extends StatelessWidget {
               children: [
                 Text(
                   'Listed by',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[600],
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 4),
                 Row(
@@ -489,16 +472,12 @@ class _OwnerSection extends StatelessWidget {
                     Text(
                       ownerName,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     if (isVerified) ...[
                       const SizedBox(width: 8),
-                      Icon(
-                        Icons.verified,
-                        size: 20,
-                        color: _themeColorDark,
-                      ),
+                      Icon(Icons.verified, size: 20, color: _themeColorDark),
                     ],
                   ],
                 ),
@@ -544,10 +523,7 @@ class _ReviewsSection extends StatefulWidget {
   final List<_Review> reviews;
   final void Function(int rating, String comment) onAddReview;
 
-  const _ReviewsSection({
-    required this.reviews,
-    required this.onAddReview,
-  });
+  const _ReviewsSection({required this.reviews, required this.onAddReview});
 
   @override
   State<_ReviewsSection> createState() => _ReviewsSectionState();
@@ -570,17 +546,17 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
       children: [
         Text(
           'Reviews',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         if (widget.reviews.isEmpty)
           Text(
             'No reviews yet. Be the first to leave one!',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[600],
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
           )
         else
           ListView.separated(
@@ -613,8 +589,9 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                       children: [
                         CircleAvatar(
                           radius: 18,
-                          backgroundColor:
-                              _themeColorLight.withValues(alpha: 0.9),
+                          backgroundColor: _themeColorLight.withValues(
+                            alpha: 0.9,
+                          ),
                           child: Text(
                             review.reviewerName[0].toUpperCase(),
                             style: const TextStyle(
@@ -704,9 +681,9 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
         const SizedBox(height: 24),
         Text(
           'Add a review',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Row(
