@@ -3,7 +3,6 @@ import 'package:rentease_app/models/looking_for_post_model.dart';
 
 // Light blue theme constants aligned with HomePage / Add Property
 const Color _themeColor = Color(0xFF00D1FF);
-const Color _themeColorLight = Color(0xFFE5F9FF);
 const Color _themeColorLight2 = Color(0xFFB3F0FF);
 const Color _themeColorDark = Color(0xFF00B8E6);
 

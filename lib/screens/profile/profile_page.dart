@@ -7,7 +7,6 @@ import 'package:rentease_app/screens/profile/widgets/user_info_section.dart';
 import 'package:rentease_app/screens/profile/widgets/user_stats_section.dart';
 import 'package:rentease_app/screens/profile/widgets/property_list_section.dart';
 import 'package:rentease_app/screens/profile/widgets/favorites_section.dart';
-import 'package:rentease_app/screens/profile/widgets/settings_section.dart';
 import 'package:rentease_app/services/auth_service.dart';
 import 'package:rentease_app/sign_in/sign_in_page.dart';
 
@@ -151,11 +150,57 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  /// Handle settings action
+  /// Handle settings action (icon in the app bar)
   void _handleSettings() {
-    // Note: Navigation to settings page will be implemented when needed
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Settings feature coming soon')),
+      const SnackBar(content: Text('Settings coming soon')),
+    );
+  }
+
+  /// Build logout card
+  Widget _buildLogoutCard(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            spreadRadius: 0,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: _handleLogout,
+          icon: const Icon(Icons.logout, size: 20),
+          label: const Text(
+            'Logout',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 16,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            side: BorderSide(
+              color: Colors.red[300]!,
+              width: 1.5,
+            ),
+            foregroundColor: Colors.red[700],
+          ),
+        ),
+      ),
     );
   }
 
@@ -194,7 +239,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         actions: [
                           IconButton(
                             icon: const Icon(Icons.settings_outlined),
-                            color: Colors.black87,
+                            color: isDark ? Colors.white : Colors.black87,
                             onPressed: _handleSettings,
                             tooltip: 'Settings',
                           ),
@@ -220,7 +265,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               onNotificationsTap: _navigateToNotifications,
                             ),
                         
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 20),
                         
                         // My Properties Section
                         PropertyListSection(
@@ -236,7 +281,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           },
                         ),
                         
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 20),
                         
                         // Favorites Section
                         FavoritesSection(
@@ -244,11 +289,12 @@ class _ProfilePageState extends State<ProfilePage> {
                           onPropertyTap: _navigateToProperty,
                         ),
                         
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 20),
                         
-                        // Settings & Account Management
-                        SettingsSection(
-                          onLogout: _handleLogout,
+                        // Logout Button Card
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                          child: _buildLogoutCard(isDark),
                         ),
                         
                         const SizedBox(height: 32),
