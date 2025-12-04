@@ -409,32 +409,10 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                   valueColor:
                       const AlwaysStoppedAnimation<Color>(_themeColorDark),
                 ),
-              // Step progress indicator
+              // Step progress indicator (custom horizontal stepper)
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    LinearProgressIndicator(
-                      value: (_currentStep + 1) / _totalSteps,
-                      backgroundColor: colorScheme.surfaceContainerHighest,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        _themeColorDark,
-                      ),
-                      minHeight: 6,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildStepLabel('Details', 0),
-                        _buildStepLabel('Pricing & Location', 1),
-                        _buildStepLabel('Amenities & Contact', 2),
-                      ],
-                    ),
-                  ],
-                ),
+                child: _buildStepHeader(colorScheme),
               ),
               // Scrollable form content
               Expanded(
@@ -485,39 +463,100 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     );
   }
 
-  Widget _buildStepLabel(String label, int stepIndex) {
-    final theme = Theme.of(context);
-    final isActive = stepIndex == _currentStep;
-    final isCompleted = stepIndex < _currentStep;
-    final ColorScheme colorScheme = theme.colorScheme;
+  /// Builds the full step header matching the reference design:
+  /// horizontal line with circular step indicators and labels underneath.
+  Widget _buildStepHeader(ColorScheme colorScheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Circles + connecting line
+        SizedBox(
+          height: 40,
+          child: Row(
+            children: List.generate(_totalSteps * 2 - 1, (index) {
+              final isCircle = index.isEven;
+              if (isCircle) {
+                final stepIndex = index ~/ 2;
+                return _buildStepCircle(stepIndex, colorScheme);
+              } else {
+                final lineIndex = (index - 1) ~/ 2;
+                final isCompletedLine = lineIndex < _currentStep;
+                return Expanded(
+                  child: Container(
+                    height: 3,
+                    color: isCompletedLine
+                        ? _themeColor
+                        : colorScheme.surfaceContainerHighest,
+                  ),
+                );
+              }
+            }),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Keep titles as requested
+            Expanded(child: _StepLabelText('Details', 0)),
+            Expanded(child: _StepLabelText('Pricing & Location', 1)),
+            Expanded(child: _StepLabelText('Amenities & Contact', 2)),
+          ],
+        ),
+      ],
+    );
+  }
 
-    Color textColor;
-    FontWeight fontWeight;
+  Widget _buildStepCircle(int stepIndex, ColorScheme colorScheme) {
+    final bool isActive = stepIndex == _currentStep;
+    final bool isCompleted = stepIndex < _currentStep;
 
-    if (isActive) {
-      textColor = colorScheme.primary;
-      fontWeight = FontWeight.w700;
-    } else if (isCompleted) {
-      textColor = colorScheme.onSurfaceVariant;
-      fontWeight = FontWeight.w600;
+    Color backgroundColor;
+    Color borderColor;
+    Widget? child;
+
+    if (isCompleted) {
+      // Completed: solid light blue with checkmark
+      backgroundColor = _themeColor;
+      borderColor = _themeColor;
+      child = const Icon(
+        Icons.check,
+        size: 16,
+        color: Colors.white,
+      );
+    } else if (isActive) {
+      // Current: solid lighter blue with step number
+      backgroundColor = _themeColorLight2;
+      borderColor = _themeColor;
+      child = Text(
+        '${stepIndex + 1}',
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: _themeColorDark,
+              fontWeight: FontWeight.w700,
+            ),
+      );
     } else {
-      textColor = colorScheme.onSurfaceVariant;
-      fontWeight = FontWeight.w400;
+      // Upcoming: neutral grey circle
+      backgroundColor = colorScheme.surfaceContainerHighest;
+      borderColor = colorScheme.outlineVariant;
+      child = Text(
+        '${stepIndex + 1}',
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+      );
     }
 
-    return Expanded(
-      child: Text(
-        label,
-        textAlign: stepIndex == 0
-            ? TextAlign.left
-            : stepIndex == _totalSteps - 1
-                ? TextAlign.right
-                : TextAlign.center,
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: textColor,
-          fontWeight: fontWeight,
-        ),
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        shape: BoxShape.circle,
+        border: Border.all(color: borderColor, width: 2),
       ),
+      alignment: Alignment.center,
+      child: child,
     );
   }
 
@@ -759,6 +798,58 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                 ),
         ),
       ],
+    );
+  }
+}
+
+class _StepLabelText extends StatelessWidget {
+  final String label;
+  final int stepIndex;
+
+  const _StepLabelText(this.label, this.stepIndex, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final state =
+        context.findAncestorStateOfType<_AddPropertyPageState>();
+    final currentStep = state?._currentStep ?? 0;
+    const totalSteps = _AddPropertyPageState._totalSteps;
+
+    final isActive = stepIndex == currentStep;
+    final isCompleted = stepIndex < currentStep;
+    final ColorScheme colorScheme = theme.colorScheme;
+
+    Color textColor;
+    FontWeight fontWeight;
+
+    if (isActive) {
+      textColor = _themeColorDark;
+      fontWeight = FontWeight.w700;
+    } else if (isCompleted) {
+      textColor = colorScheme.onSurfaceVariant;
+      fontWeight = FontWeight.w600;
+    } else {
+      textColor = colorScheme.onSurfaceVariant;
+      fontWeight = FontWeight.w400;
+    }
+
+    TextAlign textAlign;
+    if (stepIndex == 0) {
+      textAlign = TextAlign.left;
+    } else if (stepIndex == totalSteps - 1) {
+      textAlign = TextAlign.right;
+    } else {
+      textAlign = TextAlign.center;
+    }
+
+    return Text(
+      label,
+      textAlign: textAlign,
+      style: theme.textTheme.labelMedium?.copyWith(
+        color: textColor,
+        fontWeight: fontWeight,
+      ),
     );
   }
 }

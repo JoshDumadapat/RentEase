@@ -122,6 +122,7 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
+        automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
           onPressed: () => Navigator.of(context).pop(),
@@ -167,284 +168,242 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
               Expanded(
                 child: SingleChildScrollView(
                   controller: _scrollController,
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Preferred Location
-                      _buildSectionTitle('Preferred Location'),
-                      const SizedBox(height: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.04),
-                              spreadRadius: 0,
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                      // Intro text
+                      Text(
+                        'Tell us what you\'re looking for',
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
                         ),
-                        child: TextFormField(
-                          controller: _locationController,
-                          decoration: const InputDecoration(
-                            hintText: 'e.g., Cebu City, IT Park',
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter a preferred location';
-                            }
-                            return null;
-                          },
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Share a few details so we can surface the best matching listings for you.',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey[600],
                         ),
                       ),
                       const SizedBox(height: 24),
 
-                      // Property Type
-                      _buildSectionTitle('Property Type'),
-                      const SizedBox(height: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.04),
-                              spreadRadius: 0,
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _propertyType,
-                          decoration: const InputDecoration(
-                            hintText: 'Select property type',
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
-                            ),
-                          ),
-                          items: _propertyTypes.map((String type) {
-                            return DropdownMenuItem<String>(
-                              value: type,
-                              child: Text(type),
-                            );
-                          }).toList(),
-                          onChanged: (String? value) {
-                            setState(() {
-                              _propertyType = value;
-                            });
-                          },
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please select a property type';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Budget Range
-                      _buildSectionTitle('Budget Range'),
-                      const SizedBox(height: 12),
-                      Row(
+                      // Card: Location & Type
+                      _buildFormCard(
+                        title: 'Location & Type',
+                        subtitle:
+                            'Where are you planning to stay and what kind of place do you prefer?',
                         children: [
-                          Expanded(
-                             child: Container(
-                               decoration: BoxDecoration(
-                                 color: Colors.white,
-                                 borderRadius: BorderRadius.circular(12),
-                                 boxShadow: [
-                                   BoxShadow(
-                                     color: Colors.black.withValues(alpha: 0.04),
-                                     spreadRadius: 0,
-                                     blurRadius: 8,
-                                     offset: const Offset(0, 2),
-                                   ),
-                                 ],
-                               ),
-                               child: TextFormField(
-                                 controller: _minBudgetController,
-                                 keyboardType: TextInputType.number,
-                                 decoration: const InputDecoration(
-                                   hintText: 'Min',
-                                   prefixText: '₱',
-                                   contentPadding: EdgeInsets.symmetric(
-                                     horizontal: 16,
-                                     vertical: 16,
-                                   ),
-                                 ),
-                                 validator: (value) {
-                                   if (value == null || value.isEmpty) {
-                                     return 'Required';
-                                   }
-                                   if (int.tryParse(value) == null) {
-                                     return 'Invalid';
-                                   }
-                                   return null;
-                                 },
-                               ),
-                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          const Text(
-                            'to',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey,
+                          _buildSectionTitle('Preferred Location'),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _locationController,
+                            decoration: const InputDecoration(
+                              hintText: 'e.g., Cebu City, IT Park',
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
                             ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter a preferred location';
+                              }
+                              return null;
+                            },
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                             child: Container(
-                               decoration: BoxDecoration(
-                                 color: Colors.white,
-                                 borderRadius: BorderRadius.circular(12),
-                                 boxShadow: [
-                                   BoxShadow(
-                                     color: Colors.black.withValues(alpha: 0.04),
-                                     spreadRadius: 0,
-                                     blurRadius: 8,
-                                     offset: const Offset(0, 2),
-                                   ),
-                                 ],
-                               ),
-                               child: TextFormField(
-                                 controller: _maxBudgetController,
-                                 keyboardType: TextInputType.number,
-                                 decoration: const InputDecoration(
-                                   hintText: 'Max',
-                                   prefixText: '₱',
-                                   contentPadding: EdgeInsets.symmetric(
-                                     horizontal: 16,
-                                     vertical: 16,
-                                   ),
-                                 ),
-                                 validator: (value) {
-                                   if (value == null || value.isEmpty) {
-                                     return 'Required';
-                                   }
-                                   if (int.tryParse(value) == null) {
-                                     return 'Invalid';
-                                   }
-                                   final min =
-                                       int.tryParse(_minBudgetController.text);
-                                   final max = int.tryParse(value);
-                                   if (min != null && max != null && max < min) {
-                                     return 'Max < Min';
-                                   }
-                                   return null;
-                                 },
-                               ),
-                             ),
+                          const SizedBox(height: 18),
+                          _buildSectionTitle('Property Type'),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: _propertyType,
+                            decoration: const InputDecoration(
+                              hintText: 'Select property type',
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                            items: _propertyTypes.map((String type) {
+                              return DropdownMenuItem<String>(
+                                value: type,
+                                child: Text(type),
+                              );
+                            }).toList(),
+                            onChanged: (String? value) {
+                              setState(() {
+                                _propertyType = value;
+                              });
+                            },
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please select a property type';
+                              }
+                              return null;
+                            },
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
 
-                      // Move-in Date (Optional)
-                      _buildSectionTitle('Move-in Date (Optional)'),
-                      const SizedBox(height: 12),
-                      InkWell(
-                        onTap: _selectMoveInDate,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: _themeColorLight2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.04),
-                                spreadRadius: 0,
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
+                      // Card: Budget & timing
+                      _buildFormCard(
+                        title: 'Budget & Timing',
+                        subtitle:
+                            'Set a comfortable budget range and when you\'d like to move in.',
+                        children: [
+                          _buildSectionTitle('Budget Range'),
+                          const SizedBox(height: 8),
+                          Row(
                             children: [
-                              Icon(
-                                Icons.calendar_today,
-                                color: Colors.grey[600],
-                                size: 20,
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                _moveInDate != null
-                                    ? '${_moveInDate!.day}/${_moveInDate!.month}/${_moveInDate!.year}'
-                                    : 'Select move-in date',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: _moveInDate != null
-                                      ? Colors.black87
-                                      : Colors.grey[600],
-                                ),
-                              ),
-                              const Spacer(),
-                              if (_moveInDate != null)
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.clear,
-                                    size: 20,
-                                    color: Colors.grey[600],
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _minBudgetController,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    hintText: 'Min',
+                                    prefixText: '₱',
+                                    contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 16,
+                                    ),
                                   ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _moveInDate = null;
-                                    });
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Required';
+                                    }
+                                    if (int.tryParse(value) == null) {
+                                      return 'Invalid';
+                                    }
+                                    return null;
                                   },
                                 ),
+                              ),
+                              const SizedBox(width: 16),
+                              const Text(
+                                'to',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _maxBudgetController,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    hintText: 'Max',
+                                    prefixText: '₱',
+                                    contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 16,
+                                    ),
+                                  ),
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Required';
+                                    }
+                                    if (int.tryParse(value) == null) {
+                                      return 'Invalid';
+                                    }
+                                    final min =
+                                        int.tryParse(_minBudgetController.text);
+                                    final max = int.tryParse(value);
+                                    if (min != null &&
+                                        max != null &&
+                                        max < min) {
+                                      return 'Max < Min';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
                             ],
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Description
-                      _buildSectionTitle('Description'),
-                      const SizedBox(height: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.04),
-                              spreadRadius: 0,
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                          const SizedBox(height: 18),
+                          _buildSectionTitle('Move-in Date (Optional)'),
+                          const SizedBox(height: 8),
+                          InkWell(
+                            onTap: _selectMoveInDate,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: _themeColorLight2),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.calendar_today,
+                                    color: Colors.grey[600],
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    _moveInDate != null
+                                        ? '${_moveInDate!.day}/${_moveInDate!.month}/${_moveInDate!.year}'
+                                        : 'Select move-in date',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: _moveInDate != null
+                                          ? Colors.black87
+                                          : Colors.grey[500],
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  if (_moveInDate != null)
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.clear,
+                                        size: 20,
+                                        color: Colors.grey[600],
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _moveInDate = null;
+                                        });
+                                      },
+                                    ),
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
-                        child: TextFormField(
-                          controller: _descriptionController,
-                          maxLines: 5,
-                          decoration: const InputDecoration(
-                            hintText: 'Describe what you\'re looking for...',
-                            contentPadding: EdgeInsets.all(16),
                           ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter a description';
-                            }
-                            return null;
-                          },
-                        ),
+                        ],
                       ),
-                      const SizedBox(height: 32),
+
+                      // Card: Description
+                      _buildFormCard(
+                        title: 'More Details',
+                        subtitle:
+                            'Any preferences about roommates, amenities, or surroundings?',
+                        children: [
+                          _buildSectionTitle('Description'),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _descriptionController,
+                            maxLines: 5,
+                            decoration: const InputDecoration(
+                              hintText:
+                                  'Describe what you\'re looking for in a comfortable, friendly way...',
+                              contentPadding: EdgeInsets.all(16),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter a description';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 8),
                     ],
                   ),
                 ),
@@ -488,6 +447,54 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFormCard({
+    required String title,
+    String? subtitle,
+    required List<Widget> children,
+  }) {
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: textTheme.bodySmall?.copyWith(
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          ...children,
+        ],
       ),
     );
   }
