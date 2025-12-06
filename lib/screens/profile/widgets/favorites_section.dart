@@ -24,68 +24,83 @@ class FavoritesSection extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Container(
-      color: isDark ? Colors.grey[900] : Colors.white,
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Section Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Favorites',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              if (favorites.isNotEmpty)
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              spreadRadius: 0,
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Section Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
                 Text(
-                  '${favorites.length}',
+                  'Favorites',
                   style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    fontWeight: FontWeight.w500,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
                 ),
-            ],
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // Favorites List
-          if (favorites.isEmpty)
-            _EmptyState(
-              message: 'No favorites yet',
-              subtitle: 'Save properties you like to view them here',
-              isDark: isDark,
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: favorites.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final favorite = favorites[index];
-                return PropertyTile(
-                  property: favorite,
-                  onTap: () => onPropertyTap(favorite),
-                  onDelete: () {
-                    // Note: Remove from favorites functionality will be implemented when backend is ready
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Removed ${favorite.title} from favorites'),
-                      ),
-                    );
-                  },
-                );
-              },
+                if (favorites.isNotEmpty)
+                  Text(
+                    '${favorites.length}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+              ],
             ),
-        ],
+          // Favorites List
+          Transform.translate(
+            offset: const Offset(0, -12),
+            child: favorites.isEmpty
+                ? _EmptyState(
+                    message: 'No favorites yet',
+                    subtitle: 'Save properties you like to view them here',
+                    isDark: isDark,
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: favorites.length,
+                    separatorBuilder: (context, index) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final favorite = favorites[index];
+                      return PropertyTile(
+                        property: favorite,
+                        onTap: () => onPropertyTap(favorite),
+                        showRemoveButton: true,
+                        onRemove: () {
+                          // Note: Remove from favorites functionality will be implemented when backend is ready
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Removed ${favorite.title} from favorites'),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+          ),
+          ],
+        ),
       ),
     );
   }
@@ -107,33 +122,42 @@ class _EmptyState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SvgPicture.asset(
-            'assets/icons/navbar/heart_outlined.svg',
-            width: 64,
-            height: 64,
-            colorFilter: ColorFilter.mode(
-              isDark ? Colors.grey[700]! : Colors.grey[300]!,
-              BlendMode.srcIn,
+          Center(
+            child: SvgPicture.asset(
+              'assets/icons/navbar/heart_outlined.svg',
+              width: 64,
+              height: 64,
+              colorFilter: ColorFilter.mode(
+                isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                BlendMode.srcIn,
+              ),
             ),
           ),
           const SizedBox(height: 16),
-          Text(
-            message,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
+          Center(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? Colors.grey[600] : Colors.grey[500],
+          Center(
+            child: Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.grey[600] : Colors.grey[500],
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),

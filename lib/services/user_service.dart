@@ -1,33 +1,17 @@
-import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+import 'package:rentease_app/backend/BUserService.dart';
 
-/// Service class for handling user data operations in Firestore
+/// Service class for handling user data operations
+/// 
+/// This is a wrapper around BUserService for backward compatibility.
+/// All backend logic has been moved to BUserService.
+/// 
+/// @deprecated Use BUserService directly for new code
 class UserService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final BUserService _backendService = BUserService();
 
   /// Check if user document exists in Firestore
-  Future<bool> userExists(String uid) async {
-    try {
-      // Add timeout to prevent long waits (reduced to 5 seconds for faster response)
-      final doc = await _firestore
-          .collection('users')
-          .doc(uid)
-          .get()
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () {
-              debugPrint('Timeout checking if user exists');
-              throw TimeoutException('Firestore query timed out', const Duration(seconds: 5));
-            },
-          );
-      return doc.exists;
-    } catch (e) {
-      debugPrint('Error checking if user exists: $e');
-      // Return false on error/timeout - user will be redirected to sign up
-      return false;
-    }
-  }
+  Future<bool> userExists(String uid) => _backendService.userExists(uid);
 
   /// Create or update user document in Firestore
   Future<void> createOrUpdateUser({
@@ -43,60 +27,30 @@ class UserService {
     String? faceWithIdUrl,
     String? userType,
     String? password,
+    String? profileImageUrl,
     Map<String, dynamic>? additionalData,
-  }) async {
-    try {
-      final userData = <String, dynamic>{
-        'email': email,
-        'updatedAt': FieldValue.serverTimestamp(),
-        if (fname != null) 'fname': fname,
-        if (lname != null) 'lname': lname,
-        if (birthday != null) 'birthday': birthday,
-        if (phone != null) 'phone': phone,
-        if (countryCode != null) 'countryCode': countryCode,
-        if (idImageFrontUrl != null) 'id_image_front_url': idImageFrontUrl,
-        if (idImageBackUrl != null) 'id_image_back_url': idImageBackUrl,
-        if (faceWithIdUrl != null) 'face_with_id_url': faceWithIdUrl,
-        if (userType != null) 'userType': userType,
-        if (password != null) 'password': password,
-        if (additionalData != null) ...additionalData,
-      };
-
-      // Check if document exists
-      final docRef = _firestore.collection('users').doc(uid);
-      final doc = await docRef.get();
-
-      if (!doc.exists) {
-        // Create new document
-        userData['createdAt'] = FieldValue.serverTimestamp();
-        await docRef.set(userData);
-      } else {
-        // Update existing document (merge to avoid overwriting)
-        await docRef.set(userData, SetOptions(merge: true));
-      }
-    } catch (e) {
-      debugPrint('Error creating/updating user: $e');
-      rethrow;
-    }
-  }
+  }) =>
+      _backendService.createOrUpdateUser(
+        uid: uid,
+        email: email,
+        fname: fname,
+        lname: lname,
+        birthday: birthday,
+        phone: phone,
+        countryCode: countryCode,
+        idImageFrontUrl: idImageFrontUrl,
+        idImageBackUrl: idImageBackUrl,
+        faceWithIdUrl: faceWithIdUrl,
+        userType: userType,
+        password: password,
+        profileImageUrl: profileImageUrl,
+        additionalData: additionalData,
+      );
 
   /// Get user data from Firestore
-  Future<Map<String, dynamic>?> getUserData(String uid) async {
-    try {
-      final doc = await _firestore.collection('users').doc(uid).get();
-      if (doc.exists) {
-        return doc.data();
-      }
-      return null;
-    } catch (e) {
-      debugPrint('Error getting user data: $e');
-      return null;
-    }
-  }
+  Future<Map<String, dynamic>?> getUserData(String uid) => _backendService.getUserData(uid);
 
   /// Get user document reference
-  DocumentReference getUserDocument(String uid) {
-    return _firestore.collection('users').doc(uid);
-  }
+  DocumentReference getUserDocument(String uid) => _backendService.getUserDocument(uid);
 }
 

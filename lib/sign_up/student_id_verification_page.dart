@@ -112,7 +112,6 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
         return false;
       }
     } catch (e) {
-      debugPrint('Error requesting permissions: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -270,12 +269,15 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
 
         // If camera is selected, use custom camera UI
         if (source == ImageSource.camera) {
+          if (!mounted) return;
+          
           final String title = imageType == 'faceWithId' 
               ? 'Face with ID'
               : imageType == 'front' 
                   ? 'Front ID' 
                   : 'Back ID';
           
+          if (!mounted) return;
           final result = await Navigator.of(context).push<XFile>(
             MaterialPageRoute(
               builder: (context) => IDCameraCapturePage(title: title),
@@ -346,7 +348,6 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
         }
       }
     } catch (e) {
-      debugPrint('Error capturing image: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -482,7 +483,6 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
       // This ensures the Firebase Auth user is ONLY created after the full registration (ID upload) is completed.
       if (widget.googleData != null) {
         try {
-          debugPrint('=== GOOGLE FINAL ACCOUNT CREATION ===');
           final credential = GoogleAuthProvider.credential(
             idToken: widget.googleData!.idToken,
             accessToken: widget.googleData!.accessToken,
@@ -490,9 +490,7 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
           final userCredential =
               await FirebaseAuth.instance.signInWithCredential(credential);
           user = userCredential.user;
-          debugPrint('Google account created/signed in: ${user?.uid}');
         } catch (e) {
-          debugPrint('ERROR creating Google account at final step: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -512,10 +510,6 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
         try {
           const password = 'Pass123'; // Default password
           final email = widget.email.trim().toLowerCase();
-          
-          debugPrint('=== EMAIL/PASSWORD SIGN UP ===');
-          debugPrint('Email: "$email"');
-          debugPrint('Password length: ${password.length}');
 
           // Check if email is already in use FIRST by trying to create the user
           try {
@@ -525,11 +519,9 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
               password,
             );
             user = userCredential.user;
-            debugPrint('Created new user: ${user?.uid}');
           } on Exception catch (signUpError) {
             final errorMessage = signUpError.toString();
             if (errorMessage.contains('already exists') || errorMessage.contains('email-already-in-use')) {
-              debugPrint('Email already exists. Signing in instead...');
               // Try to sign in with the default password
               try {
                 final userCredential = await _authService.signInWithEmailAndPassword(
@@ -537,9 +529,7 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
                   password,
                 );
                 user = userCredential.user;
-                debugPrint('Signed in existing user: ${user?.uid}');
-              } catch (signInError) {
-                debugPrint('Failed to sign in: $signInError');
+              } catch (_) {
                 // Email exists but password is wrong - ask user to reset
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -555,25 +545,16 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
               }
             } else {
               // Create new account
-              debugPrint('Creating new account...');
               final userCredential = await _authService.signUpWithEmailAndPassword(
                 email,
                 password,
               );
               user = userCredential.user;
-              debugPrint('Account created: ${user?.uid}');
               
               // Verify the account was actually created
               await user?.reload();
-              final currentUser = FirebaseAuth.instance.currentUser;
-              if (currentUser != null && currentUser.uid == user?.uid) {
-                debugPrint('✅ Account verified in Firebase Auth');
-              } else {
-                debugPrint('⚠️ Account created but not current user');
-              }
             }
-          } catch (fetchError) {
-            debugPrint('Error checking email: $fetchError');
+          } catch (_) {
             // Proceed with account creation anyway
             final userCredential = await _authService.signUpWithEmailAndPassword(
               email,
@@ -582,7 +563,6 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
             user = userCredential.user;
           }
         } catch (e) {
-          debugPrint('ERROR creating account: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -603,7 +583,14 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
 
       // At this point, user must be non-null (either from Google or email/password flow)
       final uid = user!.uid;
-      debugPrint('✅ User authenticated with UID: $uid');
+
+      // Get photo URL from Google data or Firebase Auth user
+      String? photoUrl;
+      if (widget.googleData != null && widget.googleData!.photoUrl != null) {
+        photoUrl = widget.googleData!.photoUrl;
+      } else if (user.photoURL != null) {
+        photoUrl = user.photoURL;
+      }
 
       // Save user data to Firestore
       await _userService.createOrUpdateUser(
@@ -619,9 +606,9 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
         faceWithIdUrl: _faceWithIdImage != null ? 'PENDING' : null,
         userType: widget.userType,
         password: widget.googleData == null ? 'Pass123' : null,
+        profileImageUrl: photoUrl,
       );
 
-      debugPrint('✅ User data saved to Firestore');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -641,7 +628,6 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
         );
       }
     } catch (e) {
-      debugPrint('❌ Final error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -1,25 +1,116 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users collection - users can only read/write their own document
+    // ============================================
+    // USERS COLLECTION
+    // ============================================
+    // Users can only read/write their own document
     match /users/{userId} {
-      // Allow read if the user is authenticated and accessing their own document
       allow read: if request.auth != null && request.auth.uid == userId;
-      
-      // Allow create if the user is authenticated and creating their own document
       allow create: if request.auth != null && request.auth.uid == userId;
-      
-      // Allow update if the user is authenticated and updating their own document
       allow update: if request.auth != null && request.auth.uid == userId;
-      
-      // Allow delete if the user is authenticated and deleting their own document
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Add other collection rules here as needed
-    // For example, if you have listings, notifications, etc.
+    // ============================================
+    // LISTINGS COLLECTION
+    // ============================================
+    // Property listings - authenticated users can read, owners can write
+    match /listings/{listingId} {
+      // Anyone authenticated can read listings (for browsing)
+      allow read: if request.auth != null;
+      
+      // Anyone authenticated can create listings
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // Only owner can update their listing
+      allow update: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // Only owner can delete their listing
+      allow delete: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+    }
     
-    // Default deny all other access
+    // ============================================
+    // NOTIFICATIONS COLLECTION
+    // ============================================
+    // Users can only read their own notifications
+    match /notifications/{notificationId} {
+      // Users can only read their own notifications
+      allow read: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // System can create notifications (authenticated users)
+      allow create: if request.auth != null;
+      
+      // Users can update their own notifications (e.g., mark as read)
+      allow update: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // Users can delete their own notifications
+      allow delete: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    // ============================================
+    // FAVORITES COLLECTION
+    // ============================================
+    // Users can only access their own favorites
+    match /favorites/{favoriteId} {
+      // Users can only read their own favorites
+      allow read: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // Users can create their own favorites
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // Users can update their own favorites
+      allow update: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // Users can delete their own favorites
+      allow delete: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    // ============================================
+    // LOOKING FOR POSTS COLLECTION (if exists)
+    // ============================================
+    match /lookingForPosts/{postId} {
+      // Authenticated users can read all posts
+      allow read: if request.auth != null;
+      
+      // Users can create their own posts
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // Only owner can update/delete
+      allow update, delete: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    // ============================================
+    // COMMENTS COLLECTION (if exists)
+    // ============================================
+    match /comments/{commentId} {
+      // Authenticated users can read comments
+      allow read: if request.auth != null;
+      
+      // Users can create comments
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // Only owner can update/delete their comments
+      allow update, delete: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    // ============================================
+    // DEFAULT DENY ALL OTHER COLLECTIONS
+    // ============================================
     match /{document=**} {
       allow read, write: if false;
     }

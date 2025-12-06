@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class ListingModel {
   final String id;
   final String title;
@@ -28,6 +30,76 @@ class ListingModel {
     required this.area,
     required this.postedDate,
   });
+
+  /// Get formatted time ago string (e.g., "2d ago", "5h ago", "30m ago")
+  String get timeAgo {
+    final now = DateTime.now();
+    final difference = now.difference(postedDate);
+    
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
+  /// Create ListingModel from Firestore map data
+  factory ListingModel.fromMap(Map<String, dynamic> data) {
+    // Parse postedDate/createdAt
+    DateTime postedDate;
+    if (data['postedDate'] != null) {
+      if (data['postedDate'] is Timestamp) {
+        postedDate = (data['postedDate'] as Timestamp).toDate();
+      } else if (data['postedDate'] is DateTime) {
+        postedDate = data['postedDate'] as DateTime;
+      } else {
+        postedDate = DateTime.now();
+      }
+    } else if (data['createdAt'] != null) {
+      if (data['createdAt'] is Timestamp) {
+        postedDate = (data['createdAt'] as Timestamp).toDate();
+      } else if (data['createdAt'] is DateTime) {
+        postedDate = data['createdAt'] as DateTime;
+      } else {
+        postedDate = DateTime.now();
+      }
+    } else {
+      postedDate = DateTime.now();
+    }
+
+    // Parse imageUrls/imagePaths
+    List<String> imagePaths = [];
+    if (data['imageUrls'] != null && data['imageUrls'] is List) {
+      imagePaths = (data['imageUrls'] as List).map((e) => e.toString()).toList();
+    } else if (data['imagePaths'] != null && data['imagePaths'] is List) {
+      imagePaths = (data['imagePaths'] as List).map((e) => e.toString()).toList();
+    }
+
+    // Get owner name (might be in user data or listing data)
+    String ownerName = data['ownerName'] as String? ?? 
+                       data['owner'] as String? ?? 
+                       'Unknown Owner';
+
+    return ListingModel(
+      id: data['id'] as String? ?? '',
+      title: data['title'] as String? ?? '',
+      category: data['category'] as String? ?? '',
+      location: data['location'] as String? ?? '',
+      price: (data['price'] as num?)?.toDouble() ?? 0.0,
+      ownerName: ownerName,
+      isOwnerVerified: data['isOwnerVerified'] as bool? ?? false,
+      imagePaths: imagePaths,
+      description: data['description'] as String? ?? '',
+      bedrooms: (data['bedrooms'] as num?)?.toInt() ?? 0,
+      bathrooms: (data['bathrooms'] as num?)?.toInt() ?? 0,
+      area: (data['area'] as num?)?.toDouble() ?? 0.0,
+      postedDate: postedDate,
+    );
+  }
 
   static List<ListingModel> getMockListings() {
     final now = DateTime.now();

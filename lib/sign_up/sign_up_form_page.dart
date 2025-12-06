@@ -1288,9 +1288,7 @@ class _GoogleSignUpButtonWidgetState extends State<_GoogleSignUpButtonWidget> {
     });
 
     try {
-      debugPrint('Starting Google account selection for sign-up (no Firebase user yet)...');
       final googleData = await _authService.signInWithGoogleAccountOnly();
-      debugPrint('Google account selection completed, googleData: ${googleData != null}');
 
       if (googleData == null) {
         // User canceled Google sign up
@@ -1322,13 +1320,10 @@ class _GoogleSignUpButtonWidgetState extends State<_GoogleSignUpButtonWidget> {
         // 3) Redirect to StudentSignUpPage with Google data to fill fields.
         try {
           await userCredential.user?.delete();
-        } catch (e) {
-          debugPrint('Warning: failed to delete newly created Google user (sign-up button): $e');
-        }
+        } catch (_) {}
         await FirebaseAuth.instance.signOut();
 
         if (mounted) {
-          debugPrint('New Google user – navigating to StudentSignUpPage for full registration');
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (context) => StudentSignUpPage(
@@ -1352,12 +1347,10 @@ class _GoogleSignUpButtonWidgetState extends State<_GoogleSignUpButtonWidget> {
           userExists = await _userService.userExists(uid).timeout(
             const Duration(seconds: 5),
             onTimeout: () {
-              debugPrint('User exists check timed out, assuming new user');
               return false;
             },
           );
-        } catch (e) {
-          debugPrint('Error checking user exists: $e');
+        } catch (_) {
           userExists = false;
         }
 
@@ -1386,9 +1379,7 @@ class _GoogleSignUpButtonWidgetState extends State<_GoogleSignUpButtonWidget> {
               lname: lastName,
               userType: 'student',
             );
-          } catch (e) {
-            debugPrint('Error creating user record for existing Google user (sign-up button): $e');
-          }
+          } catch (_) {}
         }
 
         if (mounted) {
@@ -1398,9 +1389,7 @@ class _GoogleSignUpButtonWidgetState extends State<_GoogleSignUpButtonWidget> {
           );
         }
       }
-    } catch (e, stackTrace) {
-      debugPrint('Error in Google Sign-Up flow: $e');
-      debugPrint('Stack trace: $stackTrace');
+    } catch (e, _) {
       if (mounted) {
         setState(() {
           _isLoading = false;

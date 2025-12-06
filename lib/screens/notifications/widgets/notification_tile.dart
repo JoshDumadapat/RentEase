@@ -217,21 +217,25 @@ class NotificationTile extends StatelessWidget {
         }
         break;
       case NotificationType.friendRequest:
-        text = '${notification.actorName} sent you a friend request.';
+        text = '${notification.actorName} started following your rentals.';
         break;
       case NotificationType.comment:
         text = '${notification.actorName} commented on your post';
-        if (notification.postTitle != null) {
+        if (notification.commentText != null &&
+            notification.commentText!.isNotEmpty) {
+          text += ': "${notification.commentText}"';
+        } else if (notification.postTitle != null) {
           text += ': "${notification.postTitle}"';
         }
-        text += '.';
         break;
       case NotificationType.mention:
-        text = '${notification.actorName} mentioned you in a comment';
-        if (notification.commentText != null) {
-          text += ' in ${notification.commentText}';
+        text = '${notification.actorName} mentioned you in a post';
+        if (notification.commentText != null &&
+            notification.commentText!.isNotEmpty) {
+          text += ': "${notification.commentText}"';
+        } else if (notification.postTitle != null) {
+          text += ': "${notification.postTitle}"';
         }
-        text += '.';
         break;
     }
 

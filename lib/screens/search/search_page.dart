@@ -599,7 +599,7 @@ class _FeaturedListingCard extends StatelessWidget {
                     Row(
                       children: [
                         Icon(
-                          Icons.location_on_rounded,
+                          Icons.location_on_outlined,
                           size: 14,
                           color: Colors.grey[500],
                         ),
@@ -617,6 +617,15 @@ class _FeaturedListingCard extends StatelessWidget {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      listing.timeAgo,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[500],
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ],
                 ),
@@ -645,35 +654,48 @@ class _NearbyListingCard extends StatelessWidget {
         splashColor: _themeColor.withValues(alpha: 0.1),
         highlightColor: _themeColor.withValues(alpha: 0.05),
         child: Container(
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Colors.grey[50],
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                spreadRadius: 0,
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            border: Border.all(
+              color: Colors.grey[200]!,
+              width: 1,
+            ),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.horizontal(
-                  left: Radius.circular(16),
-                ),
-                child: SizedBox(
-                  width: 120,
-                  height: 120,
-                  child: listing.imagePaths.isNotEmpty
-                      ? Image.asset(
-                          listing.imagePaths[0],
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
+              // Column 1: Thumbnail
+              Align(
+                alignment: Alignment.topLeft,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    width: 100,
+                    height: 130,
+                    child: Container(
+                      color: Colors.grey[200],
+                      child: listing.imagePaths.isNotEmpty
+                          ? Image.asset(
+                              listing.imagePaths[0],
+                              fit: BoxFit.cover,
+                              width: 100,
+                              height: 130,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: Colors.grey[200],
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.image_outlined,
+                                      size: 32,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          : Container(
                               color: Colors.grey[200],
                               child: const Center(
                                 child: Icon(
@@ -682,24 +704,16 @@ class _NearbyListingCard extends StatelessWidget {
                                   color: Colors.grey,
                                 ),
                               ),
-                            );
-                          },
-                        )
-                      : Container(
-                          color: Colors.grey[200],
-                          child: const Center(
-                            child: Icon(
-                              Icons.image_outlined,
-                              size: 32,
-                              color: Colors.grey,
                             ),
-                          ),
-                        ),
+                    ),
+                  ),
                 ),
               ),
+              const SizedBox(width: 12),
+              // Column 2: Property Info
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: EdgeInsets.zero,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -757,14 +771,37 @@ class _NearbyListingCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Text(
-                        '₱${listing.price.toStringAsFixed(0)}/month',
+                        listing.timeAgo,
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: _themeColorDark,
+                          fontSize: 11,
+                          color: Colors.grey[500],
+                          fontWeight: FontWeight.w400,
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '₱${listing.price.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: _themeColorDark,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '/mo',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.normal,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

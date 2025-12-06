@@ -1,11 +1,8 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
 
 /// Camera page for capturing ID photos with rectangular guide overlay
 class IDCameraCapturePage extends StatefulWidget {
@@ -30,7 +27,6 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
   List<CameraDescription>? _cameras;
   bool _isInitialized = false;
   bool _isCapturing = false;
-  XFile? _capturedImage;
 
   @override
   void initState() {
@@ -79,9 +75,8 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
           _isInitialized = true;
         });
       }
-    } catch (e, stackTrace) {
-      debugPrint('Error initializing camera: $e');
-      debugPrint('Stack trace: $stackTrace');
+    } catch (e) {
+      // Error initializing camera
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -121,7 +116,7 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
           previewSize = _controller!.value.previewSize;
         }
       } catch (e) {
-        debugPrint('Error getting preview size: $e');
+        // Error:'Error getting preview size: $e');
         return originalImage;
       }
       
@@ -191,7 +186,7 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
       // Save cropped image
       final croppedBytes = img.encodeJpg(croppedImg, quality: 85);
       final tempDir = await getTemporaryDirectory();
-      final croppedPath = path.join(tempDir.path, 'cropped_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final croppedPath = '${tempDir.path}/cropped_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final croppedFile = File(croppedPath);
       await croppedFile.writeAsBytes(croppedBytes);
       
@@ -202,13 +197,12 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
           await originalFile.delete();
         }
       } catch (e) {
-        debugPrint('Error deleting original image: $e');
+        // Error:'Error deleting original image: $e');
       }
       
       return XFile(croppedPath);
-    } catch (e, stackTrace) {
-      debugPrint('Error cropping image: $e');
-      debugPrint('Stack trace: $stackTrace');
+    } catch (e) {
+      // Error cropping image
       return originalImage; // Return original if cropping fails
     }
   }
@@ -236,7 +230,7 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
             await file.delete();
           }
         } catch (e) {
-          debugPrint('Error deleting image after dispose: $e');
+          // Error:'Error deleting image after dispose: $e');
         }
         return;
       }
@@ -253,7 +247,7 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
               await file.delete();
             }
           } catch (e) {
-            debugPrint('Error deleting cropped image after dispose: $e');
+            // Error:'Error deleting cropped image after dispose: $e');
           }
         }
         return;
@@ -279,7 +273,7 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
             await file.delete();
           }
         } catch (e) {
-          debugPrint('Error deleting image after dispose: $e');
+          // Error:'Error deleting image after dispose: $e');
         }
         return;
       }
@@ -294,7 +288,7 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
             await file.delete();
           }
         } catch (e) {
-          debugPrint('Error deleting rejected image: $e');
+          // Error:'Error deleting rejected image: $e');
         }
         if (mounted) {
           setState(() {
@@ -302,9 +296,8 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
           });
         }
       }
-    } catch (e, stackTrace) {
-      debugPrint('Error capturing photo: $e');
-      debugPrint('Stack trace: $stackTrace');
+    } catch (e) {
+      // Error capturing photo
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

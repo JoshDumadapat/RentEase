@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 /// User Model
 /// 
 /// Represents a user profile with account information, stats, and preferences.
@@ -74,6 +76,55 @@ class UserModel {
       commentsReceived: commentsReceived ?? this.commentsReceived,
       followersCount: followersCount ?? this.followersCount,
       followingCount: followingCount ?? this.followingCount,
+    );
+  }
+
+  /// Create UserModel from Firestore data
+  factory UserModel.fromFirestore(Map<String, dynamic> data, String id) {
+    // Build display name from fname and lname
+    String displayName = '';
+    if (data['fname'] != null || data['lname'] != null) {
+      final fname = data['fname'] as String? ?? '';
+      final lname = data['lname'] as String? ?? '';
+      displayName = '$fname $lname'.trim();
+    }
+    if (displayName.isEmpty && data['displayName'] != null) {
+      displayName = data['displayName'] as String;
+    }
+    if (displayName.isEmpty && data['email'] != null) {
+      displayName = (data['email'] as String).split('@')[0];
+    }
+    if (displayName.isEmpty) {
+      displayName = 'User';
+    }
+
+    // Parse joined date
+    DateTime? joinedDate;
+    if (data['createdAt'] != null) {
+      final timestamp = data['createdAt'];
+      if (timestamp is Timestamp) {
+        joinedDate = timestamp.toDate();
+      } else if (timestamp is DateTime) {
+        joinedDate = timestamp;
+      }
+    }
+
+    return UserModel(
+      id: id,
+      displayName: displayName,
+      username: data['username'] as String?,
+      bio: data['bio'] as String?,
+      email: data['email'] as String? ?? '',
+      phone: data['phone'] as String?,
+      profileImageUrl: data['profileImageUrl'] as String?,
+      isVerified: data['isVerified'] as bool? ?? false,
+      joinedDate: joinedDate,
+      propertiesCount: (data['propertiesCount'] as num?)?.toInt() ?? 0,
+      favoritesCount: (data['favoritesCount'] as num?)?.toInt() ?? 0,
+      likesReceived: (data['likesReceived'] as num?)?.toInt() ?? 0,
+      commentsReceived: (data['commentsReceived'] as num?)?.toInt() ?? 0,
+      followersCount: (data['followersCount'] as num?)?.toInt(),
+      followingCount: (data['followingCount'] as num?)?.toInt(),
     );
   }
 

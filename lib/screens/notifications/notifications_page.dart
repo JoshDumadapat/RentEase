@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rentease_app/screens/home/widgets/threedots.dart';
 import 'package:rentease_app/services/notification_service.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/models/notification_model.dart';
@@ -102,18 +103,20 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? Colors.grey[900] : Colors.grey[50],
+      backgroundColor: isDark ? Colors.grey[900] : Colors.grey[100],
       appBar: AppBar(
-        title: const Text('Notifications'),
+        title: const Text(
+          'Notifications',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
         backgroundColor: isDark ? Colors.grey[900] : Colors.white,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: () {
-              // Note: Menu functionality will be implemented when needed
-            },
-          ),
+          ThreeDotsMenu(),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
@@ -157,12 +160,6 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
           _buildSection(
             title: 'New',
             notifications: _getNewNotifications(notifications),
-            showSeeAll: true,
-            isDark: isDark,
-          ),
-          _buildSection(
-            title: 'Friend requests',
-            notifications: _getFriendRequests(notifications),
             showSeeAll: true,
             isDark: isDark,
           ),
@@ -214,67 +211,91 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
   }) {
     if (notifications.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[900] : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : Colors.black87,
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    if (showSeeAll)
+                      TextButton(
+                        onPressed: () {
+                          // Note: Navigation to see all notifications will be implemented when needed
+                        },
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'See all',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color:
+                                isDark ? Colors.blue[300] : Colors.blue[600],
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              if (showSeeAll)
-                TextButton(
-                  onPressed: () {
-                    // Note: Navigation to see all notifications will be implemented when needed
-                  },
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    'See all',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isDark ? Colors.blue[300] : Colors.blue[600],
+              const SizedBox(height: 4),
+              ...notifications.asMap().entries.map((entry) {
+                final index = entry.key;
+                final notification = entry.value;
+                final isLast = index == notifications.length - 1;
+
+                return Column(
+                  children: [
+                    NotificationTile(
+                      notification: notification,
+                      onTap: () => _navigateToNotificationTarget(notification),
                     ),
-                  ),
-                ),
+                    if (!isLast)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 72.0),
+                        child: Divider(
+                          height: 1,
+                          thickness: 0.5,
+                          color: isDark
+                              ? Colors.grey[800]!.withValues(alpha: 0.5)
+                              : Colors.grey[300]!.withValues(alpha: 0.5),
+                        ),
+                      ),
+                  ],
+                );
+              }),
             ],
           ),
         ),
-        ...notifications.asMap().entries.map((entry) {
-          final index = entry.key;
-          final notification = entry.value;
-          final isLast = index == notifications.length - 1;
-          
-          return Column(
-            children: [
-              NotificationTile(
-                notification: notification,
-                onTap: () => _navigateToNotificationTarget(notification),
-              ),
-              if (!isLast)
-                Divider(
-                  height: 1,
-                  thickness: 0.5,
-                  indent: 72, // Align with content (avatar width + spacing)
-                  color: isDark 
-                      ? Colors.grey[800]!.withValues(alpha: 0.5) 
-                      : Colors.grey[300]!.withValues(alpha: 0.5),
-                ),
-            ],
-          );
-        }),
-      ],
+      ),
     );
   }
 
@@ -286,9 +307,6 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
     }).toList();
   }
 
-  List<NotificationModel> _getFriendRequests(List<NotificationModel> notifications) {
-    return notifications.where((n) => n.type == NotificationType.friendRequest).toList();
-  }
 
   List<NotificationModel> _getTodayNotifications(List<NotificationModel> notifications) {
     final now = DateTime.now();

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:rentease_app/models/filter_model.dart';
 
 // Theme color constants
-const Color _themeColor = Color(0xFF00D1FF);
 const Color _themeColorLight = Color(0xFFE5F9FF); // Light background (like blue[50])
 const Color _themeColorDark = Color(0xFF00B8E6); // Darker shade for text (like blue[700])
 
@@ -104,6 +103,10 @@ class _FilterSheetState extends State<FilterSheet> {
                     // adjusting filters or click Apply/Cancel to close
                     _filterModel.clearFilters();
                   },
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 40),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
                   child: Text(
                     'Clear Filters',
                     style: TextStyle(
@@ -124,6 +127,11 @@ class _FilterSheetState extends State<FilterSheet> {
                   style: FilledButton.styleFrom(
                     backgroundColor: _themeColorDark,
                     foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    minimumSize: const Size(0, 40),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   child: const Text('Apply'),
                 ),

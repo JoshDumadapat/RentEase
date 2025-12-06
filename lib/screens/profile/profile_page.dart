@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/models/user_model.dart';
+import 'package:rentease_app/backend/BUserService.dart';
+import 'package:rentease_app/backend/BListingService.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
-import 'package:rentease_app/screens/notifications/notifications_page.dart';
 import 'package:rentease_app/screens/profile/widgets/user_info_section.dart';
 import 'package:rentease_app/screens/profile/widgets/user_stats_section.dart';
 import 'package:rentease_app/screens/profile/widgets/property_list_section.dart';
 import 'package:rentease_app/screens/profile/widgets/favorites_section.dart';
-import 'package:rentease_app/screens/profile/widgets/settings_section.dart';
-import 'package:rentease_app/services/auth_service.dart';
-import 'package:rentease_app/sign_in/sign_in_page.dart';
+import 'package:rentease_app/screens/profile/widgets/property_actions_card.dart';
+import 'package:rentease_app/screens/profile/widgets/date_filter_sheet.dart';
+import 'package:rentease_app/screens/add_property/add_property_page.dart';
+import 'package:rentease_app/screens/home/widgets/threedots.dart';
 
 /// Profile Page
 /// 
@@ -38,6 +42,7 @@ class _ProfilePageState extends State<ProfilePage> {
   List<ListingModel> _favorites = [];
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
+  String _selectedTab = 'properties'; // 'properties' or 'favorites'
 
   @override
   void initState() {
@@ -51,27 +56,143 @@ class _ProfilePageState extends State<ProfilePage> {
     super.dispose();
   }
 
-  /// Load user profile data
-  /// In production, this would fetch from API
+  /// Load user profile data from Firestore
   Future<void> _loadProfileData() async {
     setState(() {
       _isLoading = true;
     });
 
-    // Simulate API delay
-    await Future.delayed(const Duration(milliseconds: 800));
+    try {
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      if (firebaseUser == null) {
+        setState(() {
+          _user = null;
+          _isLoading = false;
+        });
+        return;
+      }
 
-    // Load mock data
-    final allListings = ListingModel.getMockListings();
-    
-    setState(() {
-      _user = UserModel.getMockUser();
-      // Get user's properties (mock: first 3 listings)
-      _userProperties = allListings.take(3).toList();
-      // Get favorites (mock: last 2 listings)
-      _favorites = allListings.skip(4).take(2).toList();
-      _isLoading = false;
-    });
+      // Get user data from Firestore
+      final userService = BUserService();
+      final userData = await userService.getUserData(firebaseUser.uid);
+
+      // Get user's listings
+      final listingService = BListingService();
+      final listingsData = await listingService.getListingsByUser(firebaseUser.uid);
+
+      // Get user's favorites
+      final favoritesData = await listingService.getUserFavorites(firebaseUser.uid);
+
+      // Build UserModel from Firestore data
+      UserModel? user;
+      if (userData != null) {
+        user = UserModel.fromFirestore(userData, firebaseUser.uid);
+        // Add sample bio if not present
+        if (user.bio == null || user.bio!.isEmpty) {
+          user = user.copyWith(
+            bio: 'Property owner and real estate enthusiast. Always happy to help!',
+          );
+        }
+        // Add sample verified status if not present
+        if (!user.isVerified) {
+          user = user.copyWith(
+            isVerified: true, // Sample verified status for testing
+          );
+        }
+      } else {
+        // Fallback: create UserModel from Firebase Auth data
+        final displayName = firebaseUser.displayName ?? 
+            (userData != null ? '${userData['fname'] ?? ''} ${userData['lname'] ?? ''}'.trim() : null) ??
+            firebaseUser.email?.split('@')[0] ?? 'User';
+        
+        user = UserModel(
+          id: firebaseUser.uid,
+          email: firebaseUser.email ?? '',
+          displayName: displayName,
+          phone: userData?['phone'] as String?,
+          profileImageUrl: userData?['profileImageUrl'] as String? ?? firebaseUser.photoURL,
+          joinedDate: firebaseUser.metadata.creationTime,
+          bio: 'Property owner and real estate enthusiast. Always happy to help!',
+          isVerified: true, // Sample verified status for testing
+        );
+      }
+
+      // Convert listings data to ListingModel
+      // If no properties from Firestore, use sample data for demonstration
+      List<ListingModel> userProperties;
+      if (listingsData.isEmpty) {
+        // Use sample data from mock listings (first 2-3 listings as user properties)
+        final mockListings = ListingModel.getMockListings();
+        userProperties = mockListings.take(2).toList();
+      } else {
+        userProperties = listingsData
+            .map((data) => ListingModel.fromMap(data))
+            .toList();
+      }
+
+      // Convert favorites data to ListingModel
+      // If no favorites from Firestore, use sample data for demonstration
+      List<ListingModel> favorites;
+      if (favoritesData.isEmpty) {
+        // Use sample data from mock listings (first 3 listings as favorites)
+        final mockListings = ListingModel.getMockListings();
+        favorites = mockListings.take(3).toList();
+      } else {
+        favorites = favoritesData
+            .map((data) => ListingModel.fromMap(data))
+            .toList();
+      }
+
+      // Parse joined date
+      DateTime? joinedDate;
+      if (userData != null && userData['createdAt'] != null) {
+        final timestamp = userData['createdAt'];
+        if (timestamp is Timestamp) {
+          joinedDate = timestamp.toDate();
+        }
+      }
+      // Update user with joined date and ensure photo URL is set
+      if (joinedDate != null || user.profileImageUrl == null) {
+        user = UserModel(
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          phone: user.phone,
+          profileImageUrl: user.profileImageUrl ?? firebaseUser.photoURL,
+          joinedDate: joinedDate ?? user.joinedDate,
+          bio: user.bio, // Preserve bio
+          isVerified: user.isVerified, // Preserve verified status
+        );
+      }
+      
+      // Ensure bio is set (add sample bio if still missing)
+      if (user.bio == null || user.bio!.isEmpty) {
+        user = user.copyWith(
+          bio: 'Property owner and real estate enthusiast. Always happy to help!',
+        );
+      }
+      
+      // Ensure verified status is set (add sample verified for testing)
+      if (!user.isVerified) {
+        user = user.copyWith(
+          isVerified: true, // Sample verified status for testing
+        );
+      }
+
+      setState(() {
+        _user = user;
+        _userProperties = userProperties;
+        _favorites = favorites;
+        _isLoading = false;
+      });
+    } catch (_) {
+      setState(() {
+        _user = null;
+        _userProperties = [];
+        _favorites = [];
+        _isLoading = false;
+      });
+    }
   }
 
   /// Refresh profile data (pull-to-refresh)
@@ -89,16 +210,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  /// Navigate to notifications page
-  void _navigateToNotifications() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const NotificationsPage(),
-      ),
-    );
-  }
-
   /// Handle edit profile action
   void _handleEditProfile() {
     // Note: Navigation to edit profile page will be implemented when backend is ready
@@ -107,57 +218,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  /// Handle logout action
-  Future<void> _handleLogout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Text('Logout'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    try {
-      // Sign out from Firebase Auth and Google
-      await AuthService().signOut();
-
-      if (!mounted) return;
-
-      // Navigate back to the sign-in page and clear the navigation stack
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const SignInPage()),
-        (route) => false,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Logout failed: $e')),
-      );
-    }
-  }
-
-  /// Handle settings action
-  void _handleSettings() {
-    // Note: Navigation to settings page will be implemented when needed
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Settings feature coming soon')),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -192,12 +252,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         centerTitle: false,
                         actions: [
-                          IconButton(
-                            icon: const Icon(Icons.settings_outlined),
-                            color: Colors.black87,
-                            onPressed: _handleSettings,
-                            tooltip: 'Settings',
-                          ),
+                          ThreeDotsMenu(),
                         ],
                       ),
                       
@@ -217,39 +272,76 @@ class _ProfilePageState extends State<ProfilePage> {
                             // User Stats Section
                             UserStatsSection(
                               user: _user!,
-                              onNotificationsTap: _navigateToNotifications,
+                              onStatTap: (tab) {
+                                setState(() {
+                                  _selectedTab = tab;
+                                });
+                              },
                             ),
                         
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 20),
                         
-                        // My Properties Section
-                        PropertyListSection(
-                          properties: _userProperties,
-                          onPropertyTap: _navigateToProperty,
-                          onAddProperty: () {
-                            // Note: Navigation to add property page - feature available in bottom nav
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Add property feature available in bottom nav'),
-                              ),
-                            );
-                          },
-                        ),
+                        // Property Actions Card (only show for Properties tab)
+                        if (_selectedTab == 'properties')
+                          PropertyActionsCard(
+                            onAddProperty: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const AddPropertyPage(),
+                                ),
+                              );
+                            },
+                            onFilter: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (context) => DraggableScrollableSheet(
+                                  initialChildSize: 0.36,
+                                  minChildSize: 0.23,
+                                  maxChildSize: 0.8,
+                                  builder: (context, scrollController) => Container(
+                                    decoration: BoxDecoration(
+                                      color: theme.scaffoldBackgroundColor,
+                                      borderRadius: const BorderRadius.vertical(
+                                        top: Radius.circular(20),
+                                      ),
+                                    ),
+                                    child: DateFilterSheet(
+                                      onFilterSelected: (filter, fromDate, toDate) {
+                                        // Handle date filter selection
+                                        // You can filter the properties list here based on the selected date filter
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Filter applied: ${filter?.toString().split('.').last ?? 'All'}',
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         
-                        const SizedBox(height: 32),
+                        if (_selectedTab == 'properties') const SizedBox(height: 20),
                         
-                        // Favorites Section
-                        FavoritesSection(
-                          favorites: _favorites,
-                          onPropertyTap: _navigateToProperty,
-                        ),
+                        // My Properties Section (only show when Properties tab is selected)
+                        if (_selectedTab == 'properties')
+                          PropertyListSection(
+                            properties: _userProperties,
+                            onPropertyTap: _navigateToProperty,
+                          ),
                         
-                        const SizedBox(height: 32),
-                        
-                        // Settings & Account Management
-                        SettingsSection(
-                          onLogout: _handleLogout,
-                        ),
+                        // Favorites Section (only show when Favorites tab is selected)
+                        if (_selectedTab == 'favorites')
+                          FavoritesSection(
+                            favorites: _favorites,
+                            onPropertyTap: _navigateToProperty,
+                          ),
                         
                         const SizedBox(height: 32),
                       ],

@@ -96,7 +96,6 @@ class _LandingPageState extends State<LandingPage>
       }
     } catch (e) {
       // If there's an error, still try to navigate to get started
-      debugPrint('Error in _checkFirstTimeAndNavigate: $e');
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const GetStartedPage()),

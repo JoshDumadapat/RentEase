@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:rentease_app/models/listing_model.dart';
 
+// Theme colors to match HomePage
+const Color _themeColorLight = Color(0xFFE5F9FF);
+const Color _themeColorLight2 = Color(0xFFB3F0FF);
+const Color _themeColorDark = Color(0xFF00B8E6);
+
 class ListingDetailsPage extends StatefulWidget {
   final ListingModel listing;
 
@@ -12,91 +17,239 @@ class ListingDetailsPage extends StatefulWidget {
 
 class _ListingDetailsPageState extends State<ListingDetailsPage> {
   int _currentImageIndex = 0;
+  final List<_Review> _reviews = [
+    _Review(
+      reviewerName: 'Anna Lopez',
+      rating: 5,
+      comment:
+          'Beautiful and very clean apartment. The owner was responsive and helpful throughout our stay.',
+      createdAt: DateTime(2024, 7, 12),
+    ),
+    _Review(
+      reviewerName: 'Mark Reyes',
+      rating: 4,
+      comment:
+          'Great location and amenities. A bit noisy at night, but overall a good experience.',
+      createdAt: DateTime(2024, 6, 28),
+    ),
+  ];
+
+  double get _averageRating {
+    if (_reviews.isEmpty) return 0;
+    final total = _reviews.fold<int>(0, (sum, review) => sum + review.rating);
+    return total / _reviews.length;
+  }
+
+  void _addReview(int rating, String comment) {
+    if (rating == 0 || comment.trim().isEmpty) return;
+    setState(() {
+      _reviews.add(
+        _Review(
+          reviewerName: 'You',
+          rating: rating,
+          comment: comment.trim(),
+          createdAt: DateTime.now(),
+        ),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
         backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.of(context).pop(),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black87),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
         ),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ImageCarousel(
-              images: widget.listing.imagePaths,
-              currentIndex: _currentImageIndex,
-              onPageChanged: (index) {
-                setState(() {
-                  _currentImageIndex = index;
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.listing.title,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+        body: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ImageCarousel(
+                      images: widget.listing.imagePaths,
+                      currentIndex: _currentImageIndex,
+                      onPageChanged: (index) {
+                        setState(() {
+                          _currentImageIndex = index;
+                        });
+                      },
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '₱ ${widget.listing.price.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue[700],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.location_on,
-                        size: 20,
-                        color: Colors.grey[600],
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          widget.listing.location,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[700],
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _themeColorLight,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      widget.listing.category,
+                                      style: Theme.of(context).textTheme.labelMedium
+                                          ?.copyWith(color: _themeColorDark),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    widget.listing.timeAgo,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(color: Colors.grey[600]),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.chat_bubble_outline_outlined,
+                                    size: 16,
+                                    color: Colors.grey[600],
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${_reviews.length} reviews',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(color: Colors.grey[600]),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Icon(
+                                    Icons.star_rounded,
+                                    size: 16,
+                                    color: Colors.amber,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _reviews.isEmpty
+                                        ? '-'
+                                        : _averageRating.toStringAsFixed(1),
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                        ),
+                          const SizedBox(height: 16),
+                          Text(
+                            widget.listing.title,
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.location_on_outlined,
+                                size: 20,
+                                color: Colors.grey[600],
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  widget.listing.location,
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(color: Colors.grey[700]),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '₱${widget.listing.price.toStringAsFixed(2)}',
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: _themeColorDark,
+                                    ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '/month',
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(color: Colors.grey[600]),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          TabBar(
+                            labelColor: _themeColorDark,
+                            unselectedLabelColor: Colors.grey[600],
+                            indicatorColor: _themeColorDark,
+                            indicatorSize: TabBarIndicatorSize.label,
+                            tabs: const [
+                              Tab(text: 'About'),
+                              Tab(text: 'Review'),
+                            ],
+                          ),
+                        ],
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ];
+          },
+          body: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: TabBarView(
+              children: [
+                SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 16),
+                      _PropertyDetailsSection(listing: widget.listing),
+                      const SizedBox(height: 24),
+                      _DescriptionSection(
+                        description: widget.listing.description,
+                      ),
+                      const SizedBox(height: 24),
+                      _OwnerSection(
+                        ownerName: widget.listing.ownerName,
+                        isVerified: widget.listing.isOwnerVerified,
+                      ),
+                      const SizedBox(height: 24),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  _PropertyDetailsSection(listing: widget.listing),
-                  const SizedBox(height: 24),
-                  _DescriptionSection(description: widget.listing.description),
-                  const SizedBox(height: 24),
-                  _OwnerSection(
-                    ownerName: widget.listing.ownerName,
-                    isVerified: widget.listing.isOwnerVerified,
+                ),
+                SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 16.0, bottom: 24.0),
+                    child: _ReviewsSection(
+                      reviews: _reviews,
+                      onAddReview: _addReview,
+                    ),
                   ),
-                  const SizedBox(height: 24),
-                  _ActionButtons(),
-                  const SizedBox(height: 32),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -189,34 +342,33 @@ class _PropertyDetailsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Property Details',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
               child: _DetailItem(
-                icon: Icons.bed,
+                icon: Icons.bed_outlined,
                 label: 'Bedrooms',
                 value: listing.bedrooms.toString(),
+                dateText: listing.timeAgo,
               ),
             ),
             Expanded(
               child: _DetailItem(
-                icon: Icons.bathtub,
+                icon: Icons.bathtub_outlined,
                 label: 'Bathrooms',
                 value: listing.bathrooms.toString(),
               ),
             ),
             Expanded(
               child: _DetailItem(
-                icon: Icons.square_foot,
+                icon: Icons.square_foot_outlined,
                 label: 'Area',
                 value: '${listing.area.toStringAsFixed(0)} m²',
               ),
@@ -232,29 +384,54 @@ class _DetailItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final String? dateText;
 
   const _DetailItem({
     required this.icon,
     required this.label,
     required this.value,
+    this.dateText,
   });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Icon(icon, size: 32, color: Colors.blue[700]),
+        Icon(icon, size: 32, color: _themeColorDark),
         const SizedBox(height: 8),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 4),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+            ),
+            if (dateText != null) ...[
+              Text(
+                ' • ',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.grey[400]),
+              ),
+              Text(
+                dateText!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+              ),
+            ],
+          ],
+        ),
       ],
     );
   }
@@ -270,18 +447,19 @@ class _DescriptionSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Description',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         Text(
           description,
-          style: TextStyle(fontSize: 16, color: Colors.grey[700], height: 1.5),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Colors.grey[700],
+            height: 1.5,
+          ),
         ),
       ],
     );
@@ -299,20 +477,20 @@ class _OwnerSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: _themeColorLight2.withValues(alpha: 0.25),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 30,
-            backgroundColor: Colors.blue[100],
+            backgroundColor: _themeColorLight,
             child: Text(
               ownerName[0].toUpperCase(),
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.blue[700],
+                color: _themeColorDark,
               ),
             ),
           ),
@@ -321,24 +499,24 @@ class _OwnerSection extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Listed by',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
                     Text(
                       ownerName,
-                      style: const TextStyle(
-                        fontSize: 18,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
                       ),
                     ),
                     if (isVerified) ...[
                       const SizedBox(width: 8),
-                      Icon(Icons.verified, size: 20, color: Colors.blue[600]),
+                      Icon(Icons.verified, size: 20, color: _themeColorDark),
                     ],
                   ],
                 ),
@@ -352,7 +530,7 @@ class _OwnerSection extends StatelessWidget {
               );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[700],
+              backgroundColor: _themeColorDark,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -366,58 +544,228 @@ class _OwnerSection extends StatelessWidget {
   }
 }
 
-class _ActionButtons extends StatelessWidget {
+class _Review {
+  final String reviewerName;
+  final int rating;
+  final String comment;
+  final DateTime createdAt;
+
+  _Review({
+    required this.reviewerName,
+    required this.rating,
+    required this.comment,
+    required this.createdAt,
+  });
+}
+
+class _ReviewsSection extends StatefulWidget {
+  final List<_Review> reviews;
+  final void Function(int rating, String comment) onAddReview;
+
+  const _ReviewsSection({required this.reviews, required this.onAddReview});
+
+  @override
+  State<_ReviewsSection> createState() => _ReviewsSectionState();
+}
+
+class _ReviewsSectionState extends State<_ReviewsSection> {
+  final TextEditingController _controller = TextEditingController();
+  int _selectedRating = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('Listing saved!')));
+        Text(
+          'Reviews',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        if (widget.reviews.isEmpty)
+          Text(
+            'No reviews yet. Be the first to leave one!',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: widget.reviews.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final review = widget.reviews[index];
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _themeColorLight2.withValues(alpha: 0.6),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: _themeColorLight.withValues(
+                            alpha: 0.9,
+                          ),
+                          child: Text(
+                            review.reviewerName[0].toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: _themeColorDark,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                review.reviewerName,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${review.createdAt.day}/${review.createdAt.month}/${review.createdAt.year}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.star_rounded,
+                              size: 18,
+                              color: Colors.amber,
+                            ),
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _themeColorLight,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                review.rating.toString(),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: _themeColorDark,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: List.generate(
+                        5,
+                        (i) => Icon(
+                          i < review.rating
+                              ? Icons.star_rounded
+                              : Icons.star_border_rounded,
+                          size: 16,
+                          color: Colors.amber,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      review.comment,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              );
             },
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              side: BorderSide(color: Colors.blue[700]!),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text(
-              'Save',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1976D2),
+          ),
+        const SizedBox(height: 24),
+        Text(
+          'Add a review',
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: List.generate(
+            5,
+            (index) => IconButton(
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              onPressed: () {
+                setState(() {
+                  _selectedRating = index + 1;
+                });
+              },
+              icon: Icon(
+                index < _selectedRating
+                    ? Icons.star_rounded
+                    : Icons.star_border_rounded,
+                color: Colors.amber,
               ),
             ),
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: ElevatedButton(
+        const SizedBox(height: 8),
+        TextField(
+          controller: _controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Share your experience about this property',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Schedule viewing feature coming soon!'),
-                ),
-              );
+              widget.onAddReview(_selectedRating, _controller.text);
+              _controller.clear();
+              setState(() {
+                _selectedRating = 0;
+              });
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[700],
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text(
-              'Schedule Viewing',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
+            child: const Text('Submit'),
           ),
         ),
       ],

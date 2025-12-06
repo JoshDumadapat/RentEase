@@ -164,7 +164,7 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
     return Positioned(
       left: 0,
       right: 0,
-      top: imageHeight - 55,
+      top: imageHeight - 40,
       bottom: 0,
       child: Container(
         decoration: const BoxDecoration(
@@ -239,7 +239,7 @@ class _SignInContentWidget extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Top spacing - proportional to bottom margin
+                    // Top spacing - responsive
                     SizedBox(height: isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
                     // Logo Widget
                     _LogoWidget(),
@@ -663,42 +663,6 @@ class _SignInButtonWidgetState extends State<_SignInButtonWidget> {
   final UserService _userService = UserService();
   bool _isLoading = false;
 
-  String _getUserFriendlyError(String errorMessage) {
-    // Check for common Firebase error patterns
-    if (errorMessage.contains('operation-not-allowed') ||
-        errorMessage.contains('Email/Password authentication is not enabled')) {
-      return 'Email/Password authentication is not enabled. Please enable it in Firebase Console → Authentication → Sign-in method.';
-    } else if (errorMessage.contains('user-not-found') || 
-        errorMessage.contains('No user found')) {
-      return 'No account found with this email. The account may not exist in Firebase Auth. Please sign up first.';
-    } else if (errorMessage.contains('wrong-password') || 
-               errorMessage.contains('Wrong password') ||
-               errorMessage.contains('invalid-credential')) {
-      return 'Incorrect password. Make sure you are using: Pass123 (case-sensitive, no spaces).';
-    } else if (errorMessage.contains('invalid-email') || 
-               errorMessage.contains('invalid email')) {
-      return 'Invalid email address. Please enter a valid email.';
-    } else if (errorMessage.contains('user-disabled')) {
-      return 'This account has been disabled. Please contact support.';
-    } else if (errorMessage.contains('too-many-requests')) {
-      return 'Too many failed attempts. Please try again later.';
-    } else if (errorMessage.contains('network') || 
-               errorMessage.contains('Network')) {
-      return 'Network error. Please check your internet connection.';
-    } else if (errorMessage.contains('email') && 
-               errorMessage.contains('required')) {
-      return 'Email is required';
-    } else if (errorMessage.contains('password') && 
-               errorMessage.contains('required')) {
-      return 'Password is required';
-    } else {
-      // Return a generic but friendly message with the actual error
-      final cleanError = errorMessage.contains('Exception: ') 
-          ? errorMessage.split('Exception: ').last 
-          : errorMessage;
-      return 'Invalid email or password. Error: $cleanError';
-    }
-  }
 
   Future<void> _handleSignIn() async {
     // Clear previous errors
@@ -739,17 +703,10 @@ class _SignInButtonWidgetState extends State<_SignInButtonWidget> {
         return;
       }
 
-      // Debug logging to see exactly what we're sending
-      debugPrint('=== SIGN IN ATTEMPT ===');
-      debugPrint('Email: "$email" (length: ${email.length})');
-      debugPrint('Password: "${password.replaceAll(RegExp(r'.'), '*')}" (length: ${password.length})');
-      debugPrint('Password should be: "Pass123" (length: 7)');
-      
       final userCredential = await _authService.signInWithEmailAndPassword(
         email,
         password,
       );
-      debugPrint('✅ Sign in successful. UID: ${userCredential.user?.uid}');
 
       if (userCredential.user != null && mounted) {
         // Check if user exists in Firestore
@@ -780,11 +737,6 @@ class _SignInButtonWidgetState extends State<_SignInButtonWidget> {
       }
     } catch (e) {
       if (mounted) {
-        final errorMessage = e.toString();
-        debugPrint('Sign in error: $errorMessage');
-        final friendlyError = _getUserFriendlyError(errorMessage);
-        debugPrint('User-facing auth error (not shown directly): $friendlyError');
-
         // Show a single generic message under the password field
         widget.onSetAuthError('Invalid email or password');
       }
@@ -975,9 +927,7 @@ class _GoogleSignInButtonWidgetState extends State<_GoogleSignInButtonWidget> {
         // 3) Redirect to sign-up with the temporary Google data
         try {
           await userCredential.user?.delete();
-        } catch (e) {
-          debugPrint('Warning: failed to delete newly created Google user: $e');
-        }
+        } catch (_) {}
         await FirebaseAuth.instance.signOut();
 
         if (mounted) {
@@ -1002,12 +952,10 @@ class _GoogleSignInButtonWidgetState extends State<_GoogleSignInButtonWidget> {
           userExists = await _userService.userExists(uid).timeout(
             const Duration(seconds: 5),
             onTimeout: () {
-              debugPrint('User exists check timed out, assuming new user');
               return false;
             },
           );
-        } catch (e) {
-          debugPrint('Error checking user exists: $e');
+        } catch (_) {
           userExists = false;
         }
 
@@ -1029,18 +977,21 @@ class _GoogleSignInButtonWidgetState extends State<_GoogleSignInButtonWidget> {
               }
             }
 
+            // Get photo URL from Firebase Auth user
+            final photoUrl = userCredential.user!.photoURL;
+            
             await _userService.createOrUpdateUser(
               uid: uid,
               email: email,
               fname: firstName,
               lname: lastName,
               userType: 'student',
+              profileImageUrl: photoUrl,
             );
-          } catch (e) {
-            debugPrint('Error creating user record for existing Google user: $e');
-          }
+          } catch (_) {}
         }
 
+        if (!mounted) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (context) => const MainApp(),

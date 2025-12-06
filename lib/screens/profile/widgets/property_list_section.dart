@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/profile/widgets/property_tile.dart';
 
@@ -8,17 +9,14 @@ import 'package:rentease_app/screens/profile/widgets/property_tile.dart';
 /// - List of properties with thumbnails
 /// - Tap to open property details
 /// - Edit/delete actions per property
-/// - Add new property button
 class PropertyListSection extends StatelessWidget {
   final List<ListingModel> properties;
   final Function(ListingModel) onPropertyTap;
-  final VoidCallback onAddProperty;
 
   const PropertyListSection({
     super.key,
     required this.properties,
     required this.onPropertyTap,
-    required this.onAddProperty,
   });
 
   @override
@@ -26,100 +24,91 @@ class PropertyListSection extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Container(
-      color: isDark ? Colors.grey[900] : Colors.white,
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Section Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'My Properties',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              if (properties.isNotEmpty)
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              spreadRadius: 0,
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Section Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
                 Text(
-                  '${properties.length}',
+                  'My Properties',
                   style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    fontWeight: FontWeight.w500,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
                 ),
-            ],
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // Add Property Button
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: onAddProperty,
-              icon: const Icon(Icons.add, size: 20),
-              label: const Text('Add New Property'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 14,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                side: BorderSide(
-                  color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
-                ),
-              ),
+                if (properties.isNotEmpty)
+                  Text(
+                    '${properties.length}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+              ],
             ),
-          ),
-          
-          const SizedBox(height: 20),
-          
           // Properties List
-          if (properties.isEmpty)
-            _EmptyState(
-              message: 'No properties yet',
-              subtitle: 'Add your first property to get started',
-              isDark: isDark,
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: properties.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final property = properties[index];
-                return PropertyTile(
-                  property: property,
-                  onTap: () => onPropertyTap(property),
-                  onEdit: () {
-                    // Note: Navigation to edit property page will be implemented when backend is ready
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Edit property: ${property.title}'),
-                      ),
-                    );
-                  },
-                  onDelete: () {
-                    // Note: Delete confirmation and property deletion will be implemented when backend is ready
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Delete property: ${property.title}'),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-        ],
+          Transform.translate(
+            offset: const Offset(0, -12),
+            child: properties.isEmpty
+                ? _EmptyState(
+                    message: 'No properties yet',
+                    subtitle: 'Add your first property to get started',
+                    isDark: isDark,
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: properties.length,
+                    separatorBuilder: (context, index) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final property = properties[index];
+                      return PropertyTile(
+                        property: property,
+                        onTap: () => onPropertyTap(property),
+                        showMenuButton: true,
+                        onEdit: () {
+                          // Note: Navigation to edit property page will be implemented when backend is ready
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Edit property: ${property.title}'),
+                            ),
+                          );
+                        },
+                        onDelete: () {
+                          // Note: Delete confirmation and property deletion will be implemented when backend is ready
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Delete property: ${property.title}'),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+          ),
+          ],
+        ),
       ),
     );
   }
@@ -141,29 +130,42 @@ class _EmptyState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(
-            Icons.home_outlined,
-            size: 64,
-            color: isDark ? Colors.grey[700] : Colors.grey[300],
+          Center(
+            child: SvgPicture.asset(
+              'assets/icons/navbar/home_outlined.svg',
+              width: 64,
+              height: 64,
+              colorFilter: ColorFilter.mode(
+                isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                BlendMode.srcIn,
+              ),
+            ),
           ),
           const SizedBox(height: 16),
-          Text(
-            message,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
+          Center(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? Colors.grey[600] : Colors.grey[500],
+          Center(
+            child: Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.grey[600] : Colors.grey[500],
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),

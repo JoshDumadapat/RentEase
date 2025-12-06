@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:rentease_app/models/listing_model.dart';
 
+// Theme colors matching the listing cards
+const Color _themeColorDark = Color(0xFF00B8E6); // Darker shade for text (like blue[700])
+
 /// Property Tile Widget
 /// 
 /// Reusable tile for displaying a property in lists.
@@ -10,6 +13,9 @@ class PropertyTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final VoidCallback? onRemove; // For favorites - "Remove" button
+  final bool showMenuButton; // For "My Properties" - show three dots menu
+  final bool showRemoveButton; // For "Favorites" - show "Remove" text button
 
   const PropertyTile({
     super.key,
@@ -17,6 +23,9 @@ class PropertyTile extends StatelessWidget {
     required this.onTap,
     this.onEdit,
     this.onDelete,
+    this.onRemove,
+    this.showMenuButton = false,
+    this.showRemoveButton = false,
   });
 
   @override
@@ -42,29 +51,37 @@ class PropertyTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Thumbnail
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  color: isDark ? Colors.grey[700] : Colors.grey[200],
-                  child: property.imagePaths.isNotEmpty
-                      ? Image.asset(
-                          property.imagePaths[0],
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              _buildPlaceholder(isDark),
-                        )
-                      : _buildPlaceholder(isDark),
+              // Column 1: Thumbnail
+              Align(
+                alignment: Alignment.topLeft,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    width: 100,
+                    height: 120,
+                    child: Container(
+                      color: isDark ? Colors.grey[700] : Colors.grey[200],
+                      child: property.imagePaths.isNotEmpty
+                          ? Image.asset(
+                              property.imagePaths[0],
+                              fit: BoxFit.cover,
+                              width: 100,
+                              height: 120,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _buildPlaceholder(isDark),
+                            )
+                          : _buildPlaceholder(isDark),
+                    ),
+                  ),
                 ),
               ),
               
               const SizedBox(width: 12),
               
-              // Property Info
+              // Column 2: Property Info
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Title
@@ -106,66 +123,123 @@ class PropertyTile extends StatelessWidget {
                       ],
                     ),
                     
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     
-                    // Price
+                    // Date and Time
                     Text(
-                      '₱${property.price.toStringAsFixed(0)}/mo',
+                      property.timeAgo,
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[700],
+                        fontSize: 11,
+                        color: isDark
+                            ? Colors.grey[500]
+                            : Colors.grey[500],
                       ),
                     ),
                     
-                    // Action Buttons (if onEdit/onDelete provided)
-                    if (onEdit != null || onDelete != null) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          if (onEdit != null)
-                            TextButton.icon(
-                              onPressed: onEdit,
-                              icon: const Icon(Icons.edit_outlined, size: 16),
-                              label: const Text('Edit'),
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    const SizedBox(height: 8),
+                    
+                    // Price and Remove button (for favorites)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '₱${property.price.toStringAsFixed(0)}',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: _themeColorDark,
                               ),
                             ),
-                          if (onDelete != null) ...[
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              onPressed: onDelete,
-                              icon: const Icon(Icons.delete_outline, size: 16),
-                              label: const Text('Delete'),
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                foregroundColor: Colors.red,
+                            const SizedBox(width: 4),
+                            Text(
+                              '/mo',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.normal,
+                                color: isDark ? Colors.grey[500] : Colors.grey[600],
                               ),
                             ),
                           ],
-                        ],
-                      ),
-                    ],
+                        ),
+                        if (showRemoveButton && onRemove != null)
+                          TextButton(
+                            onPressed: onRemove,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              'Remove',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.red[300],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
               ),
               
-              // Chevron Icon
-              Icon(
-                Icons.chevron_right,
-                color: isDark ? Colors.grey[600] : Colors.grey[400],
-              ),
+              // Column 3: Three dots menu or Chevron
+              if (showMenuButton)
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: PopupMenuButton<String>(
+                    icon: Icon(
+                      Icons.more_vert,
+                      size: 20,
+                      color: isDark ? Colors.grey[600] : Colors.grey[400],
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    offset: const Offset(-10, 30),
+                    onSelected: (value) {
+                      if (value == 'edit' && onEdit != null) onEdit!();
+                      if (value == 'delete' && onDelete != null) onDelete!();
+                    },
+                    itemBuilder: (context) => [
+                      if (onEdit != null)
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_outlined, size: 18),
+                              SizedBox(width: 8),
+                              Text('Edit'),
+                            ],
+                          ),
+                        ),
+                      if (onDelete != null)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                              SizedBox(width: 8),
+                              Text('Delete', style: TextStyle(color: Colors.red)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                )
+              else if (!showRemoveButton)
+                Icon(
+                  Icons.chevron_right,
+                  color: isDark ? Colors.grey[600] : Colors.grey[400],
+                ),
             ],
           ),
         ),

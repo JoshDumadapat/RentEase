@@ -8,15 +8,14 @@ import 'package:rentease_app/models/user_model.dart';
 /// - Number of properties listed
 /// - Number of favorites/saved properties
 /// - Number of likes/comments received (optional)
-/// - Notifications shortcut with unread count badge
 class UserStatsSection extends StatelessWidget {
   final UserModel user;
-  final VoidCallback onNotificationsTap;
+  final Function(String)? onStatTap;
 
   const UserStatsSection({
     super.key,
     required this.user,
-    required this.onNotificationsTap,
+    this.onStatTap,
   });
 
   @override
@@ -25,22 +24,10 @@ class UserStatsSection extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
-      color: isDark ? Colors.grey[900] : Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section Title
-          Text(
-            'Activity',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 16),
-          
           // Stats Grid
           Row(
             children: [
@@ -48,8 +35,9 @@ class UserStatsSection extends StatelessWidget {
                 child: _StatTile(
                   label: 'Properties',
                   value: user.propertiesCount.toString(),
-                  icon: Icons.home_outlined,
+                  iconPath: 'assets/icons/navbar/home_outlined.svg',
                   isDark: isDark,
+                  onTap: onStatTap != null ? () => onStatTap!('properties') : null,
                 ),
               ),
               const SizedBox(width: 12),
@@ -59,95 +47,20 @@ class UserStatsSection extends StatelessWidget {
                   value: user.favoritesCount.toString(),
                   iconPath: 'assets/icons/navbar/heart_outlined.svg',
                   isDark: isDark,
+                  onTap: onStatTap != null ? () => onStatTap!('favorites') : null,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _StatTile(
-                  label: 'Likes',
+                  label: 'Rating',
                   value: user.likesReceived.toString(),
-                  icon: Icons.thumb_up_outlined,
+                  icon: Icons.star_outline,
                   isDark: isDark,
+                  onTap: null, // Rating card is not clickable
                 ),
               ),
             ],
-          ),
-          
-          // Notifications Shortcut
-          const SizedBox(height: 20),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onNotificationsTap,
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.grey[800]
-                      : Colors.blue[50],
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.grey[700]!
-                        : Colors.blue[100]!,
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.grey[700]
-                            : Colors.blue[100],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.notifications_outlined,
-                        color: Colors.blue[700],
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Notifications',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: isDark
-                                  ? Colors.white
-                                  : Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'View your activity feed',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isDark
-                                  ? Colors.grey[400]
-                                  : Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.chevron_right,
-                      color: isDark
-                          ? Colors.grey[500]
-                          : Colors.grey[600],
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ),
         ],
       ),
@@ -161,6 +74,7 @@ class _StatTile extends StatelessWidget {
   final String? iconPath;
   final IconData? icon;
   final bool isDark;
+  final VoidCallback? onTap;
 
   const _StatTile({
     required this.label,
@@ -168,44 +82,49 @@ class _StatTile extends StatelessWidget {
     this.iconPath,
     this.icon,
     required this.isDark,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
+    final widget = Container(
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? Colors.grey[800] : Colors.grey[50],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? Colors.grey[700]! : Colors.grey[200]!,
-          width: 1,
-        ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            spreadRadius: 0,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
           iconPath != null
               ? SvgPicture.asset(
                   iconPath!,
-                  width: 28,
-                  height: 28,
-                  colorFilter: ColorFilter.mode(
-                    Colors.blue[700]!,
+                  width: 20,
+                  height: 20,
+                  colorFilter: const ColorFilter.mode(
+                    Color(0xFF00B8E6),
                     BlendMode.srcIn,
                   ),
                 )
               : Icon(
                   icon,
-                  size: 28,
-                  color: Colors.blue[700],
+                  size: 20,
+                  color: const Color(0xFF00B8E6),
                 ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black87,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
             ),
           ),
           const SizedBox(height: 4),
@@ -213,7 +132,7 @@ class _StatTile extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: 12,
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
+              color: Colors.grey[600],
               fontWeight: FontWeight.w500,
             ),
             textAlign: TextAlign.center,
@@ -221,6 +140,16 @@ class _StatTile extends StatelessWidget {
         ],
       ),
     );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: widget,
+      );
+    }
+
+    return widget;
   }
 }
 
