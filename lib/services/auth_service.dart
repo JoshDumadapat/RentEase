@@ -71,8 +71,25 @@ class AuthService {
     GoogleSignInAuthentication? googleAuth;
     
     try {
-      // Trigger Google Sign-In UI directly (removed unnecessary signOut for faster loading)
-      googleUser = await _googleSignIn.signIn();
+      // Force account picker to always show by clearing cached instance and signing out/disconnecting
+      try {
+        // Clear cached instance to reset state
+        _cachedGoogleSignIn = null;
+        
+        // Get fresh instance
+        final googleSignIn = _googleSignIn;
+        
+        // Disconnect and sign out to force account selection
+        await googleSignIn.disconnect();
+        await googleSignIn.signOut();
+      } catch (_) {
+        // Ignore errors - just ensure we have a fresh instance
+        _cachedGoogleSignIn = null;
+      }
+      
+      // Get fresh GoogleSignIn instance and trigger account picker
+      final googleSignIn = _googleSignIn;
+      googleUser = await googleSignIn.signIn();
 
       if (googleUser == null) {
         return null;
@@ -224,8 +241,25 @@ class AuthService {
   /// Sign in with Google
   Future<UserCredential?> signInWithGoogle() async {
     try {
-      // Trigger the Google Sign In flow directly (removed unnecessary signOut for faster loading)
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      // Force account picker to always show by clearing cached instance and signing out/disconnecting
+      try {
+        // Clear cached instance to reset state
+        _cachedGoogleSignIn = null;
+        
+        // Get fresh instance
+        final googleSignIn = _googleSignIn;
+        
+        // Disconnect and sign out to force account selection
+        await googleSignIn.disconnect();
+        await googleSignIn.signOut();
+      } catch (_) {
+        // Ignore errors - just ensure we have a fresh instance
+        _cachedGoogleSignIn = null;
+      }
+      
+      // Get fresh GoogleSignIn instance and trigger account picker
+      final googleSignIn = _googleSignIn;
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
 
       if (googleUser == null) {
         return null;

@@ -5,8 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:rentease_app/services/user_service.dart';
 import 'package:rentease_app/services/auth_service.dart';
-import 'package:rentease_app/main_app.dart';
 import 'package:rentease_app/widgets/id_camera_capture_page.dart';
+import 'package:rentease_app/widgets/selfie_camera_capture_page.dart';
+import 'package:rentease_app/screens/verification/verification_loading_page.dart';
 
 class StudentIDVerificationPage extends StatefulWidget {
   final String firstName;
@@ -39,13 +40,21 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
   final ImagePicker _imagePicker = ImagePicker();
   final UserService _userService = UserService();
   final AuthService _authService = AuthService();
+  final TextEditingController _idNumberController = TextEditingController();
+  final PageController _pageController = PageController(viewportFraction: 0.8);
 
   XFile? _frontIdImage;
   XFile? _backIdImage;
-  XFile? _faceWithIdImage;
 
   bool _isLoading = false;
   bool _isUploading = false;
+
+  @override
+  void dispose() {
+    _idNumberController.dispose();
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,17 +64,16 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
           _BackgroundImageWidget(),
           _WhiteCardBackgroundWidget(
             child: _StudentIDVerificationContentWidget(
+              idNumberController: _idNumberController,
+              pageController: _pageController,
               frontIdImage: _frontIdImage,
               backIdImage: _backIdImage,
-              faceWithIdImage: _faceWithIdImage,
               isLoading: _isLoading,
               isUploading: _isUploading,
               onCaptureFront: () => _captureImage('front'),
               onCaptureBack: () => _captureImage('back'),
-              onCaptureFaceWithId: () => _captureImage('faceWithId'),
               onRetakeFront: () => _captureImage('front'),
               onRetakeBack: () => _captureImage('back'),
-              onRetakeFaceWithId: () => _captureImage('faceWithId'),
               onUpload: _handleUpload,
               userType: widget.userType,
             ),
@@ -299,8 +307,6 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
                   _frontIdImage = image;
                 } else if (imageType == 'back') {
                   _backIdImage = image;
-                } else if (imageType == 'faceWithId') {
-                  _faceWithIdImage = image;
                 }
               });
             }
@@ -324,8 +330,6 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
                     _frontIdImage = image;
                   } else if (imageType == 'back') {
                     _backIdImage = image;
-                  } else if (imageType == 'faceWithId') {
-                    _faceWithIdImage = image;
                   }
                   _isLoading = false;
                 });
@@ -461,10 +465,10 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
   }
 
   Future<void> _handleUpload() async {
-    if (_frontIdImage == null || _backIdImage == null || _faceWithIdImage == null) {
+    if (_frontIdImage == null || _backIdImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please capture all required photos: Front ID, Back ID, and Face with ID'),
+          content: Text('Please capture all required photos: Front ID and Back ID'),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 2),
         ),
@@ -592,7 +596,7 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
         photoUrl = user.photoURL;
       }
 
-      // Save user data to Firestore
+      // Save user data to Firestore (without selfie for now)
       await _userService.createOrUpdateUser(
         uid: uid,
         email: widget.email.trim().toLowerCase(),
@@ -603,29 +607,47 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
         countryCode: widget.countryCode,
         idImageFrontUrl: 'PENDING', // Mark as pending until images uploaded
         idImageBackUrl: 'PENDING',
-        faceWithIdUrl: _faceWithIdImage != null ? 'PENDING' : null,
+        faceWithIdUrl: null, // Will be updated after selfie capture
         userType: widget.userType,
         password: widget.googleData == null ? 'Pass123' : null,
         profileImageUrl: photoUrl,
       );
 
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account created successfully!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
+        // Navigate to selfie camera
+        final selfieImage = await Navigator.of(context).push<XFile>(
+          MaterialPageRoute(
+            builder: (context) => const SelfieCameraCapturePage(),
           ),
         );
 
-        // Navigate to main app
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (context) => const MainApp(),
-          ),
-          (route) => false,
-        );
+        if (selfieImage != null && mounted) {
+          // Update user with selfie URL (mark as pending)
+          await _userService.createOrUpdateUser(
+            uid: uid,
+            email: widget.email.trim().toLowerCase(),
+            fname: widget.firstName.trim(),
+            lname: widget.lastName.trim(),
+            birthday: widget.birthday,
+            phone: widget.phone.trim(),
+            countryCode: widget.countryCode,
+            idImageFrontUrl: 'PENDING',
+            idImageBackUrl: 'PENDING',
+            faceWithIdUrl: 'PENDING',
+            userType: widget.userType,
+            password: widget.googleData == null ? 'Pass123' : null,
+            profileImageUrl: photoUrl,
+          );
+
+          // Navigate to verification loading page (will auto-navigate to password creation after 3 seconds)
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => const VerificationLoadingPage(),
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -705,32 +727,30 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
 }
 
 class _StudentIDVerificationContentWidget extends StatelessWidget {
+  final TextEditingController idNumberController;
+  final PageController pageController;
   final XFile? frontIdImage;
   final XFile? backIdImage;
-  final XFile? faceWithIdImage;
   final bool isLoading;
   final bool isUploading;
   final VoidCallback onCaptureFront;
   final VoidCallback onCaptureBack;
-  final VoidCallback onCaptureFaceWithId;
   final VoidCallback onRetakeFront;
   final VoidCallback onRetakeBack;
-  final VoidCallback onRetakeFaceWithId;
   final VoidCallback onUpload;
   final String userType;
 
   const _StudentIDVerificationContentWidget({
+    required this.idNumberController,
+    required this.pageController,
     required this.frontIdImage,
     required this.backIdImage,
-    this.faceWithIdImage,
     required this.isLoading,
     required this.isUploading,
     required this.onCaptureFront,
     required this.onCaptureBack,
-    required this.onCaptureFaceWithId,
     required this.onRetakeFront,
     required this.onRetakeBack,
-    required this.onRetakeFaceWithId,
     required this.onUpload,
     required this.userType,
   });
@@ -770,33 +790,24 @@ class _StudentIDVerificationContentWidget extends StatelessWidget {
             _TitleWidget(userType: userType),
             SizedBox(height: isSmallScreen ? 4 : 6),
             _DescriptionWidget(),
-            SizedBox(height: isSmallScreen ? 16 : 18),
-            _IDCaptureSectionWidget(
-              title: 'Front ID',
-              image: frontIdImage,
+            SizedBox(height: isSmallScreen ? 20 : 24),
+            // ID Number Input Field
+            _IDNumberInputWidget(controller: idNumberController),
+            SizedBox(height: isSmallScreen ? 20 : 24),
+            // Horizontal Scrollable ID Capture Section
+            _HorizontalIDCaptureSection(
+              pageController: pageController,
+              frontIdImage: frontIdImage,
+              backIdImage: backIdImage,
               isLoading: isLoading,
-              onCapture: onCaptureFront,
-              onRetake: onRetakeFront,
-            ),
-            SizedBox(height: isSmallScreen ? 14 : 16),
-            _IDCaptureSectionWidget(
-              title: 'Back ID',
-              image: backIdImage,
-              isLoading: isLoading,
-              onCapture: onCaptureBack,
-              onRetake: onRetakeBack,
-            ),
-            SizedBox(height: isSmallScreen ? 14 : 16),
-            _IDCaptureSectionWidget(
-              title: 'Face with ID',
-              image: faceWithIdImage,
-              isLoading: isLoading,
-              onCapture: onCaptureFaceWithId,
-              onRetake: onRetakeFaceWithId,
+              onCaptureFront: onCaptureFront,
+              onCaptureBack: onCaptureBack,
+              onRetakeFront: onRetakeFront,
+              onRetakeBack: onRetakeBack,
             ),
             SizedBox(height: isSmallScreen ? 16 : 18),
             _UploadIDButtonWidget(
-              isEnabled: frontIdImage != null && backIdImage != null && faceWithIdImage != null,
+              isEnabled: frontIdImage != null && backIdImage != null,
               isLoading: isLoading || isUploading,
               onUpload: onUpload,
             ),
@@ -875,6 +886,372 @@ class _DescriptionWidget extends StatelessWidget {
         color: Colors.grey[700],
         height: 1.4,
       ),
+    );
+  }
+}
+
+// ID Number Input Widget
+class _IDNumberInputWidget extends StatelessWidget {
+  final TextEditingController controller;
+
+  const _IDNumberInputWidget({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'ID Number',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[600],
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: 'Enter your ID number',
+            hintStyle: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[400],
+            ),
+            filled: true,
+            fillColor: Colors.grey[50],
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.blue[400]!, width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+          ),
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Horizontal Scrollable ID Capture Section
+class _HorizontalIDCaptureSection extends StatefulWidget {
+  final PageController pageController;
+  final XFile? frontIdImage;
+  final XFile? backIdImage;
+  final bool isLoading;
+  final VoidCallback onCaptureFront;
+  final VoidCallback onCaptureBack;
+  final VoidCallback onRetakeFront;
+  final VoidCallback onRetakeBack;
+
+  const _HorizontalIDCaptureSection({
+    required this.pageController,
+    required this.frontIdImage,
+    required this.backIdImage,
+    required this.isLoading,
+    required this.onCaptureFront,
+    required this.onCaptureBack,
+    required this.onRetakeFront,
+    required this.onRetakeBack,
+  });
+
+  @override
+  State<_HorizontalIDCaptureSection> createState() => _HorizontalIDCaptureSectionState();
+}
+
+class _HorizontalIDCaptureSectionState extends State<_HorizontalIDCaptureSection> {
+  int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.pageController.addListener(_onPageChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.pageController.removeListener(_onPageChanged);
+    super.dispose();
+  }
+
+  void _onPageChanged() {
+    final currentPage = widget.pageController.page?.round() ?? 0;
+    if (currentPage != _currentPage) {
+      setState(() {
+        _currentPage = currentPage;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final cardHeight = screenHeight * 0.45; // Portrait rectangle height
+
+    return SizedBox(
+      height: cardHeight + 40, // Add space for label
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification is ScrollEndNotification) {
+            // Snap to nearest page when scrolling ends
+            final currentPage = widget.pageController.page ?? 0;
+            final targetPage = currentPage.round();
+            if ((currentPage - targetPage).abs() > 0.1) {
+              widget.pageController.animateToPage(
+                targetPage,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+              );
+            }
+          }
+          return false;
+        },
+        child: PageView.builder(
+          controller: widget.pageController,
+          physics: const BouncingScrollPhysics(),
+          itemCount: 2,
+          itemBuilder: (context, index) {
+            final isCentered = index == _currentPage;
+            if (index == 0) {
+              return _PortraitIDCard(
+                title: 'Front ID',
+                image: widget.frontIdImage,
+                isLoading: widget.isLoading,
+                onCapture: widget.onCaptureFront,
+                onRetake: widget.onRetakeFront,
+                isCentered: isCentered,
+              );
+            } else {
+              return _PortraitIDCard(
+                title: 'Back ID',
+                image: widget.backIdImage,
+                isLoading: widget.isLoading,
+                onCapture: widget.onCaptureBack,
+                onRetake: widget.onRetakeBack,
+                isCentered: isCentered,
+              );
+            }
+          },
+        ),
+      ),
+    );
+  }
+}
+
+// Portrait ID Card Widget
+class _PortraitIDCard extends StatelessWidget {
+  final String title;
+  final XFile? image;
+  final bool isLoading;
+  final VoidCallback onCapture;
+  final VoidCallback onRetake;
+  final bool isCentered;
+
+  const _PortraitIDCard({
+    required this.title,
+    required this.image,
+    required this.isLoading,
+    required this.onCapture,
+    required this.onRetake,
+    this.isCentered = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardHeight = screenHeight * 0.45;
+    final cardWidth = screenWidth * 0.7; // Portrait aspect ratio
+    
+    // Scale and opacity for non-centered cards
+    final scale = isCentered ? 1.0 : 0.85;
+    final opacity = isCentered ? 1.0 : 0.6;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      child: Column(
+        children: [
+          // Portrait Rectangle with overlay effect for non-centered
+          Transform.scale(
+            scale: scale,
+            child: Opacity(
+              opacity: opacity,
+              child: GestureDetector(
+                onTap: image == null && !isLoading && isCentered
+                    ? () {
+                        onCapture();
+                      }
+                    : null,
+                child: Container(
+                  width: cardWidth,
+                  height: cardHeight,
+                  decoration: BoxDecoration(
+                    color: title.toLowerCase().contains('face')
+                        ? Colors.orange[50]
+                        : Colors.blue[50],
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: image != null
+                          ? Colors.green[400]!
+                          : (title.toLowerCase().contains('face')
+                              ? Colors.orange[200]!
+                              : Colors.blue[200]!),
+                      width: 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: image == null
+                      ? _EmptyPortraitCaptureArea(
+                          title: title,
+                          onTap: isLoading || !isCentered
+                              ? null
+                              : () {
+                                  onCapture();
+                                },
+                        )
+                      : _PortraitImagePreview(
+                          imagePath: image!.path,
+                          onRetake: () {
+                            onRetake();
+                          },
+                        ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Label at bottom
+          Opacity(
+            opacity: opacity,
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Empty Portrait Capture Area
+class _EmptyPortraitCaptureArea extends StatelessWidget {
+  final String? title;
+  final VoidCallback? onTap;
+
+  const _EmptyPortraitCaptureArea({this.title, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final isFaceWithId = title?.toLowerCase().contains('face') ?? false;
+    final iconColor = isFaceWithId ? Colors.orange[700] : Colors.blue[700];
+    final backgroundColor = isFaceWithId ? Colors.orange[100] : Colors.blue[100];
+    final icon = isFaceWithId ? Icons.face : Icons.camera_alt;
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 40, color: iconColor),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Tap to capture',
+            style: TextStyle(
+              fontSize: 14,
+              color: iconColor,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Portrait Image Preview
+class _PortraitImagePreview extends StatelessWidget {
+  final String imagePath;
+  final VoidCallback onRetake;
+
+  const _PortraitImagePreview({
+    required this.imagePath,
+    required this.onRetake,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.file(
+            File(imagePath),
+            width: double.infinity,
+            height: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                color: Colors.grey[300],
+                child: const Center(
+                  child: Icon(
+                    Icons.error_outline,
+                    size: 50,
+                    color: Colors.grey,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        Positioned(
+          top: 12,
+          right: 12,
+          child: GestureDetector(
+            onTap: () {
+              onRetake();
+            },
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.refresh, color: Colors.white, size: 22),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

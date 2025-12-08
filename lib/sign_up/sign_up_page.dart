@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:rentease_app/sign_in/sign_in_page.dart';
 import 'package:rentease_app/sign_up/sign_up_form_page.dart';
 import 'package:rentease_app/services/auth_service.dart';
+import 'package:rentease_app/guest/guest_home_page.dart';
 
 /// Sign Up Page with user type selection
 class SignUpPage extends StatefulWidget {
@@ -206,7 +207,12 @@ class _SignUpContentWidget extends StatelessWidget {
                         backgroundColor: Colors.orange[50]!,
                         arrowColor: Colors.orange,
                         onTap: () {
-                          // Handle guest sign up
+                          // Navigate to guest home page
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (context) => const GuestHomePage(),
+                            ),
+                          );
                         },
                       ),
                     ],
@@ -349,15 +355,18 @@ class _UserTypeCardWidget extends StatelessWidget {
     final isSmallScreen = screenHeight < 700;
     final isVerySmallScreen = screenHeight < 600;
     
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.all(isVerySmallScreen ? 12 : 14),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: EdgeInsets.all(isVerySmallScreen ? 12 : 14),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
           children: [
             // Avatar Image
             Container(
@@ -417,6 +426,7 @@ class _UserTypeCardWidget extends StatelessWidget {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

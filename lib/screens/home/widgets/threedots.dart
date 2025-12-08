@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rentease_app/services/auth_service.dart';
 import 'package:rentease_app/sign_in/sign_in_page.dart';
+import 'package:rentease_app/screens/settings/settings_page.dart';
 
 /// Three dots menu widget with dropdown options
 class ThreeDotsMenu extends StatelessWidget {
@@ -8,8 +9,10 @@ class ThreeDotsMenu extends StatelessWidget {
 
   // Menu action handlers
   void _handleSettings(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Settings feature coming soon')),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const SettingsPage(),
+      ),
     );
   }
 

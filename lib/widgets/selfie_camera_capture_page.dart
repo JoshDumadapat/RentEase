@@ -4,27 +4,15 @@ import 'package:camera/camera.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 
-/// Camera page for capturing ID photos with rectangular guide overlay
-class IDCameraCapturePage extends StatefulWidget {
-  final String title; // e.g., "Front ID", "Back ID", "Face with ID"
-
-  const IDCameraCapturePage({
-    super.key,
-    required this.title,
-  });
-
-  // ID field dimensions (matching the portrait rectangle in ID validation)
-  // Portrait orientation: taller than wide
-  static const double idFieldWidthRatio = 0.7; // 70% of screen width
-  static const double idFieldHeightRatio = 0.45; // 45% of screen height
-  static const double horizontalPadding = 24.0; // Default padding
-  static const double horizontalPaddingNarrow = 20.0; // Narrow screen padding
+/// Selfie camera page for capturing face photos with oval guide overlay
+class SelfieCameraCapturePage extends StatefulWidget {
+  const SelfieCameraCapturePage({super.key});
 
   @override
-  State<IDCameraCapturePage> createState() => _IDCameraCapturePageState();
+  State<SelfieCameraCapturePage> createState() => _SelfieCameraCapturePageState();
 }
 
-class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
+class _SelfieCameraCapturePageState extends State<SelfieCameraCapturePage> {
   CameraController? _controller;
   List<CameraDescription>? _cameras;
   bool _isInitialized = false;
@@ -54,10 +42,10 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
 
       if (!mounted) return;
 
-      // Use back camera by default, fallback to first available
+      // Use front camera for selfie
       CameraDescription? selectedCamera;
       for (var camera in _cameras!) {
-        if (camera.lensDirection == CameraLensDirection.back) {
+        if (camera.lensDirection == CameraLensDirection.front) {
           selectedCamera = camera;
           break;
         }
@@ -78,7 +66,6 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
         });
       }
     } catch (e) {
-      // Error initializing camera
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -98,14 +85,12 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
     super.dispose();
   }
 
-  Future<XFile?> _cropImageToRectangle(XFile originalImage) async {
+  Future<XFile?> _cropImageToOval(XFile originalImage) async {
     try {
-      // Check if widget is still mounted and controller is available
       if (!mounted || _controller == null || !_controller!.value.isInitialized) {
         return originalImage;
       }
 
-      // Store values before async operations to avoid context issues
       final screenWidth = MediaQuery.of(context).size.width;
       final screenHeight = MediaQuery.of(context).size.height;
       
@@ -116,7 +101,6 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
           previewSize = _controller!.value.previewSize;
         }
       } catch (e) {
-        // Error:'Error getting preview size: $e');
         return originalImage;
       }
       
@@ -129,42 +113,41 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
       final originalImg = img.decodeImage(imageBytes);
       
       if (originalImg == null) {
-        return originalImage; // Return original if decode fails
+        return originalImage;
       }
       
-      // Calculate portrait rectangle dimensions on screen (matching ID validation cards)
-      final guideWidth = screenWidth * IDCameraCapturePage.idFieldWidthRatio;
-      final guideHeight = screenHeight * IDCameraCapturePage.idFieldHeightRatio;
+      // Calculate face shape dimensions on screen (oval, taller than wide)
+      final faceWidth = screenWidth * 0.65; // 65% of screen width
+      final faceHeight = faceWidth * 1.2; // 20% taller than wide (face shape)
+      final faceCenterX = screenWidth / 2;
+      final faceCenterY = screenHeight / 2;
       
-      // Calculate rectangle position (centered both horizontally and vertically)
-      final rectLeft = (screenWidth - guideWidth) / 2;
-      final rectTop = (screenHeight - guideHeight) / 2;
+      // Calculate rectangle position (centered)
+      final rectLeft = faceCenterX - (faceWidth / 2);
+      final rectTop = faceCenterY - (faceHeight / 2);
       
       // Camera preview aspect ratio
       final previewAspectRatio = previewSize.height / previewSize.width;
       
-      // Calculate how the preview is displayed on screen (may be letterboxed/pillarboxed)
+      // Calculate how the preview is displayed on screen
       double displayWidth = screenWidth;
       double displayHeight = screenWidth * previewAspectRatio;
       double offsetX = 0;
       double offsetY = 0;
       
       if (displayHeight > screenHeight) {
-        // Preview is taller than screen - letterboxed horizontally
         displayHeight = screenHeight;
         displayWidth = screenHeight / previewAspectRatio;
         offsetX = (screenWidth - displayWidth) / 2;
       } else {
-        // Preview is wider than screen - pillarboxed vertically
         offsetY = (screenHeight - displayHeight) / 2;
       }
       
       // Calculate the crop area in the original image coordinates
-      // Map screen coordinates to image coordinates
       final relativeLeft = (rectLeft - offsetX) / displayWidth;
       final relativeTop = (rectTop - offsetY) / displayHeight;
-      final relativeWidth = guideWidth / displayWidth;
-      final relativeHeight = guideHeight / displayHeight;
+      final relativeWidth = faceWidth / displayWidth;
+      final relativeHeight = faceHeight / displayHeight;
       
       // Ensure values are within bounds
       final imageWidth = originalImg.width;
@@ -174,7 +157,7 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
       final cropWidth = ((relativeWidth.clamp(0.0, 1.0 - relativeLeft.clamp(0.0, 1.0)) * imageWidth).round()).clamp(1, imageWidth - cropX);
       final cropHeight = ((relativeHeight.clamp(0.0, 1.0 - relativeTop.clamp(0.0, 1.0)) * imageHeight).round()).clamp(1, imageHeight - cropY);
       
-      // Crop the image
+      // Crop the image to face shape (oval proportions)
       final croppedImg = img.copyCrop(
         originalImg,
         x: cropX,
@@ -186,7 +169,7 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
       // Save cropped image
       final croppedBytes = img.encodeJpg(croppedImg, quality: 85);
       final tempDir = await getTemporaryDirectory();
-      final croppedPath = '${tempDir.path}/cropped_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final croppedPath = '${tempDir.path}/selfie_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final croppedFile = File(croppedPath);
       await croppedFile.writeAsBytes(croppedBytes);
       
@@ -197,13 +180,12 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
           await originalFile.delete();
         }
       } catch (e) {
-        // Error:'Error deleting original image: $e');
+        // Error deleting original
       }
       
       return XFile(croppedPath);
     } catch (e) {
-      // Error cropping image
-      return originalImage; // Return original if cropping fails
+      return originalImage;
     }
   }
 
@@ -223,23 +205,21 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
       final XFile originalImage = await _controller!.takePicture();
       
       if (!mounted) {
-        // Widget was disposed, clean up
         try {
           final file = File(originalImage.path);
           if (await file.exists()) {
             await file.delete();
           }
         } catch (e) {
-          // Error:'Error deleting image after dispose: $e');
+          // Error deleting
         }
         return;
       }
       
-      // Crop image to rectangle area
-      final XFile? croppedImage = await _cropImageToRectangle(originalImage);
+      // Crop image to oval area
+      final XFile? croppedImage = await _cropImageToOval(originalImage);
       
       if (!mounted) {
-        // Widget was disposed during cropping
         if (croppedImage != null) {
           try {
             final file = File(croppedImage.path);
@@ -247,7 +227,7 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
               await file.delete();
             }
           } catch (e) {
-            // Error:'Error deleting cropped image after dispose: $e');
+            // Error deleting
           }
         }
         return;
@@ -273,7 +253,7 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
             await file.delete();
           }
         } catch (e) {
-          // Error:'Error deleting image after dispose: $e');
+          // Error deleting
         }
         return;
       }
@@ -288,7 +268,7 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
             await file.delete();
           }
         } catch (e) {
-          // Error:'Error deleting rejected image: $e');
+          // Error deleting rejected image
         }
         if (mounted) {
           setState(() {
@@ -297,7 +277,6 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
         }
       }
     } catch (e) {
-      // Error capturing photo
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -349,8 +328,8 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Image preview with rectangle frame matching ID field size
-                _ImagePreviewWithFrame(image: image),
+                // Image preview with oval frame matching face shape
+                _FaceImagePreviewWithFrame(image: image),
                 const SizedBox(height: 16),
                 // Action buttons (smaller size)
                 Row(
@@ -405,10 +384,11 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
-    // Portrait rectangle dimensions matching ID validation cards
-    final guideWidth = screenWidth * IDCameraCapturePage.idFieldWidthRatio;
-    final guideHeight = screenHeight * IDCameraCapturePage.idFieldHeightRatio;
+    // Face shape: oval (wider than tall, but more face-like proportions)
+    final faceWidth = screenWidth * 0.65; // 65% of screen width
+    final faceHeight = faceWidth * 1.2; // 20% taller than wide (face shape)
 
+    // Camera preview
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -425,46 +405,24 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
               ),
             ),
 
-          // Top section with header, subheader and close button
+          // Top section with title and close button
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Header
-                            Text(
-                              widget.title,
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            // Subheader
-                            Text(
-                              'Please place your ${widget.title.toLowerCase()} here',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[700],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.black, size: 28),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
+                  const Text(
+                    'Selfie',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.black, size: 28),
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
@@ -473,22 +431,22 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
 
           // Instructions text
           Positioned(
-            top: MediaQuery.of(context).padding.top + 90,
+            top: MediaQuery.of(context).padding.top + 60,
             left: 16,
             right: 16,
-            child: Text(
-              'Point your camera on your ${widget.title} and capture it.',
-              style: const TextStyle(
+            child: const Text(
+              'Position your face within the oval guide',
+              style: TextStyle(
                 fontSize: 14,
                 color: Colors.black,
-                fontWeight: FontWeight.w500,
               ),
+              textAlign: TextAlign.center,
             ),
           ),
 
-          // Prompt to fit ID in the box
+          // Prompt to fit face in the guide
           Positioned(
-            top: (screenHeight / 2) - (guideHeight / 2) - 50,
+            top: (screenHeight / 2) - (faceHeight / 2) - 50,
             left: 0,
             right: 0,
             child: Center(
@@ -499,7 +457,7 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Text(
-                  'Fit your ID within the outlined box',
+                  'Fit your face within the face guide',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -511,26 +469,25 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
             ),
           ),
 
-          // Full white overlay outside capture area (100% opacity)
+          // Full white overlay outside face area (100% opacity)
           CustomPaint(
             size: Size(screenWidth, screenHeight),
-            painter: _OverlayPainter(
-              captureRect: Rect.fromCenter(
+            painter: _SelfieOverlayPainter(
+              faceRect: Rect.fromCenter(
                 center: Offset(screenWidth / 2, screenHeight / 2),
-                width: guideWidth,
-                height: guideHeight,
+                width: faceWidth,
+                height: faceHeight,
               ),
             ),
           ),
 
-          // Portrait rectangular guide overlay (centered) with dashed border and curved edges
+          // Face-shaped guide overlay (oval, taller than wide) with dashed border
           Center(
             child: SizedBox(
-              width: guideWidth,
-              height: guideHeight,
+              width: faceWidth,
+              height: faceHeight,
               child: CustomPaint(
-                painter: _DashedBorderPainter(
-                  borderRadius: 16,
+                painter: _DashedOvalBorderPainter(
                   color: Colors.orange,
                   strokeWidth: 3,
                 ),
@@ -595,11 +552,11 @@ class _IDCameraCapturePageState extends State<IDCameraCapturePage> {
   }
 }
 
-/// Custom painter for white overlay outside capture area
-class _OverlayPainter extends CustomPainter {
-  final Rect captureRect;
+/// Custom painter for white overlay outside face capture area
+class _SelfieOverlayPainter extends CustomPainter {
+  final Rect faceRect;
 
-  _OverlayPainter({required this.captureRect});
+  _SelfieOverlayPainter({required this.faceRect});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -607,23 +564,18 @@ class _OverlayPainter extends CustomPainter {
       ..color = Colors.white // 100% opacity white
       ..style = PaintingStyle.fill;
 
-    // Create path that covers entire screen except capture area
+    // Create path that covers entire screen except face area
     final path = Path()
       ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
 
-    // Subtract the capture rectangle with rounded corners (make it transparent)
-    final capturePath = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          captureRect,
-          const Radius.circular(16),
-        ),
-      );
+    // Subtract the face oval (make it transparent)
+    final facePath = Path()
+      ..addOval(faceRect);
 
     final combinedPath = Path.combine(
       PathOperation.difference,
       path,
-      capturePath,
+      facePath,
     );
 
     canvas.drawPath(combinedPath, paint);
@@ -633,14 +585,12 @@ class _OverlayPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// Custom painter for dashed border with curved edges
-class _DashedBorderPainter extends CustomPainter {
-  final double borderRadius;
+/// Custom painter for dashed oval border
+class _DashedOvalBorderPainter extends CustomPainter {
   final Color color;
   final double strokeWidth;
 
-  _DashedBorderPainter({
-    required this.borderRadius,
+  _DashedOvalBorderPainter({
     required this.color,
     required this.strokeWidth,
   });
@@ -652,13 +602,8 @@ class _DashedBorderPainter extends CustomPainter {
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke;
 
-    final path = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(0, 0, size.width, size.height),
-          Radius.circular(borderRadius),
-        ),
-      );
+    final oval = Rect.fromLTWH(0, 0, size.width, size.height);
+    final path = Path()..addOval(oval);
 
     // Draw dashed border
     final dashWidth = 8.0;
@@ -682,38 +627,36 @@ class _DashedBorderPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// Widget for displaying image preview with rectangle frame in confirmation dialog
-class _ImagePreviewWithFrame extends StatelessWidget {
+/// Widget for displaying face image preview with oval frame in confirmation dialog
+class _FaceImagePreviewWithFrame extends StatelessWidget {
   final XFile image;
 
-  const _ImagePreviewWithFrame({required this.image});
+  const _FaceImagePreviewWithFrame({required this.image});
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final frameWidth = screenWidth * IDCameraCapturePage.idFieldWidthRatio * 0.8; // Slightly smaller for dialog
-    final frameHeight = screenHeight * IDCameraCapturePage.idFieldHeightRatio * 0.8;
+    final faceWidth = screenWidth * 0.65 * 0.8; // Slightly smaller for dialog
+    final faceHeight = faceWidth * 1.2; // Face shape proportions
 
     return Container(
-      width: frameWidth,
-      height: frameHeight,
+      width: faceWidth,
+      height: faceHeight,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(faceHeight / 2), // Oval shape
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+      child: ClipOval(
         child: Stack(
           children: [
             Image.file(
               File(image.path),
-              width: frameWidth,
-              height: frameHeight,
+              width: faceWidth,
+              height: faceHeight,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) {
                 return Container(
-                  width: frameWidth,
-                  height: frameHeight,
+                  width: faceWidth,
+                  height: faceHeight,
                   color: Colors.grey[300],
                   child: const Icon(
                     Icons.error_outline,
@@ -725,9 +668,8 @@ class _ImagePreviewWithFrame extends StatelessWidget {
             ),
             // Dashed border overlay
             CustomPaint(
-              size: Size(frameWidth, frameHeight),
-              painter: _DashedBorderPainter(
-                borderRadius: 16,
+              size: Size(faceWidth, faceHeight),
+              painter: _DashedOvalBorderPainter(
                 color: Colors.orange,
                 strokeWidth: 3,
               ),

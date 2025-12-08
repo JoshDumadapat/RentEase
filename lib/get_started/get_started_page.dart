@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:rentease_app/sign_in/sign_in_page.dart';
+import 'package:rentease_app/guest/guest_home_page.dart';
 
 /// Get Started Page with three onboarding screens
 class GetStartedPage extends StatefulWidget {
@@ -314,6 +315,10 @@ class _ContentWidget extends StatelessWidget {
                 onPressed: onNext,
                 isLastPage: currentPage == totalPages - 1,
               ),
+              if (currentPage == totalPages - 1) ...[
+                SizedBox(height: spacing * 1.2),
+                _GuestButtonWidget(),
+              ],
               SizedBox(height: spacing * 1.2), // Reduced space between Next and Skip
               _SkipLinkWidget(onSkip: onSkip),
               SizedBox(height: spacing * 3), // More spacing below Skip button
@@ -453,6 +458,50 @@ class _NextButtonWidget extends StatelessWidget {
             const SizedBox(width: 8),
             const Icon(Icons.arrow_forward, size: 18),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Widget for the Guest button (shown on last page)
+class _GuestButtonWidget extends StatelessWidget {
+  const _GuestButtonWidget();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 40,
+      child: OutlinedButton(
+        onPressed: () async {
+          // Mark onboarding as complete
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('is_first_time', false);
+          
+          // Navigate to guest home page
+          if (context.mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const GuestHomePage(),
+              ),
+            );
+          }
+        },
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: Colors.grey[300]!),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: const Text(
+          'Continue as Guest',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
         ),
       ),
     );
