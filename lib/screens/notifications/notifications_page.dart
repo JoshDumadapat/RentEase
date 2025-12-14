@@ -3,7 +3,11 @@ import 'package:rentease_app/screens/home/widgets/threedots.dart';
 import 'package:rentease_app/services/notification_service.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/models/notification_model.dart';
+import 'package:rentease_app/models/looking_for_post_model.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
+import 'package:rentease_app/screens/looking_for_post_detail/looking_for_post_detail_page.dart';
+import 'package:rentease_app/backend/BListingService.dart';
+import 'package:rentease_app/backend/BLookingForPostService.dart';
 import 'package:rentease_app/screens/notifications/widgets/empty_state_widget.dart';
 import 'package:rentease_app/screens/notifications/widgets/notification_skeleton.dart';
 import 'package:rentease_app/screens/notifications/widgets/notification_tile.dart';
@@ -62,30 +66,57 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
     }
   }
 
-  /// Navigate to the relevant listing based on notification type
-  void _navigateToNotificationTarget(NotificationModel notification) {
-    // Mark as read when tapped
-    _controller.markAsRead(notification.id);
+  /// Navigate to the relevant listing or looking-for post based on notification type
+  Future<void> _navigateToNotificationTarget(NotificationModel notification) async {
+    // Mark as read when tapped (but don't remove the notification)
+    if (!notification.read) {
+      await _controller.markAsRead(notification.id);
+    }
 
     // Skip navigation for friend requests
     if (notification.type == NotificationType.friendRequest) {
       return;
     }
 
-    // Navigate to listing details if postId is available
+    // Navigate based on postType
     if (notification.postId != null) {
-      final listings = ListingModel.getMockListings();
-      final listing = listings.firstWhere(
-        (l) => l.id == notification.postId,
-        orElse: () => listings.first, // Fallback to first listing if not found
-      );
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ListingDetailsPage(listing: listing),
-        ),
-      );
+      if (notification.postType == 'lookingFor') {
+        // Navigate to looking-for post detail page
+        try {
+          final lookingForPostService = BLookingForPostService();
+          final postData = await lookingForPostService.getLookingForPost(notification.postId!);
+          
+          if (postData != null && mounted) {
+            final post = LookingForPostModel.fromMap(postData);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => LookingForPostDetailPage(post: post),
+              ),
+            );
+          }
+        } catch (e) {
+          debugPrint('❌ [NotificationsPage] Error loading looking-for post: $e');
+        }
+      } else {
+        // Default to listing (or if postType is 'listing' or null)
+        try {
+          final listingService = BListingService();
+          final listingData = await listingService.getListing(notification.postId!);
+          
+          if (listingData != null && mounted) {
+            final listing = ListingModel.fromMap(listingData);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ListingDetailsPage(listing: listing),
+              ),
+            );
+          }
+        } catch (e) {
+          debugPrint('❌ [NotificationsPage] Error loading listing: $e');
+        }
+      }
     }
   }
 

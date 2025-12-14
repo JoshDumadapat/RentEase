@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:rentease_app/models/user_model.dart';
+import 'package:rentease_app/backend/BFollowService.dart';
+import 'package:rentease_app/utils/snackbar_utils.dart';
+import 'package:rentease_app/screens/chat/user_chat_page.dart';
 
 // Theme colors matching the listing cards
 const Color _themeColorLight = Color(0xFFE5F9FF); // Light background (like blue[50])
@@ -25,28 +28,114 @@ const Color _themeColorDark = Color(0xFF00B8E6); // Darker shade for text (like 
 
 /// - Edit profile button
 
-class UserInfoSection extends StatelessWidget {
-
+class UserInfoSection extends StatefulWidget {
   final UserModel user;
-
   final VoidCallback onEditProfile;
   final VoidCallback? onShareProfile;
+  final bool isVisitorView; // If true, this is viewing another user's profile
 
   const UserInfoSection({
-
     super.key,
-
     required this.user,
-
     required this.onEditProfile,
     this.onShareProfile,
-
+    this.isVisitorView = false,
   });
 
   @override
+  State<UserInfoSection> createState() => _UserInfoSectionState();
+}
 
+class _UserInfoSectionState extends State<UserInfoSection> {
+  final BFollowService _followService = BFollowService();
+  bool _isFollowing = false;
+  bool _isLoadingFollow = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isVisitorView) {
+      _checkFollowStatus();
+    }
+  }
+
+  Future<void> _checkFollowStatus() async {
+    try {
+      final isFollowing = await _followService.isFollowing(widget.user.id);
+      if (mounted) {
+        setState(() {
+          _isFollowing = isFollowing;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking follow status: $e');
+    }
+  }
+
+  Future<void> _toggleFollow() async {
+    if (_isLoadingFollow) return;
+    
+    setState(() {
+      _isLoadingFollow = true;
+    });
+
+    try {
+      if (_isFollowing) {
+        await _followService.unfollowUser(widget.user.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBarUtils.buildThemedSnackBar(
+              context,
+              'Unfollowed ${widget.user.displayName}',
+            ),
+          );
+        }
+      } else {
+        await _followService.followUser(widget.user.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBarUtils.buildThemedSnackBar(
+              context,
+              'Following ${widget.user.displayName}',
+            ),
+          );
+        }
+      }
+      
+      if (mounted) {
+        setState(() {
+          _isFollowing = !_isFollowing;
+          _isLoadingFollow = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingFollow = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Error: ${e.toString()}',
+          ),
+        );
+      }
+    }
+  }
+
+  void _handleChat() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => UserChatPage(
+          otherUser: widget.user,
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-
     final theme = Theme.of(context);
 
     final isDark = theme.brightness == Brightness.dark;
@@ -121,13 +210,13 @@ class UserInfoSection extends StatelessWidget {
 
                 ),
 
-                child: user.profileImageUrl != null
+                child: widget.user.profileImageUrl != null
 
                     ? ClipOval(
 
                         child: Image.network(
 
-                          user.profileImageUrl!,
+                          widget.user.profileImageUrl!,
 
                           fit: BoxFit.cover,
 
@@ -173,11 +262,11 @@ class UserInfoSection extends StatelessWidget {
 
                               Text(
 
-                                user.displayName,
+                                widget.user.displayName,
 
                                 style: TextStyle(
 
-                                  fontSize: 18,
+                                  fontSize: _getFontSize(widget.user.displayName),
 
                                   fontWeight: FontWeight.bold,
 
@@ -207,13 +296,13 @@ class UserInfoSection extends StatelessWidget {
 
                     // Username below name
 
-                    if (user.username != null && user.username!.isNotEmpty) ...[
+                    if (widget.user.username != null && widget.user.username!.isNotEmpty) ...[
 
                       const SizedBox(height: 8),
 
                       Text(
 
-                        '@${user.username}',
+                        '@${widget.user.username}',
 
                         style: TextStyle(
 
@@ -235,9 +324,9 @@ class UserInfoSection extends StatelessWidget {
 
                     // Verified text with icon (below username or below name if no username)
 
-                    if (user.isVerified) ...[
+                    if (widget.user.isVerified) ...[
 
-                      SizedBox(height: user.username != null && user.username!.isNotEmpty ? 6 : 8),
+                      SizedBox(height: widget.user.username != null && widget.user.username!.isNotEmpty ? 6 : 8),
 
                       Row(
 
@@ -303,141 +392,156 @@ class UserInfoSection extends StatelessWidget {
 
           
 
-          // Bio
-
-          if (user.bio != null && user.bio!.isNotEmpty) ...[
-
+          // Bio with Follow button for visitors
+          if (widget.user.bio != null && widget.user.bio!.isNotEmpty) ...[
             const SizedBox(height: 20),
-
-            Text(
-
-              user.bio!,
-
-              style: TextStyle(
-
-                fontSize: 15,
-
-                color: isDark ? Colors.grey[300] : const Color(0xFF2D2D2D),
-
-                height: 1.5,
-                fontWeight: FontWeight.w600,
-                fontStyle: FontStyle.italic,
-
-              ),
-
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.user.bio!,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: isDark ? Colors.grey[300] : const Color(0xFF2D2D2D),
+                      height: 1.5,
+                      fontWeight: FontWeight.w600,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+                // Follow button beside bio for visitors
+                if (widget.isVisitorView) ...[
+                  const SizedBox(width: 12),
+                  _buildFollowButton(isDark),
+                ],
+              ],
             ),
-
+          ] else if (widget.isVisitorView) ...[
+            // If no bio, show follow button in its own row
+            const SizedBox(height: 20),
+            _buildFollowButton(isDark),
           ],
 
-          // Edit Profile and Share Profile Buttons
-
+          // Action Buttons
           const SizedBox(height: 16),
-
-          Row(
-
-            children: [
-
-              Expanded(
-
-                child: TextButton(
-
-                  onPressed: onEditProfile,
-
-                  style: TextButton.styleFrom(
-
-                    padding: const EdgeInsets.symmetric(
-
-                      horizontal: 16,
-
-                      vertical: 6,
-
+          
+          if (widget.isVisitorView) ...[
+            // Visitor view: Show Chat and Follow buttons
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _handleChat,
+                    icon: const Icon(Icons.message_outlined, size: 18),
+                    label: const Text('Chat'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      side: BorderSide(
+                        color: isDark ? Colors.grey[600]! : Colors.grey[300]!,
+                      ),
                     ),
-
-                    minimumSize: const Size(0, 21),
-
-                    shape: RoundedRectangleBorder(
-
-                      borderRadius: BorderRadius.circular(10),
-
-                    ),
-
-                    backgroundColor: isDark ? Colors.grey[700] : _themeColorDark,
-
                   ),
-
-                  child: Text(
-
-                    'Edit Profile',
-
-                    style: TextStyle(
-
-                      color: Colors.white,
-
-                      fontWeight: FontWeight.w500,
-
-                      fontSize: 14,
-
-                    ),
-
-                  ),
-
                 ),
-
-              ),
-
-              const SizedBox(width: 12),
-
-              Expanded(
-
-                child: TextButton(
-
-                  onPressed: onShareProfile ?? () {},
-
-                  style: TextButton.styleFrom(
-
-                    padding: const EdgeInsets.symmetric(
-
-                      horizontal: 16,
-
-                      vertical: 6,
-
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _isLoadingFollow ? null : _toggleFollow,
+                    icon: _isLoadingFollow
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Icon(
+                            _isFollowing ? Icons.person_remove : Icons.person_add,
+                            size: 18,
+                          ),
+                    label: Text(_isFollowing ? 'Unfollow' : 'Follow'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      backgroundColor: _isFollowing
+                          ? (isDark ? Colors.grey[700] : Colors.grey[300])
+                          : _themeColorDark,
+                      foregroundColor: _isFollowing
+                          ? (isDark ? Colors.white : Colors.black87)
+                          : Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
-
-                    minimumSize: const Size(0, 21),
-
-                    shape: RoundedRectangleBorder(
-
-                      borderRadius: BorderRadius.circular(10),
-
-                    ),
-
-                    backgroundColor: isDark ? Colors.grey[700] : _themeColorDark,
-
                   ),
-
-                  child: Text(
-
-                    'Share Profile',
-
-                    style: TextStyle(
-
-                      color: Colors.white,
-
-                      fontWeight: FontWeight.w500,
-
-                      fontSize: 14,
-
-                    ),
-
-                  ),
-
                 ),
-
-              ),
-
-            ],
-
-          ),
+              ],
+            ),
+          ] else ...[
+            // Own profile: Show Edit Profile and Share Profile buttons
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: widget.onEditProfile,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      minimumSize: const Size(0, 21),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      backgroundColor: isDark ? Colors.grey[700] : _themeColorDark,
+                    ),
+                    child: Text(
+                      'Edit Profile',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextButton(
+                    onPressed: widget.onShareProfile ?? () {},
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      minimumSize: const Size(0, 21),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      backgroundColor: isDark ? Colors.grey[700] : _themeColorDark,
+                    ),
+                    child: Text(
+                      'Share Profile',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
 
           
 
@@ -473,7 +577,7 @@ class UserInfoSection extends StatelessWidget {
               ),
             ),
 
-            label: user.email,
+            label: widget.user.email,
 
             isDark: isDark,
 
@@ -483,7 +587,7 @@ class UserInfoSection extends StatelessWidget {
 
           // Phone (if available)
 
-          if (user.phone != null) ...[
+          if (widget.user.phone != null) ...[
 
             const SizedBox(height: 12),
 
@@ -499,7 +603,7 @@ class UserInfoSection extends StatelessWidget {
                 ),
               ),
 
-              label: user.phone!,
+              label: widget.user.phone!,
 
               isDark: isDark,
 
@@ -511,7 +615,7 @@ class UserInfoSection extends StatelessWidget {
 
           // Joined Date (if available)
 
-          if (user.joinedDate != null) ...[
+          if (widget.user.joinedDate != null) ...[
 
             const SizedBox(height: 12),
 
@@ -519,7 +623,7 @@ class UserInfoSection extends StatelessWidget {
 
               icon: Icons.calendar_today_outlined,
 
-              label: 'Joined ${_formatDate(user.joinedDate!)}',
+              label: 'Joined ${_formatDate(widget.user.joinedDate!)}',
 
               isDark: isDark,
 
@@ -619,6 +723,65 @@ class UserInfoSection extends StatelessWidget {
 
     }
 
+  }
+
+  Widget _buildFollowButton(bool isDark) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _isFollowing
+            ? (isDark ? Colors.grey[700] : Colors.grey[200])
+            : _themeColorDark,
+        borderRadius: BorderRadius.circular(20),
+        border: _isFollowing
+            ? Border.all(
+                color: isDark ? Colors.grey[600]! : Colors.grey[400]!,
+                width: 1,
+              )
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _isLoadingFollow ? null : _toggleFollow,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: _isLoadingFollow
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isFollowing ? Icons.person_remove : Icons.person_add,
+                        size: 18,
+                        color: _isFollowing
+                            ? (isDark ? Colors.white : Colors.black87)
+                            : Colors.white,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _isFollowing ? 'Unfollow' : 'Follow',
+                        style: TextStyle(
+                          color: _isFollowing
+                              ? (isDark ? Colors.white : Colors.black87)
+                              : Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
   }
 
 }

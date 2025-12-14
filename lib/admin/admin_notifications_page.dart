@@ -53,8 +53,19 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
     try {
       final notifications = await _adminService.getAllNotifications();
       if (mounted) {
+        // Remove duplicates based on notification ID
+        final seenIds = <String>{};
+        final uniqueNotifications = <Map<String, dynamic>>[];
+        for (final notification in notifications) {
+          final notificationId = notification['id'] as String?;
+          if (notificationId != null && notificationId.isNotEmpty && !seenIds.contains(notificationId)) {
+            seenIds.add(notificationId);
+            uniqueNotifications.add(notification);
+          }
+        }
+        
         setState(() {
-          _notifications = notifications;
+          _notifications = uniqueNotifications;
           _isLoading = false;
         });
       }
@@ -216,14 +227,20 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
               : RefreshIndicator(
                   onRefresh: _loadNotifications,
                   child: ListView.builder(
+                    key: const PageStorageKey<String>('admin_notifications_list'),
                     padding: const EdgeInsets.all(16),
                     itemCount: _notifications.length,
                     itemBuilder: (context, index) {
                       final notification = _notifications[index];
-                      final notificationId = notification['id'] as String;
+                      final notificationId = notification['id'] as String? ?? '';
+                      // Ensure we have a valid ID
+                      if (notificationId.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
                       final isRead = notification['read'] as bool? ?? false;
 
                       return Card(
+                        key: ValueKey('notification_$notificationId'),
                         margin: const EdgeInsets.only(bottom: 12),
                         color: cardColor,
                         child: ListTile(

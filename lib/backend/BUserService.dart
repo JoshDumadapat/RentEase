@@ -471,5 +471,24 @@ class BUserService {
       rethrow;
     }
   }
+
+  /// Get all users (for chat list)
+  /// Returns list of user data maps, excluding deactivated users
+  Future<List<Map<String, dynamic>>> getAllUsers() async {
+    try {
+      final snapshot = await _firestore
+          .collection(_collectionName)
+          .where('isDeactivated', isEqualTo: false)
+          .get();
+      
+      return snapshot.docs.map((doc) => {
+        'id': doc.id,
+        ...doc.data(),
+      }).toList();
+    } catch (e) {
+      debugPrint('❌ [BUserService] Error getting all users: $e');
+      return [];
+    }
+  }
 }
 

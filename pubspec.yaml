@@ -85,6 +85,7 @@ flutter:
     - assets/icons/navbar/
     - assets/icons/email.svg
     - assets/icons/phone.svg
+    - assets/icons/chat_icon.svg
     - assets/models/
 
 

@@ -88,9 +88,20 @@ class _AdminLookingForPageState extends State<AdminLookingForPage> {
       }
       
       if (mounted) {
+        // Remove duplicates based on post ID
+        final seenIds = <String>{};
+        final uniquePosts = <Map<String, dynamic>>[];
+        for (final post in posts) {
+          final postId = post['id'] as String?;
+          if (postId != null && postId.isNotEmpty && !seenIds.contains(postId)) {
+            seenIds.add(postId);
+            uniquePosts.add(post);
+          }
+        }
+        
         setState(() {
-          _allPosts = posts;
-          _filteredPosts = posts;
+          _allPosts = uniquePosts;
+          _filteredPosts = uniquePosts;
           _isLoading = false;
         });
         _applySearch();
@@ -449,11 +460,16 @@ class _AdminLookingForPageState extends State<AdminLookingForPage> {
                     : RefreshIndicator(
                         onRefresh: _loadPosts,
                         child: ListView.builder(
+                          key: const PageStorageKey<String>('admin_looking_for_list'),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _filteredPosts.length,
                           itemBuilder: (context, index) {
                             final post = _filteredPosts[index];
-                            final postId = post['id'] as String;
+                            final postId = post['id'] as String? ?? '';
+                            // Ensure we have a valid ID
+                            if (postId.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
                             final description = post['description'] as String? ?? '';
                             final location = post['location'] as String? ?? '';
                             final budget = post['budget'] as String? ?? '';
@@ -467,6 +483,7 @@ class _AdminLookingForPageState extends State<AdminLookingForPage> {
                             final isSelected = _selectedPostIds.contains(postId);
 
                             return Card(
+                              key: ValueKey('post_$postId'),
                               margin: const EdgeInsets.only(bottom: 12),
                               color: isSelected 
                                 ? _themeColorDark.withValues(alpha: 0.2)

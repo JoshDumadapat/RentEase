@@ -18,6 +18,7 @@ class BNotificationService {
     String? commentText,
     String? postTitle,
     String? postId,
+    String? postType, // 'listing' or 'lookingFor'
     List<String>? otherActors,
     int? reactionCount,
   }) async {
@@ -34,6 +35,7 @@ class BNotificationService {
         if (commentText != null) 'commentText': commentText,
         if (postTitle != null) 'postTitle': postTitle,
         if (postId != null) 'postId': postId,
+        if (postType != null) 'postType': postType,
         if (otherActors != null) 'otherActors': otherActors,
         if (reactionCount != null) 'reactionCount': reactionCount,
       };
@@ -228,6 +230,7 @@ class BNotificationService {
         commentText: commentText,
         postTitle: listingTitle,
         postId: listingId,
+        postType: 'listing',
       );
     } catch (e) {
       // Log error but don't throw - notification failure shouldn't break comment creation
@@ -265,6 +268,7 @@ class BNotificationService {
         commentText: commentText,
         postTitle: postTitle,
         postId: postId,
+        postType: 'lookingFor',
       );
     } catch (e) {
       // Log error but don't throw - notification failure shouldn't break comment creation
@@ -298,6 +302,7 @@ class BNotificationService {
         commentText: reviewComment,
         postTitle: listingTitle,
         postId: listingId,
+        postType: 'listing',
       );
     } catch (e) {
       // Log error but don't throw - notification failure shouldn't break review creation
@@ -329,10 +334,48 @@ class BNotificationService {
         reactionEmoji: '❤️',
         postTitle: listingTitle,
         postId: listingId,
+        postType: 'listing',
       );
     } catch (e) {
       // Log error but don't throw - notification failure shouldn't break favorite creation
       debugPrint('❌ [BNotificationService] Error creating favorite notification: $e');
+    }
+  }
+
+  /// Create a notification for a like on a looking-for post
+  /// Notifies the post owner when someone likes their post
+  Future<void> notifyLikeOnLookingForPost({
+    required String postOwnerId,
+    required String likerId,
+    required String likerName,
+    String? likerAvatarUrl,
+    required String postId,
+    String? postDescription,
+  }) async {
+    try {
+      // Don't notify if user is liking their own post
+      if (postOwnerId == likerId) {
+        return;
+      }
+
+      // Use first 50 characters of description as title
+      final postTitle = postDescription != null && postDescription.length > 50
+          ? '${postDescription.substring(0, 50)}...'
+          : postDescription;
+
+      await createNotification(
+        userId: postOwnerId,
+        type: 'reaction',
+        actorName: likerName,
+        actorAvatarUrl: likerAvatarUrl,
+        reactionEmoji: '❤️',
+        postTitle: postTitle,
+        postId: postId,
+        postType: 'lookingFor',
+      );
+    } catch (e) {
+      // Log error but don't throw - notification failure shouldn't break like creation
+      debugPrint('❌ [BNotificationService] Error creating like notification: $e');
     }
   }
 }

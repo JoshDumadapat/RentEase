@@ -31,6 +31,7 @@ class _AdminPostsPageState extends State<AdminPostsPage> {
   bool _isLoading = true;
   String _searchQuery = '';
   bool _selectionMode = false;
+  bool _showNonHousingOnly = false; // Filter for non-housing related posts
 
   @override
   void initState() {
@@ -53,16 +54,103 @@ class _AdminPostsPageState extends State<AdminPostsPage> {
     _applySearch();
   }
 
-  void _applySearch() {
-    if (_searchQuery.isEmpty) {
-      setState(() {
-        _filteredListings = _allListings;
-      });
-      return;
+  /// Algorithm to detect non-housing related posts
+  /// Checks title, description, and category for non-housing keywords
+  bool _isNonHousingRelated(Map<String, dynamic> listing) {
+    final title = (listing['title'] as String? ?? '').toLowerCase();
+    final description = (listing['description'] as String? ?? '').toLowerCase();
+    final category = (listing['category'] as String? ?? '').toLowerCase();
+    
+    // Non-housing related keywords
+    final nonHousingKeywords = [
+      // Vehicles
+      'car', 'cars', 'vehicle', 'vehicles', 'automobile', 'auto', 'motorcycle', 
+      'motor', 'bike', 'bicycle', 'scooter', 'tricycle', 'trike', 'truck', 
+      'van', 'suv', 'sedan', 'hatchback', 'sports car', 'luxury car',
+      // Electronics
+      'phone', 'smartphone', 'iphone', 'android', 'laptop', 'computer', 
+      'pc', 'tablet', 'ipad', 'gadget', 'electronics', 'electronic',
+      'tv', 'television', 'monitor', 'keyboard', 'mouse', 'headphone',
+      'speaker', 'camera', 'drone', 'watch', 'smartwatch',
+      // Other non-housing items
+      'furniture', 'appliance', 'appliances', 'refrigerator', 'washing machine',
+      'clothes', 'clothing', 'shoes', 'bag', 'accessories', 'jewelry',
+      'food', 'restaurant', 'business', 'service', 'job', 'employment',
+      'for sale', 'selling', 'buy', 'purchase', 'auction',
+    ];
+    
+    // Housing-related keywords (if these are present, it's likely housing)
+    final housingKeywords = [
+      'house', 'apartment', 'condo', 'condominium', 'room', 'bedroom', 
+      'boarding', 'dorm', 'dormitory', 'studio', 'flat', 'unit',
+      'rent', 'rental', 'lease', 'leasehold', 'accommodation', 'lodging',
+      'bed', 'bath', 'bathroom', 'kitchen', 'living', 'dining', 'balcony',
+      'parking space', 'garage', 'yard', 'garden', 'floor', 'sqm', 'sqft',
+      'monthly', 'per month', 'deposit', 'advance', 'utilities', 'amenities',
+    ];
+    
+    // Check if it contains non-housing keywords
+    final combinedText = '$title $description $category';
+    bool hasNonHousingKeyword = false;
+    bool hasHousingKeyword = false;
+    
+    for (final keyword in nonHousingKeywords) {
+      if (combinedText.contains(keyword)) {
+        hasNonHousingKeyword = true;
+        break;
+      }
     }
+    
+    for (final keyword in housingKeywords) {
+      if (combinedText.contains(keyword)) {
+        hasHousingKeyword = true;
+        break;
+      }
+    }
+    
+    // If it has non-housing keywords but no housing keywords, it's non-housing
+    if (hasNonHousingKeyword && !hasHousingKeyword) {
+      return true;
+    }
+    
+    // Check category - if category is not in housing categories, it might be non-housing
+    final housingCategories = [
+      'house rentals', 'apartments', 'rooms', 'boarding house', 
+      'condo rentals', 'student dorms', 'house', 'apartment', 
+      'condo', 'room', 'boarding', 'dorm'
+    ];
+    
+    if (category.isNotEmpty) {
+      bool isHousingCategory = false;
+      for (final housingCat in housingCategories) {
+        if (category.contains(housingCat)) {
+          isHousingCategory = true;
+          break;
+        }
+      }
+      // If category exists but is not a housing category, likely non-housing
+      if (!isHousingCategory && hasNonHousingKeyword) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
 
+  void _applySearch() {
     setState(() {
       _filteredListings = _allListings.where((listing) {
+        // Apply non-housing filter first
+        if (_showNonHousingOnly && !_isNonHousingRelated(listing)) {
+          return false;
+        }
+        
+        // If search query is empty, return all (or filtered by non-housing)
+        if (_searchQuery.isEmpty) {
+          return true;
+        }
+        
+        // Apply search filter
         final title = (listing['title'] as String? ?? '').toLowerCase();
         final location = (listing['location'] as String? ?? '').toLowerCase();
         final description = (listing['description'] as String? ?? '').toLowerCase();
@@ -118,9 +206,20 @@ class _AdminPostsPageState extends State<AdminPostsPage> {
       }
       
       if (mounted) {
+        // Remove duplicates based on listing ID
+        final seenIds = <String>{};
+        final uniqueListings = <Map<String, dynamic>>[];
+        for (final listing in listings) {
+          final listingId = listing['id'] as String?;
+          if (listingId != null && listingId.isNotEmpty && !seenIds.contains(listingId)) {
+            seenIds.add(listingId);
+            uniqueListings.add(listing);
+          }
+        }
+        
         setState(() {
-          _allListings = listings;
-          _filteredListings = listings;
+          _allListings = uniqueListings;
+          _filteredListings = uniqueListings;
           _isLoading = false;
         });
         _applySearch();
@@ -509,29 +608,93 @@ class _AdminPostsPageState extends State<AdminPostsPage> {
       ),
       body: Column(
         children: [
-          // Search Bar
+          // Search Bar and Filter
           Padding(
             padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search by title, location...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.grey[100],
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+            child: Column(
+              children: [
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search by title, location...',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded),
+                            onPressed: () {
+                              _searchController.clear();
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.grey[100],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 12),
+                // Filter Chip for Non-Housing Posts
+                Row(
+                  children: [
+                    FilterChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.warning_rounded,
+                            size: 16,
+                            color: _showNonHousingOnly 
+                                ? Colors.white 
+                                : (isDark ? Colors.orange[300] : Colors.orange[700]),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Non-Housing Posts',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _showNonHousingOnly 
+                                  ? Colors.white 
+                                  : (isDark ? Colors.grey[300] : Colors.grey[700]),
+                            ),
+                          ),
+                        ],
+                      ),
+                      selected: _showNonHousingOnly,
+                      onSelected: (selected) {
+                        setState(() {
+                          _showNonHousingOnly = selected;
+                        });
+                        _applySearch();
+                      },
+                      selectedColor: Colors.orange,
+                      checkmarkColor: Colors.white,
+                      backgroundColor: isDark 
+                          ? Colors.grey[800]!.withValues(alpha: 0.5)
+                          : Colors.grey[200]!,
+                      side: BorderSide(
+                        color: _showNonHousingOnly 
+                            ? Colors.orange 
+                            : (isDark ? Colors.grey[700]! : Colors.grey[400]!),
+                        width: 1.5,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    const Spacer(),
+                    if (_showNonHousingOnly)
+                      Text(
+                        '${_filteredListings.length} found',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.orange[300] : Colors.orange[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
             ),
           ),
 
@@ -565,16 +728,22 @@ class _AdminPostsPageState extends State<AdminPostsPage> {
                     : RefreshIndicator(
                         onRefresh: _loadListings,
                         child: ListView.builder(
+                          key: const PageStorageKey<String>('admin_posts_list'),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _filteredListings.length,
                           itemBuilder: (context, index) {
                             final listing = _filteredListings[index];
-                      final listingModel = ListingModel.fromMap(listing);
-                      final listingId = listing['id'] as String;
-                      final isFlagged = listing['isFlagged'] as bool? ?? false;
-                      final isSelected = _selectedListingIds.contains(listingId);
+                            final listingId = listing['id'] as String;
+                            // Ensure we have a valid ID
+                            if (listingId.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            final listingModel = ListingModel.fromMap(listing);
+                            final isFlagged = listing['isFlagged'] as bool? ?? false;
+                            final isSelected = _selectedListingIds.contains(listingId);
 
-                      return Card(
+                            return Card(
+                              key: ValueKey('listing_$listingId'),
                         margin: const EdgeInsets.only(bottom: 12),
                         color: isSelected 
                           ? _themeColorDark.withValues(alpha: 0.2)

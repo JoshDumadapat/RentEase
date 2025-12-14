@@ -14,6 +14,7 @@ class NotificationModel {
   final String? commentText; // For comment/mention notifications
   final String? postTitle; // Title or preview of the post
   final String? postId; // ID of the related post
+  final String? postType; // 'listing' or 'lookingFor' - distinguishes between listing and looking-for post
   final List<String>? otherActors; // For multiple people (e.g., "X and 7 others")
   final int? reactionCount; // For grouped reactions
   final DateTime timestamp;
@@ -29,6 +30,7 @@ class NotificationModel {
     this.commentText,
     this.postTitle,
     this.postId,
+    this.postType, // 'listing' or 'lookingFor'
     this.otherActors,
     this.reactionCount,
     required this.timestamp,
@@ -46,6 +48,7 @@ class NotificationModel {
     String? commentText,
     String? postTitle,
     String? postId,
+    String? postType,
     List<String>? otherActors,
     int? reactionCount,
     DateTime? timestamp,
@@ -61,6 +64,7 @@ class NotificationModel {
       commentText: commentText ?? this.commentText,
       postTitle: postTitle ?? this.postTitle,
       postId: postId ?? this.postId,
+      postType: postType ?? this.postType,
       otherActors: otherActors ?? this.otherActors,
       reactionCount: reactionCount ?? this.reactionCount,
       timestamp: timestamp ?? this.timestamp,
@@ -122,6 +126,7 @@ class NotificationModel {
         commentText: data['commentText'] as String?,
         postTitle: data['postTitle'] as String?,
         postId: data['postId'] as String?,
+        postType: data['postType'] as String?, // 'listing' or 'lookingFor'
         otherActors: data['otherActors'] != null
             ? List<String>.from(data['otherActors'] as List)
             : null,

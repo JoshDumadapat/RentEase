@@ -98,15 +98,51 @@ class BReviewService {
   /// Get all reviews for a listing
   Future<List<Map<String, dynamic>>> getReviewsByListing(String listingId) async {
     try {
+      // Query without orderBy to avoid composite index requirement
+      // We'll sort in memory instead
       final snapshot = await _firestore
           .collection(_collectionName)
           .where('listingId', isEqualTo: listingId)
-          .orderBy('createdAt', descending: true)
           .get();
-      return snapshot.docs.map((doc) => {
-        'id': doc.id,
-        ...doc.data(),
+      
+      // Map to list and sort by createdAt in memory (newest first)
+      final reviews = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          ...data,
+        };
       }).toList();
+      
+      // Sort by createdAt in memory (newest first)
+      reviews.sort((a, b) {
+        final aDate = a['createdAt'];
+        final bDate = b['createdAt'];
+        
+        // Handle Timestamp objects
+        DateTime aDateTime;
+        DateTime bDateTime;
+        
+        if (aDate is Timestamp) {
+          aDateTime = aDate.toDate();
+        } else if (aDate is DateTime) {
+          aDateTime = aDate;
+        } else {
+          aDateTime = DateTime.fromMillisecondsSinceEpoch(0);
+        }
+        
+        if (bDate is Timestamp) {
+          bDateTime = bDate.toDate();
+        } else if (bDate is DateTime) {
+          bDateTime = bDate;
+        } else {
+          bDateTime = DateTime.fromMillisecondsSinceEpoch(0);
+        }
+        
+        return bDateTime.compareTo(aDateTime); // Descending order (newest first)
+      });
+      
+      return reviews;
     } catch (e) {
       debugPrint('❌ [BReviewService] Error getting reviews by listing: $e');
       return [];
@@ -116,15 +152,51 @@ class BReviewService {
   /// Get reviews by user ID
   Future<List<Map<String, dynamic>>> getReviewsByUser(String userId) async {
     try {
+      // Query without orderBy to avoid composite index requirement
+      // We'll sort in memory instead
       final snapshot = await _firestore
           .collection(_collectionName)
           .where('userId', isEqualTo: userId)
-          .orderBy('createdAt', descending: true)
           .get();
-      return snapshot.docs.map((doc) => {
-        'id': doc.id,
-        ...doc.data(),
+      
+      // Map to list and sort by createdAt in memory (newest first)
+      final reviews = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          ...data,
+        };
       }).toList();
+      
+      // Sort by createdAt in memory (newest first)
+      reviews.sort((a, b) {
+        final aDate = a['createdAt'];
+        final bDate = b['createdAt'];
+        
+        // Handle Timestamp objects
+        DateTime aDateTime;
+        DateTime bDateTime;
+        
+        if (aDate is Timestamp) {
+          aDateTime = aDate.toDate();
+        } else if (aDate is DateTime) {
+          aDateTime = aDate;
+        } else {
+          aDateTime = DateTime.fromMillisecondsSinceEpoch(0);
+        }
+        
+        if (bDate is Timestamp) {
+          bDateTime = bDate.toDate();
+        } else if (bDate is DateTime) {
+          bDateTime = bDate;
+        } else {
+          bDateTime = DateTime.fromMillisecondsSinceEpoch(0);
+        }
+        
+        return bDateTime.compareTo(aDateTime); // Descending order (newest first)
+      });
+      
+      return reviews;
     } catch (e) {
       debugPrint('❌ [BReviewService] Error getting reviews by user: $e');
       return [];

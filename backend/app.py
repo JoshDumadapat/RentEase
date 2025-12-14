@@ -184,8 +184,8 @@ def compare_face():
         # Calculate cosine similarity (dot product = cosine similarity when embeddings are normalized)
         similarity = float(np.dot(id_embedding, selfie_embedding))
         
-        # Validation rule: Similarity ≥ 0.10 → PASS (10% threshold)
-        threshold = 0.10
+        # Validation rule: Similarity ≥ 0.12 → PASS (12% threshold)
+        threshold = 0.12
         is_match = similarity >= threshold
         
         return jsonify({
@@ -314,8 +314,8 @@ def compare_faces():
         # Calculate cosine similarity (dot product = cosine similarity when embeddings are normalized)
         similarity = float(np.dot(id_embedding, selfie_embedding))
         
-        # Validation rule: Similarity ≥ 0.10 → PASS (10% threshold)
-        threshold = 0.10
+        # Validation rule: Similarity ≥ 0.12 → PASS (12% threshold)
+        threshold = 0.12
         is_match = similarity >= threshold
         
         return jsonify({
@@ -569,8 +569,8 @@ def compare_faces_internal(id_image_base64, selfie_image_base64):
         # Cosine similarity = dot product when embeddings are normalized
         similarity = float(np.dot(id_embedding, selfie_embedding))
         
-        # Threshold: ≥ 0.10 for PASS (10% threshold)
-        threshold = 0.10
+        # Threshold: ≥ 0.12 for PASS (12% threshold)
+        threshold = 0.12
         is_match = similarity >= threshold
         
         return {

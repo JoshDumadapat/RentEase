@@ -64,9 +64,20 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     try {
       final users = await _adminService.getAllUsers();
       if (mounted) {
+        // Remove duplicates based on user ID
+        final seenIds = <String>{};
+        final uniqueUsers = <Map<String, dynamic>>[];
+        for (final user in users) {
+          final userId = user['id'] as String?;
+          if (userId != null && userId.isNotEmpty && !seenIds.contains(userId)) {
+            seenIds.add(userId);
+            uniqueUsers.add(user);
+          }
+        }
+        
         setState(() {
-          _allUsers = users;
-          _filteredUsers = users;
+          _allUsers = uniqueUsers;
+          _filteredUsers = uniqueUsers;
           _isLoading = false;
         });
         _applySearch();
@@ -107,12 +118,14 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
         final fname = (user['fname'] as String? ?? '').toLowerCase();
         final lname = (user['lname'] as String? ?? '').toLowerCase();
         final displayName = (user['displayName'] as String? ?? '').toLowerCase();
+        final username = (user['username'] as String? ?? '').toLowerCase();
         final searchLower = _searchQuery.toLowerCase();
 
         return email.contains(searchLower) ||
             fname.contains(searchLower) ||
             lname.contains(searchLower) ||
-            displayName.contains(searchLower);
+            displayName.contains(searchLower) ||
+            username.contains(searchLower);
       }).toList();
     });
   }
@@ -238,6 +251,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     final fname = user['fname'] as String? ?? '';
     final lname = user['lname'] as String? ?? '';
     final displayName = user['displayName'] as String?;
+    final username = user['username'] as String?;
     
     if (displayName != null && displayName.isNotEmpty) {
       return displayName;
@@ -246,6 +260,14 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
       return '$fname $lname'.trim();
     }
     return user['email'] as String? ?? 'Unknown User';
+  }
+  
+  String? _getUsername(Map<String, dynamic> user) {
+    final username = user['username'] as String?;
+    if (username != null && username.trim().isNotEmpty) {
+      return username.trim();
+    }
+    return null;
   }
 
   String _formatDate(dynamic timestamp) {
@@ -337,12 +359,18 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                     : RefreshIndicator(
                         onRefresh: _loadUsers,
                         child: ListView.builder(
+                          key: const PageStorageKey<String>('admin_users_list'),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _filteredUsers.length,
                           itemBuilder: (context, index) {
                             final user = _filteredUsers[index];
-                            final userId = user['id'] as String;
+                            final userId = user['id'] as String? ?? '';
+                            // Ensure we have a valid ID
+                            if (userId.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
                             final userName = _getUserName(user);
+                            final username = _getUsername(user);
                             final email = user['email'] as String? ?? 'No email';
                             final isBanned = user['isBanned'] as bool? ?? false;
                             final isVerified = user['isVerified'] as bool? ?? false;
@@ -350,6 +378,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                             final createdAt = user['createdAt'];
 
                             return Card(
+                              key: ValueKey('user_$userId'),
                               margin: const EdgeInsets.only(bottom: 12),
                               color: cardColor,
                               child: ListTile(
@@ -380,10 +409,35 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                                       ),
                                     ),
                                     if (isVerified)
-                                      Icon(
-                                        Icons.verified,
-                                        color: _themeColorDark,
-                                        size: 20,
+                                      Container(
+                                        margin: const EdgeInsets.only(left: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _themeColorDark,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.verified,
+                                              color: Colors.white,
+                                              size: 12,
+                                            ),
+                                            const SizedBox(width: 2),
+                                            const Text(
+                                              'VERIFIED',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     if (role == 'admin')
                                       Container(
@@ -431,6 +485,16 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const SizedBox(height: 4),
+                                    if (username != null) ...[
+                                      Text(
+                                        '@$username',
+                                        style: TextStyle(
+                                          color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                    ],
                                     Text(
                                       email,
                                       style: TextStyle(

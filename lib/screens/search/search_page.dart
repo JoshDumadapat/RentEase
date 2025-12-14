@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:rentease_app/models/filter_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
+import 'package:rentease_app/models/looking_for_post_model.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
+import 'package:rentease_app/screens/looking_for_post_detail/looking_for_post_detail_page.dart';
 import 'package:rentease_app/widgets/filter_sheet.dart';
 import 'package:rentease_app/screens/home/widgets/threedots.dart';
 import 'package:rentease_app/screens/search/widgets/search_skeleton.dart';
 import 'package:rentease_app/backend/BListingService.dart';
+import 'package:rentease_app/backend/BLookingForPostService.dart';
 import 'package:rentease_app/widgets/subscription_promotion_card.dart';
 import 'package:rentease_app/screens/subscription/subscription_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // Theme color constants
 const Color _themeColor = Color(0xFF00D1FF);
@@ -21,28 +26,83 @@ class SearchPage extends StatefulWidget {
   State<SearchPage> createState() => _SearchPageState();
 }
 
-class _SearchPageState extends State<SearchPage> {
+class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
+  late TabController _tabController;
+  
+  // Listings state
   List<ListingModel> _allListings = [];
+  List<ListingModel>? _cachedFilteredListings;
+  
+  // Looking For Posts state
+  List<LookingForPostModel> _allLookingForPosts = [];
+  List<LookingForPostModel>? _cachedFilteredLookingForPosts;
+  
   final FilterModel _filterModel = FilterModel();
   final BListingService _listingService = BListingService();
+  final BLookingForPostService _lookingForPostService = BLookingForPostService();
   String? _selectedCategory;
   bool _isLoading = true;
+  bool _isLoadingLookingFor = true;
   
   // Cache filtered listings to avoid recalculating on every build
-  List<ListingModel>? _cachedFilteredListings;
   String? _lastSelectedCategory;
   double? _lastMinPrice;
   double? _lastMaxPrice;
   String? _lastBedrooms;
   String? _lastBathrooms;
   String? _lastPropertyType;
+  
+  // Verification status
+  bool _isVerified = false;
+  bool _isLoadingVerification = true;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_onTabChanged);
     _filterModel.addListener(_onFilterChanged);
     _loadSearchData();
+    _loadLookingForPosts();
+    _checkVerificationStatus();
+  }
+  
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) {
+      setState(() {});
+    }
+  }
+  
+  Future<void> _checkVerificationStatus() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        
+        if (mounted) {
+          setState(() {
+            _isVerified = userDoc.data()?['isVerified'] ?? false;
+            _isLoadingVerification = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoadingVerification = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingVerification = false;
+        });
+      }
+    }
   }
 
   /// Load search data from Firestore
@@ -76,8 +136,49 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
   
+  /// Load looking for posts from Firestore
+  Future<void> _loadLookingForPosts() async {
+    if (mounted) {
+      setState(() {
+        _isLoadingLookingFor = true;
+      });
+    }
+    
+    try {
+      final postsData = await _lookingForPostService.getAllLookingForPosts();
+      final posts = postsData.map((data) => LookingForPostModel.fromMap(data)).toList();
+      
+      if (mounted) {
+        setState(() {
+          _allLookingForPosts = posts;
+          _cachedFilteredLookingForPosts = posts;
+          _isLoadingLookingFor = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [SearchPage] Error loading looking for posts: $e');
+      if (mounted) {
+        setState(() {
+          _allLookingForPosts = [];
+          _cachedFilteredLookingForPosts = [];
+          _isLoadingLookingFor = false;
+        });
+      }
+    }
+  }
+  
   /// Perform search with filters
   Future<void> _performSearch() async {
+    // Search based on current tab
+    if (_tabController.index == 0) {
+      await _performListingsSearch();
+    } else {
+      await _performLookingForSearch();
+    }
+  }
+  
+  /// Perform search for listings
+  Future<void> _performListingsSearch() async {
     if (mounted) {
       setState(() {
         _isLoading = true;
@@ -107,11 +208,8 @@ class _SearchPageState extends State<SearchPage> {
       }
       
       // Map category filter to propertyType for fuzzy matching
-      // Since Firestore categories are like "House Rentals", "Apartments", etc.
-      // and UI shows "House", "Office", "Apartment", we use propertyType for matching
       String? propertyTypeFilter = _filterModel.selectedPropertyType;
       if (_selectedCategory != null && propertyTypeFilter == null) {
-        // Use category button selection as propertyType filter
         final categoryLower = _selectedCategory!.toLowerCase();
         if (categoryLower.contains('house')) {
           propertyTypeFilter = 'house';
@@ -122,18 +220,14 @@ class _SearchPageState extends State<SearchPage> {
         }
       }
       
-      debugPrint('🔍 [SearchPage] Performing search with filters:');
+      debugPrint('🔍 [SearchPage] Performing listings search with filters:');
       debugPrint('   - Search query: "${_searchController.text.trim()}"');
       debugPrint('   - Category: $_selectedCategory');
       debugPrint('   - Property Type: $propertyTypeFilter');
-      debugPrint('   - Min Price: ${_filterModel.currentMinPrice}');
-      debugPrint('   - Max Price: ${_filterModel.currentMaxPrice}');
-      debugPrint('   - Bedrooms: $bedroomsFilter');
-      debugPrint('   - Bathrooms: $bathroomsFilter');
       
       final listingsData = await _listingService.searchListingsWithFilters(
         searchQuery: _searchController.text.trim().isEmpty ? null : _searchController.text.trim(),
-        category: null, // Don't use category for exact match, use propertyType instead
+        category: null,
         minPrice: _filterModel.currentMinPrice > 0 ? _filterModel.currentMinPrice : null,
         maxPrice: _filterModel.currentMaxPrice < 50000 ? _filterModel.currentMaxPrice : null,
         bedrooms: bedroomsFilter,
@@ -175,12 +269,77 @@ class _SearchPageState extends State<SearchPage> {
       }
     }
   }
+  
+  /// Perform search for looking for posts
+  Future<void> _performLookingForSearch() async {
+    if (mounted) {
+      setState(() {
+        _isLoadingLookingFor = true;
+      });
+    }
+    
+    try {
+      // Map category filter to propertyType
+      String? propertyTypeFilter = _filterModel.selectedPropertyType;
+      if (_selectedCategory != null && propertyTypeFilter == null) {
+        final categoryLower = _selectedCategory!.toLowerCase();
+        if (categoryLower.contains('house')) {
+          propertyTypeFilter = 'House Rentals';
+        } else if (categoryLower.contains('apartment')) {
+          propertyTypeFilter = 'Apartment';
+        } else if (categoryLower.contains('condo')) {
+          propertyTypeFilter = 'Condo';
+        }
+      }
+      
+      debugPrint('🔍 [SearchPage] Performing looking for posts search:');
+      debugPrint('   - Search query: "${_searchController.text.trim()}"');
+      debugPrint('   - Property Type: $propertyTypeFilter');
+      
+      final postsData = await _lookingForPostService.searchLookingForPosts(
+        searchQuery: _searchController.text.trim().isEmpty ? null : _searchController.text.trim(),
+        location: null, // Could add location filter later
+        propertyType: propertyTypeFilter ?? _filterModel.selectedPropertyType,
+        budget: null, // Could add budget filter later
+      );
+      
+      debugPrint('📊 [SearchPage] Received ${postsData.length} looking for posts from service');
+      
+      final posts = postsData.map((data) => LookingForPostModel.fromMap(data)).toList();
+      
+      debugPrint('✅ [SearchPage] Final filtered results: ${posts.length} looking for posts');
+      
+      if (mounted) {
+        setState(() {
+          _allLookingForPosts = posts;
+          _cachedFilteredLookingForPosts = posts;
+          _isLoadingLookingFor = false;
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ [SearchPage] Error searching looking for posts: $e');
+      debugPrint('📚 Stack trace: $stackTrace');
+      if (mounted) {
+        setState(() {
+          _allLookingForPosts = [];
+          _cachedFilteredLookingForPosts = [];
+          _isLoadingLookingFor = false;
+        });
+      }
+    }
+  }
 
   /// Refresh search data
   Future<void> _refreshSearchData() async {
     debugPrint('🔄 [SearchPage] Refreshing search data...');
     // Always perform search when refreshing to respect current filters
-    await _performSearch();
+    if (_tabController.index == 0) {
+      await _loadSearchData();
+      await _performListingsSearch();
+    } else {
+      await _loadLookingForPosts();
+      await _performLookingForSearch();
+    }
   }
 
   void _onFilterChanged() {
@@ -197,6 +356,8 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _tabController.removeListener(_onTabChanged);
+    _tabController.dispose();
     _filterModel.removeListener(_onFilterChanged);
     _filterModel.dispose();
     super.dispose();
@@ -230,31 +391,36 @@ class _SearchPageState extends State<SearchPage> {
               _buildHeader(),
               _buildSearchBar(),
               const SizedBox(height: 12),
+              _buildTabs(),
+              const SizedBox(height: 12),
               _buildCategoryFilters(),
               const SizedBox(height: 16),
-              // Subscription Promotion Card with smooth animation
+              // Subscription Promotion Card (only show if not verified)
               AnimatedSize(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: SubscriptionPromotionCard(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SubscriptionPage(),
+                child: (!_isLoadingVerification && !_isVerified)
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: SubscriptionPromotionCard(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SubscriptionPage(),
+                              ),
+                            );
+                          },
+                          showDismissButton: true,
                         ),
-                      );
-                    },
-                    showDismissButton: true,
-                  ),
-                ),
+                      )
+                    : const SizedBox.shrink(),
               ),
               const SizedBox(height: 24),
-              _buildFeaturedListings(),
-              const SizedBox(height: 24),
-              _buildPropertyNearby(),
+              // Show results based on selected tab
+              _tabController.index == 0
+                  ? _buildListingsResults()
+                  : _buildLookingForResults(),
               const SizedBox(height: 16),
             ],
           ),
@@ -360,6 +526,12 @@ class _SearchPageState extends State<SearchPage> {
                           setState(() {
                             _searchController.clear();
                           });
+                          // Reload data for current tab when clearing
+                          if (_tabController.index == 0) {
+                            _loadSearchData();
+                          } else {
+                            _loadLookingForPosts();
+                          }
                         },
                       )
                     : null,
@@ -387,7 +559,12 @@ class _SearchPageState extends State<SearchPage> {
                 setState(() {});
                 // Perform search as user types (debounced in production)
                 if (value.isEmpty) {
-                  _loadSearchData();
+                  // Reload data for current tab
+                  if (_tabController.index == 0) {
+                    _loadSearchData();
+                  } else {
+                    _loadLookingForPosts();
+                  }
                 } else {
                   // Debounce search - wait 500ms after user stops typing
                   Future.delayed(const Duration(milliseconds: 500), () {
@@ -438,6 +615,52 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
+  Widget _buildTabs() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? Colors.grey[900] : Colors.white;
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF2A2A2A) : Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: TabBar(
+          controller: _tabController,
+          indicator: BoxDecoration(
+            color: _themeColorDark,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: Colors.transparent,
+          labelColor: Colors.white,
+          unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
+          labelStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+          tabs: const [
+            Tab(text: 'Listings'),
+            Tab(text: 'Looking For'),
+          ],
+          onTap: (index) {
+            setState(() {});
+            // Perform search when switching tabs
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _performSearch();
+            });
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _buildCategoryFilters() {
     // Simplified category list matching the reference design
     final categoryFilters = ['House', 'Condo', 'Apartment'];
@@ -458,6 +681,7 @@ class _SearchPageState extends State<SearchPage> {
                 setState(() {
                   _selectedCategory = isSelected ? null : category;
                   _cachedFilteredListings = null;
+                  _cachedFilteredLookingForPosts = null;
                 });
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _performSearch();
@@ -498,7 +722,7 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  Widget _buildFeaturedListings() {
+  Widget _buildListingsResults() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
@@ -569,7 +793,7 @@ class _SearchPageState extends State<SearchPage> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Text(
-            'Featured Properties',
+            'Search Results (${filteredListings.length})',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -578,20 +802,20 @@ class _SearchPageState extends State<SearchPage> {
           ),
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          height: 320,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
             itemCount: filteredListings.length,
             itemBuilder: (context, index) {
               final listing = filteredListings[index];
               return Padding(
                 key: ValueKey(listing.id),
                 padding: EdgeInsets.only(
-                  right: index == filteredListings.length - 1 ? 0 : 16,
+                  bottom: index == filteredListings.length - 1 ? 0 : 16,
                 ),
-                child: _FeaturedListingCard(
+                child: _NearbyListingCard(
                   listing: listing,
                   isDark: isDark,
                   onTap: () {
@@ -612,83 +836,114 @@ class _SearchPageState extends State<SearchPage> {
       ],
     );
   }
-
-  Widget _buildPropertyNearby() {
+  
+  Widget _buildLookingForResults() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final subtextColor = isDark ? Colors.grey[400] : Colors.grey[600];
+    final filteredPosts = _cachedFilteredLookingForPosts ?? _allLookingForPosts;
+
+    if (_isLoadingLookingFor) {
+      return Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Center(
+          child: CircularProgressIndicator(
+            color: _themeColorDark,
+          ),
+        ),
+      );
+    }
+
+    if (filteredPosts.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
+        child: Center(
+          child: Column(
             children: [
+              Icon(Icons.search_off, size: 64, color: subtextColor),
+              const SizedBox(height: 16),
               Text(
-                'Property Nearby',
+                'No posts found',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: textColor,
                 ),
               ),
-              TextButton(
-                onPressed: () {},
-                child: Text(
-                  'See all',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: _themeColorDark,
-                    fontWeight: FontWeight.w600,
-                  ),
+              const SizedBox(height: 8),
+              Text(
+                'Try adjusting your filters or search terms',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: subtextColor,
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () {
+                  _searchController.clear();
+                  _selectedCategory = null;
+                  _filterModel.clearFilters();
+                  _performSearch();
+                },
+                icon: const Icon(Icons.clear_all),
+                label: const Text('Clear all filters'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _themeColorDark,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 ),
               ),
             ],
           ),
         ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Text(
+            'Search Results (${filteredPosts.length})',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+        ),
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Builder(
-            builder: (context) {
-              final filteredListings = _filteredListings;
-              
-              if (filteredListings.isEmpty) {
-                return const SizedBox.shrink();
-              }
-              
-              final nearbyListings = filteredListings.length > 3
-                  ? filteredListings.sublist(0, 3)
-                  : filteredListings;
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: nearbyListings.length,
-                itemBuilder: (context, index) {
-                  final listing = nearbyListings[index];
-                  return Padding(
-                    key: ValueKey(listing.id),
-                    padding: EdgeInsets.only(
-                      bottom: index == nearbyListings.length - 1 ? 0 : 16,
-                    ),
-                    child: _NearbyListingCard(
-                      listing: listing,
-                      isDark: isDark,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ListingDetailsPage(
-                              listing: listing,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  );
-                },
+          child: ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: filteredPosts.length,
+            itemBuilder: (context, index) {
+              final post = filteredPosts[index];
+              return Padding(
+                key: ValueKey(post.id),
+                padding: EdgeInsets.only(
+                  bottom: index == filteredPosts.length - 1 ? 0 : 16,
+                ),
+                child: _SearchLookingForPostCard(
+                  post: post,
+                  isDark: isDark,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => LookingForPostDetailPage(
+                          post: post,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               );
             },
           ),
@@ -1111,6 +1366,247 @@ class _NearbyListingCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SearchLookingForPostCard extends StatelessWidget {
+  final LookingForPostModel post;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _SearchLookingForPostCard({
+    required this.post,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cardColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
+    final iconColor = isDark ? Colors.white : Colors.grey[500]!;
+    
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        splashColor: _themeColor.withValues(alpha: 0.1),
+        highlightColor: _themeColor.withValues(alpha: 0.05),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
+                blurRadius: 12,
+                spreadRadius: 0,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header: Username and time
+              Row(
+                children: [
+                  // Profile Picture
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF6C63FF).withValues(alpha: 0.15),
+                          const Color(0xFF4CAF50).withValues(alpha: 0.15),
+                        ],
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        post.username[0].toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF6C63FF),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              post.username,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: textColor,
+                              ),
+                            ),
+                            if (post.isVerified) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: BoxDecoration(
+                                  color: _themeColorDark.withValues(alpha: 0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.verified,
+                                  size: 14,
+                                  color: _themeColorDark,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          post.timeAgo,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: subtextColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Description
+              Text(
+                post.description,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: textColor,
+                  height: 1.4,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 12),
+              // Tags: Location, Property Type, Budget
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _TagChip(
+                    icon: Icons.location_on_outlined,
+                    text: post.location,
+                    color: const Color(0xFF6C63FF),
+                    isDark: isDark,
+                  ),
+                  _TagChip(
+                    icon: Icons.home_outlined,
+                    text: post.propertyType,
+                    color: const Color(0xFF4CAF50),
+                    isDark: isDark,
+                  ),
+                  _TagChip(
+                    icon: Icons.attach_money_outlined,
+                    text: post.budget,
+                    color: const Color(0xFF2196F3),
+                    isDark: isDark,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Footer: Stats
+              Row(
+                children: [
+                  if (post.likeCount > 0) ...[
+                    Icon(
+                      Icons.favorite_outline,
+                      size: 16,
+                      color: subtextColor,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${post.likeCount}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: subtextColor,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                  ],
+                  if (post.commentCount > 0) ...[
+                    Icon(
+                      Icons.comment_outlined,
+                      size: 16,
+                      color: subtextColor,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${post.commentCount}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: subtextColor,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TagChip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+  final bool isDark;
+
+  const _TagChip({
+    required this.icon,
+    required this.text,
+    required this.color,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rentease_app/backend/BUserService.dart';
 import 'package:rentease_app/backend/BBankService.dart';
 import 'package:rentease_app/models/bank_model.dart';
+import 'package:rentease_app/widgets/confetti_widget.dart';
 
 const Color _themeColorDark = Color(0xFF00B8E6);
 const Color _themeColor = Color(0xFF00D1FF);
+const Color _themeColorLight = Color(0xFFE5F9FF);
 
 /// Payment Selection Page
 /// 
@@ -365,13 +368,17 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
     setState(() => _isLoadingBanks = true);
     try {
       final banks = await _bankService.getAllBanks();
+      debugPrint('📊 [PaymentProcessingPage] Loaded ${banks.length} banks');
+      for (var bank in banks) {
+        debugPrint('  - ${bank.name}: ${bank.logoUrl}');
+      }
       setState(() {
         _banks = banks;
         _isLoadingBanks = false;
       });
     } catch (e) {
       setState(() => _isLoadingBanks = false);
-      debugPrint('Error loading banks: $e');
+      debugPrint('❌ [PaymentProcessingPage] Error loading banks: $e');
     }
   }
 
@@ -424,9 +431,10 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
         _isSuccess = true;
       });
       
-      // Auto close after success
-      await Future.delayed(const Duration(seconds: 2));
+      // Show success screen with confetti for 3 seconds
+      await Future.delayed(const Duration(seconds: 3));
       if (mounted) {
+        // Navigate back - the real-time listener in profile will update verification status
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     }
@@ -874,73 +882,138 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
 
     if (_isSuccess) {
       return Scaffold(
-        backgroundColor: backgroundColor,
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_circle,
-                    color: Colors.green,
-                    size: 64,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                Text(
-                  'Payment Successful!',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Your ${widget.planName} subscription is now active',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: _themeColorDark.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.verified,
-                        color: _themeColorDark,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Verified Badge Activated',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: _themeColorDark,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+        backgroundColor: _themeColorLight,
+        body: Stack(
+          children: [
+            // Confetti Animation
+            const ConfettiWidget(
+              particleCount: 80,
+              duration: Duration(seconds: 4),
             ),
-          ),
+            // Success Content
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Animated Success Icon
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 800),
+                      curve: Curves.elasticOut,
+                      builder: (context, value, child) {
+                        return Transform.scale(
+                          scale: value,
+                          child: Container(
+                            padding: const EdgeInsets.all(32),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  _themeColorDark,
+                                  _themeColor,
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _themeColorDark.withValues(alpha: 0.4),
+                                  blurRadius: 20,
+                                  spreadRadius: 5,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.check_circle_rounded,
+                              color: Colors.white,
+                              size: 80,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 40),
+                    Text(
+                      'Payment Successful!',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: _themeColorDark,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Your ${widget.planName} subscription is now active',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 17,
+                        color: isDark ? Colors.grey[300] : Colors.grey[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            _themeColorDark,
+                            _themeColor,
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _themeColorDark.withValues(alpha: 0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.verified_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Verified Badge Activated',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    Text(
+                      'Your profile is now verified!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -1130,7 +1203,9 @@ class _BankSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('🎨 [BankSelector] Building with ${banks.length} banks');
     if (banks.isEmpty) {
+      debugPrint('⚠️ [BankSelector] No banks available!');
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -1176,6 +1251,7 @@ class _BankSelector extends StatelessWidget {
           itemBuilder: (context, index) {
             final bank = banks[index];
             final isSelected = selectedBank?.id == bank.id;
+            debugPrint('🏦 [BankSelector] Building bank card: ${bank.name}, logoUrl: ${bank.logoUrl}');
 
             return Material(
               color: Colors.transparent,
@@ -1229,7 +1305,11 @@ class _BankSelector extends StatelessWidget {
                                 child: Image.network(
                                   bank.logoUrl,
                                   fit: BoxFit.contain,
+                                  width: 50,
+                                  height: 50,
                                   errorBuilder: (context, error, stackTrace) {
+                                    debugPrint('❌ [BankSelector] Error loading logo for ${bank.name}: $error');
+                                    debugPrint('   URL: ${bank.logoUrl}');
                                     return Icon(
                                       Icons.account_balance,
                                       color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -1237,7 +1317,10 @@ class _BankSelector extends StatelessWidget {
                                     );
                                   },
                                   loadingBuilder: (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
+                                    if (loadingProgress == null) {
+                                      debugPrint('✅ [BankSelector] Loaded logo for ${bank.name}');
+                                      return child;
+                                    }
                                     return Center(
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,

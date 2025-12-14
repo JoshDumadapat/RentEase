@@ -138,11 +138,13 @@ class BLookingForPostService {
   }
 
   /// Get all looking for posts (excludes posts from deactivated users)
+  /// NOTE: Query without orderBy to avoid Firestore composite index requirement
+  /// Sorting is done in memory instead
   Future<List<Map<String, dynamic>>> getAllLookingForPosts() async {
     try {
+      // Query WITHOUT orderBy to avoid composite index requirement
       final snapshot = await _firestore
           .collection(_collectionName)
-          .orderBy('createdAt', descending: true)
           .get();
       
       var posts = snapshot.docs.map((doc) => {
@@ -150,16 +152,26 @@ class BLookingForPostService {
         ...doc.data(),
       }).toList();
       
+      // Sort by createdAt in memory (newest first)
+      posts.sort((a, b) {
+        final aDate = a['createdAt'] as Timestamp?;
+        final bDate = b['createdAt'] as Timestamp?;
+        if (aDate == null || bDate == null) return 0;
+        return bDate.compareTo(aDate); // Descending order
+      });
+      
       // Filter out posts from deactivated users
       if (posts.isNotEmpty) {
         final userIds = posts.map((p) => p['userId'] as String?).whereType<String>().toList();
-        final deactivatedUserIds = await _userService.getDeactivatedUserIds(userIds);
-        
-        if (deactivatedUserIds.isNotEmpty) {
-          posts = posts.where((post) {
-            final userId = post['userId'] as String?;
-            return userId == null || !deactivatedUserIds.contains(userId);
-          }).toList();
+        if (userIds.isNotEmpty) {
+          final deactivatedUserIds = await _userService.getDeactivatedUserIds(userIds);
+          
+          if (deactivatedUserIds.isNotEmpty) {
+            posts = posts.where((post) {
+              final userId = post['userId'] as String?;
+              return userId == null || !deactivatedUserIds.contains(userId);
+            }).toList();
+          }
         }
       }
       
@@ -303,6 +315,102 @@ class BLookingForPostService {
     } catch (e) {
       // Error:'Error decrementing comment count: $e');
       rethrow;
+    }
+  }
+
+  /// Search looking for posts with filters
+  /// Searches by description, location, propertyType, and budget
+  Future<List<Map<String, dynamic>>> searchLookingForPosts({
+    String? searchQuery,
+    String? location,
+    String? propertyType,
+    String? budget,
+  }) async {
+    try {
+      // Query without orderBy to avoid composite index requirement
+      // We'll sort in memory instead
+      Query query = _firestore.collection(_collectionName);
+      
+      // Apply filters that can be done in Firestore
+      if (location != null && location.isNotEmpty) {
+        // Note: Firestore doesn't support case-insensitive search, so we'll filter in memory
+        // For now, we'll get all posts and filter in memory
+      }
+      
+      if (propertyType != null && propertyType.isNotEmpty) {
+        query = query.where('propertyType', isEqualTo: propertyType);
+      }
+      
+      final snapshot = await query.get();
+      
+      var posts = snapshot.docs.map<Map<String, dynamic>>((doc) {
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        return <String, dynamic>{
+          'id': doc.id,
+          ...data,
+        };
+      }).toList();
+      
+      // Filter out posts from deactivated users
+      if (posts.isNotEmpty) {
+        final userIds = posts.map((p) => p['userId'] as String?).whereType<String>().toList();
+        if (userIds.isNotEmpty) {
+          final deactivatedUserIds = await _userService.getDeactivatedUserIds(userIds);
+          
+          if (deactivatedUserIds.isNotEmpty) {
+            posts = posts.where((post) {
+              final userId = post['userId'] as String?;
+              return userId == null || !deactivatedUserIds.contains(userId);
+            }).toList();
+          }
+        }
+      }
+      
+      // Apply text search filter in memory (if provided)
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        final queryLower = searchQuery.toLowerCase();
+        posts = posts.where((post) {
+          final description = (post['description'] as String? ?? '').toLowerCase();
+          final postLocation = (post['location'] as String? ?? '').toLowerCase();
+          final postPropertyType = (post['propertyType'] as String? ?? '').toLowerCase();
+          final postBudget = (post['budget'] as String? ?? '').toLowerCase();
+          return description.contains(queryLower) || 
+                 postLocation.contains(queryLower) || 
+                 postPropertyType.contains(queryLower) ||
+                 postBudget.contains(queryLower);
+        }).toList();
+      }
+      
+      // Apply location filter in memory (if provided)
+      if (location != null && location.isNotEmpty) {
+        final locationLower = location.toLowerCase();
+        posts = posts.where((post) {
+          final postLocation = (post['location'] as String? ?? '').toLowerCase();
+          return postLocation.contains(locationLower);
+        }).toList();
+      }
+      
+      // Apply budget filter in memory (if provided)
+      if (budget != null && budget.isNotEmpty) {
+        final budgetLower = budget.toLowerCase();
+        posts = posts.where((post) {
+          final postBudget = (post['budget'] as String? ?? '').toLowerCase();
+          return postBudget.contains(budgetLower);
+        }).toList();
+      }
+      
+      // Sort by createdAt in memory (newest first)
+      posts.sort((a, b) {
+        final aDate = a['createdAt'] as Timestamp?;
+        final bDate = b['createdAt'] as Timestamp?;
+        if (aDate == null || bDate == null) return 0;
+        return bDate.compareTo(aDate); // Descending order
+      });
+      
+      return posts;
+    } catch (e) {
+      debugPrint('❌ [BLookingForPostService] Error searching looking for posts: $e');
+      return [];
     }
   }
 

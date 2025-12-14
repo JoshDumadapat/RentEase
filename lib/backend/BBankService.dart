@@ -19,9 +19,16 @@ class BBankService {
           .orderBy('name')
           .get();
 
-      return querySnapshot.docs
-          .map((doc) => BankModel.fromFirestore(doc.data(), doc.id))
+      final banks = querySnapshot.docs
+          .map((doc) {
+            final data = doc.data();
+            debugPrint(' bank [${doc.id}]: name=${data['name']}, logoUrl=${data['logoUrl']}');
+            return BankModel.fromFirestore(data, doc.id);
+          })
           .toList();
+      
+      debugPrint('✅ [BBankService] Loaded ${banks.length} banks');
+      return banks;
     } catch (e) {
       debugPrint('❌ [BBankService] Error fetching banks: $e');
       return [];

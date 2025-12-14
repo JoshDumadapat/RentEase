@@ -17,6 +17,7 @@ import 'package:rentease_app/backend/BReviewService.dart';
 import 'package:rentease_app/backend/BListingService.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
 import 'package:rentease_app/screens/listing_details/osm_location_view_page.dart';
+import 'package:rentease_app/screens/profile/profile_page.dart';
 
 // Theme colors to match HomePage
 const Color _themeColorLight = Color(0xFFE5F9FF);
@@ -1768,12 +1769,21 @@ class _OwnerSectionState extends State<_OwnerSection> {
             ),
             child: ElevatedButton(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBarUtils.buildThemedSnackBar(
+                if (widget.userId != null) {
+                  Navigator.push(
                     context,
-                    'Contact feature coming soon!',
-                  ),
-                );
+                    MaterialPageRoute(
+                      builder: (context) => ProfilePage(userId: widget.userId),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBarUtils.buildThemedSnackBar(
+                      context,
+                      'User information not available',
+                    ),
+                  );
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,

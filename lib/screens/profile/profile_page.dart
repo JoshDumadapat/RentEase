@@ -28,6 +28,8 @@ import 'package:rentease_app/screens/profile/edit_profile_page.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
 import 'package:rentease_app/widgets/subscription_promotion_card.dart';
 import 'package:rentease_app/screens/subscription/subscription_page.dart';
+import 'package:rentease_app/admin/utils/admin_auth_utils.dart';
+import 'package:rentease_app/admin/admin_dashboard_page.dart';
 
 /// Profile Page
 /// 
@@ -62,6 +64,10 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
   String _selectedTab = 'properties'; // 'properties', 'favorites', or 'lookingFor'
+  bool _isAdmin = false;
+  
+  // Check if viewing own profile or another user's profile
+  bool get _isVisitorView => widget.userId != null;
   
   // Filter state
   DateFilterOption? _currentFilter;
@@ -83,6 +89,9 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   StreamSubscription<QuerySnapshot>? _propertiesSubscription;
   StreamSubscription<QuerySnapshot>? _lookingForPostsSubscription;
   
+  // Real-time listener for user verification status
+  StreamSubscription<DocumentSnapshot>? _userVerificationSubscription;
+  
   // Subscription promotion card state
   bool _showSubscriptionCard = true;
 
@@ -90,13 +99,31 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Reset tab to properties if viewing another user's profile
+    if (widget.userId != null) {
+      _selectedTab = 'properties';
+    }
     _loadProfileData();
-    _setupFavoritesListener();
-    _setupFavoritesStream();
+    _checkAdminStatus();
+    // Only setup favorites for own profile
+    if (widget.userId == null) {
+      _setupFavoritesListener();
+      _setupFavoritesStream();
+    }
     _setupPropertiesStream();
     _setupLookingForPostsStream();
     _setupPropertiesCountListener();
     _setupLookingForPostsCountListener();
+    _setupVerificationStatusListener();
+  }
+
+  Future<void> _checkAdminStatus() async {
+    final isAdmin = await AdminAuthUtils.isCurrentUserAdmin();
+    if (mounted) {
+      setState(() {
+        _isAdmin = isAdmin;
+      });
+    }
   }
 
   @override
@@ -106,6 +133,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     _favoritesSubscription?.cancel();
     _propertiesSubscription?.cancel();
     _lookingForPostsSubscription?.cancel();
+    _userVerificationSubscription?.cancel();
     _favoritesStream = null;
     _propertiesStream = null;
     _lookingForPostsStream = null;
@@ -448,6 +476,50 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
       }
     }, onError: (error) {
       debugPrint('❌ [ProfilePage] Error listening to Looking For posts count: $error');
+    });
+  }
+
+  /// Setup real-time listener for user verification status
+  /// This updates the verified status immediately when it changes in Firestore
+  void _setupVerificationStatusListener() {
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    final targetUserId = widget.userId ?? firebaseUser?.uid;
+    
+    // Only listen if viewing own profile
+    if (targetUserId == null || widget.userId != null) {
+      return;
+    }
+    
+    _userVerificationSubscription?.cancel();
+    _userVerificationSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(targetUserId)
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted && snapshot.exists) {
+        final data = snapshot.data();
+        final isVerified = data?['isVerified'] as bool? ?? false;
+        
+        // Update user's verification status in real-time
+        if (_user != null && _user!.isVerified != isVerified) {
+          setState(() {
+            _user = _user!.copyWith(isVerified: isVerified);
+          });
+          
+          // Show success message if just verified
+          if (isVerified) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBarUtils.buildThemedSnackBar(
+                context,
+                '🎉 Your account is now verified!',
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      }
+    }, onError: (error) {
+      debugPrint('❌ [ProfilePage] Error listening to verification status: $error');
     });
   }
 
@@ -1358,6 +1430,19 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                         ),
                         centerTitle: false,
                         actions: [
+                          if (_isAdmin)
+                            IconButton(
+                              icon: const Icon(Icons.admin_panel_settings),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const AdminDashboardPage(),
+                                  ),
+                                );
+                              },
+                              tooltip: 'Admin Dashboard',
+                            ),
                           ThreeDotsMenu(),
                         ],
                       ),
@@ -1372,15 +1457,16 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                               user: _user!,
                               onEditProfile: _handleEditProfile,
                               onShareProfile: _handleShareProfile,
+                              isVisitorView: widget.userId != null, // True if viewing another user's profile
                             ),
                         
                         const SizedBox(height: 16),
                         
-                        // Subscription Promotion Card (always show below profile card)
+                        // Subscription Promotion Card (only show if user is NOT verified)
                         AnimatedSize(
                           duration: const Duration(milliseconds: 300),
                           curve: Curves.easeInOut,
-                          child: _showSubscriptionCard
+                          child: (_showSubscriptionCard && _user != null && !_user!.isVerified)
                               ? Column(
                                   children: [
                                     Padding(
@@ -1411,7 +1497,12 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                             UserStatsSection(
                               user: _user!,
                               listingIds: _userProperties.map((p) => p.id).toList(),
+                              hideFavorites: widget.userId != null, // Hide favorites for visitors
                               onStatTap: (tab) {
+                                // Don't allow visitors to access favorites tab
+                                if (widget.userId != null && tab == 'favorites') {
+                                  return;
+                                }
                                 setState(() {
                                   _selectedTab = tab;
                                 });
@@ -1420,8 +1511,8 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                         
                         const SizedBox(height: 20),
                         
-                        // Property Actions Card (only show for Properties tab)
-                        if (_selectedTab == 'properties')
+                        // Property Actions Card (only show for Properties tab and own profile)
+                        if (_selectedTab == 'properties' && widget.userId == null)
                           PropertyActionsCard(
                             onAddProperty: () async {
                               final result = await Navigator.push(
@@ -1507,12 +1598,12 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                         if (_selectedTab == 'properties')
                           _buildPropertiesSection(),
                         
-                        // Favorites Section (only show when Favorites tab is selected)
-                        if (_selectedTab == 'favorites')
+                        // Favorites Section (only show when Favorites tab is selected and viewing own profile)
+                        if (_selectedTab == 'favorites' && widget.userId == null)
                           _buildFavoritesSection(),
                         
-                        // Looking For Posts Actions Card (only show for Looking For tab)
-                        if (_selectedTab == 'lookingFor')
+                        // Looking For Posts Actions Card (only show for Looking For tab and own profile)
+                        if (_selectedTab == 'lookingFor' && widget.userId == null)
                           LookingForActionsCard(
                             onAddPost: () async {
                               final result = await Navigator.push<LookingForPostModel>(

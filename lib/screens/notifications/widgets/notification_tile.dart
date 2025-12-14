@@ -42,64 +42,86 @@ class NotificationTile extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Profile picture with overlay icon
-            _buildAvatarWithOverlay(context, isDark),
-            const SizedBox(width: 12),
-            // Notification content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildNotificationText(context, isDark),
-                  const SizedBox(height: 4),
-                  Text(
-                    TimeAgo.format(notification.timestamp, includeAgo: false),
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                  // Show reaction count if available
-                  if (notification.reactionCount != null && 
-                      notification.reactionCount! > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        '${notification.reactionCount} Reactions',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+      child: Container(
+        color: notification.read 
+            ? Colors.transparent 
+            : (isDark ? const Color(0xFF1A1A1A).withValues(alpha: 0.3) : const Color(0xFFE5F9FF).withValues(alpha: 0.5)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Profile picture with overlay icon
+              _buildAvatarWithOverlay(context, isDark),
+              const SizedBox(width: 12),
+              // Notification content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildNotificationText(context, isDark),
                         ),
+                        // Unread indicator dot
+                        if (!notification.read)
+                          Container(
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.only(left: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00B8E6),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      TimeAgo.format(notification.timestamp, includeAgo: false),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
                       ),
                     ),
-                ],
+                    // Show reaction count if available
+                    if (notification.reactionCount != null && 
+                        notification.reactionCount! > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '${notification.reactionCount} Reactions',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildAvatarWithOverlay(BuildContext context, bool isDark) {
-    // Build avatar
+    // Build avatar - CircleAvatar automatically makes it fully circular
     Widget avatar = CircleAvatar(
       radius: 24,
       backgroundColor: isDark ? Colors.grey[800] : Colors.grey[300],
-      child: notification.actorAvatarUrl != null
-          ? ClipOval(
-              child: Image.network(
-                notification.actorAvatarUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => _buildInitialsAvatar(context, isDark),
-              ),
-            )
-          : _buildInitialsAvatar(context, isDark),
+      backgroundImage: notification.actorAvatarUrl != null && notification.actorAvatarUrl!.isNotEmpty
+          ? NetworkImage(notification.actorAvatarUrl!)
+          : null,
+      child: notification.actorAvatarUrl == null || notification.actorAvatarUrl!.isEmpty
+          ? _buildInitialsAvatar(context, isDark)
+          : null,
+      onBackgroundImageError: (exception, stackTrace) {
+        // Error handled by showing initials
+      },
     );
 
     // Build overlay icon

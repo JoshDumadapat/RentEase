@@ -24,6 +24,9 @@ import 'package:rentease_app/screens/home/widgets/home_skeleton.dart';
 import 'package:rentease_app/screens/home/widgets/looking_for_skeleton.dart';
 import 'package:rentease_app/screens/home/widgets/threedots.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
+import 'package:rentease_app/widgets/ad_card_widget.dart';
+import 'package:rentease_app/models/ad_model.dart';
+import 'package:rentease_app/screens/chat/chats_list_page.dart';
 
 // Theme color constants
 const Color _themeColor = Color(0xFF00D1FF);
@@ -468,6 +471,27 @@ class _HomePageState extends State<HomePage>
               ),
             ),
             actions: [
+              IconButton(
+                icon: SvgPicture.asset(
+                  'assets/icons/chat_icon.svg',
+                  width: 20,
+                  height: 20,
+                  colorFilter: ColorFilter.mode(
+                    isDark ? Colors.white : Colors.black87,
+                    BlendMode.srcIn,
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ChatsListPage(),
+                    ),
+                  );
+                },
+                tooltip: 'Messages',
+              ),
+              const SizedBox(width: 4),
               const ThreeDotsMenu(),
               const SizedBox(width: 8),
             ],
@@ -1251,25 +1275,62 @@ class _VisitListingsSection extends StatelessWidget {
             ),
           )
         else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            itemCount: listings.length,
-            itemBuilder: (context, index) {
-              final listing = listings[index];
-              return Padding(
-                key: ValueKey(listing.id),
-                padding: EdgeInsets.only(
-                  bottom: index == listings.length - 1 ? 0 : 20,
-                ),
-                child: _AnimatedFadeSlide(
-                  delay: 400 + (index * 80), // Staggered animation with more spacing
-                  child: _ModernListingCard(
-                    listing: listing,
-                    onTap: () => onListingTap(listing),
-                  ),
-                ),
+          Builder(
+            builder: (context) {
+              // Calculate total items including ads (insert ad every 6 listings)
+              final int adInterval = 6;
+              final int adCount = (listings.length / adInterval).floor();
+              final int totalItemCount = listings.length + adCount;
+              
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                itemCount: totalItemCount,
+                itemBuilder: (context, index) {
+                  // Ads appear after every 6 listings: at positions 6, 13, 20, 27, etc.
+                  // Pattern: (index + 1) % 7 == 0 means it's an ad position (after 6 items)
+                  final bool isAdPosition = (index + 1) % 7 == 0 && index >= 6;
+                  
+                  if (isAdPosition) {
+                    // Check if we haven't exceeded the maximum number of ads
+                    final int adNumber = (index + 1) ~/ 7 - 1;
+                    if (adNumber < adCount) {
+                      // Rotate through different ads
+                      final ad = AdModel.getAdByIndex(adNumber);
+                      return AdCardWidget(
+                        ad: ad,
+                        onTap: () {
+                          // Handle ad tap - could navigate to brand URL
+                        },
+                      );
+                    }
+                  }
+                  
+                  // Calculate the actual listing index
+                  // Count how many ads appear before this index
+                  final int adsBeforeIndex = (index + 1) ~/ 7;
+                  final int listingIndex = index - adsBeforeIndex;
+                  
+                  if (listingIndex >= listings.length) {
+                    return const SizedBox.shrink();
+                  }
+                  
+                  final listing = listings[listingIndex];
+                  return Padding(
+                    key: ValueKey(listing.id),
+                    padding: EdgeInsets.only(
+                      bottom: index == totalItemCount - 1 ? 0 : 20,
+                    ),
+                    child: _AnimatedFadeSlide(
+                      delay: 400 + (listingIndex * 80), // Staggered animation with more spacing
+                      child: _ModernListingCard(
+                        listing: listing,
+                        onTap: () => onListingTap(listing),
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),

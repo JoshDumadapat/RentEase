@@ -4,11 +4,13 @@ import 'package:flutter_svg/flutter_svg.dart';
 class CustomBottomNavigationBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
+  final int unreadNotificationCount;
 
   const CustomBottomNavigationBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.unreadNotificationCount = 0,
   });
 
   @override
@@ -101,15 +103,79 @@ class CustomBottomNavigationBar extends StatelessWidget {
             label: '',
           ),
           BottomNavigationBarItem(
-            icon: _NavIcon(
-              assetPath: 'assets/icons/navbar/notifications_outlined.svg',
-              isSelected: false,
-              isDark: isDark,
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                _NavIcon(
+                  assetPath: 'assets/icons/navbar/notifications_outlined.svg',
+                  isSelected: false,
+                  isDark: isDark,
+                ),
+                if (unreadNotificationCount > 0)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Center(
+                        child: Text(
+                          unreadNotificationCount > 99 ? '99+' : '$unreadNotificationCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            activeIcon: _NavIcon(
-              assetPath: 'assets/icons/navbar/notifications_filled.svg',
-              isSelected: true,
-              isDark: isDark,
+            activeIcon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                _NavIcon(
+                  assetPath: 'assets/icons/navbar/notifications_filled.svg',
+                  isSelected: true,
+                  isDark: isDark,
+                ),
+                if (unreadNotificationCount > 0)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Center(
+                        child: Text(
+                          unreadNotificationCount > 99 ? '99+' : '$unreadNotificationCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             label: '',
           ),

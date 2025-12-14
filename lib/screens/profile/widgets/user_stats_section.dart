@@ -14,12 +14,14 @@ class UserStatsSection extends StatefulWidget {
   final UserModel user;
   final Function(String)? onStatTap;
   final List<String> listingIds;
+  final bool hideFavorites; // Hide favorites tab for visitors
 
   const UserStatsSection({
     super.key,
     required this.user,
     this.onStatTap,
     required this.listingIds,
+    this.hideFavorites = false,
   });
 
   @override
@@ -174,15 +176,17 @@ class _UserStatsSectionState extends State<UserStatsSection> {
                   showSubtext: !_isLoadingRating && _averageRating > 0 && _totalReviewCount > 0,
                   subtext: _totalReviewCount == 1 ? '1 review' : '$_totalReviewCount reviews',
                 ),
-                const SizedBox(width: 12),
-                _StatTile(
-                  label: 'Favorites',
-                  value: widget.user.favoritesCount.toString(),
-                  iconPath: 'assets/icons/navbar/heart_outlined.svg',
-                  isDark: isDark,
-                  width: cardWidth,
-                  onTap: widget.onStatTap != null ? () => widget.onStatTap!('favorites') : null,
-                ),
+                if (!widget.hideFavorites) ...[
+                  const SizedBox(width: 12),
+                  _StatTile(
+                    label: 'Favorites',
+                    value: widget.user.favoritesCount.toString(),
+                    iconPath: 'assets/icons/navbar/heart_outlined.svg',
+                    isDark: isDark,
+                    width: cardWidth,
+                    onTap: widget.onStatTap != null ? () => widget.onStatTap!('favorites') : null,
+                  ),
+                ],
               ],
             ),
           ),

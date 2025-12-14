@@ -5,6 +5,8 @@ import 'package:rentease_app/models/looking_for_post_model.dart';
 import 'package:rentease_app/guest/guest_listing_details_page.dart';
 import 'package:rentease_app/guest/widgets/sign_in_required_modal.dart';
 import 'package:rentease_app/sign_up/sign_up_page.dart';
+import 'package:rentease_app/widgets/ad_card_widget.dart';
+import 'package:rentease_app/models/ad_model.dart';
 
 /// COMPLETELY ISOLATED GUEST UI - NO SHARED COMPONENTS WITH MAIN APP
 /// This page is completely separate from MainApp to prevent navigation bugs
@@ -182,20 +184,57 @@ class _VisitListingsSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          itemCount: listings.length,
-          itemBuilder: (context, index) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: index == listings.length - 1 ? 0 : 20,
-              ),
-              child: _ModernListingCard(
-                listing: listings[index],
-                onTap: () => onListingTap(listings[index]),
-              ),
+        Builder(
+          builder: (context) {
+            // Calculate total items including ads (insert ad every 6 listings)
+            final int adInterval = 6;
+            final int adCount = (listings.length / adInterval).floor();
+            final int totalItemCount = listings.length + adCount;
+            
+            return ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              itemCount: totalItemCount,
+              itemBuilder: (context, index) {
+                // Ads appear after every 6 listings: at positions 6, 13, 20, 27, etc.
+                // Pattern: (index + 1) % 7 == 0 means it's an ad position (after 6 items)
+                final bool isAdPosition = (index + 1) % 7 == 0 && index >= 6;
+                
+                if (isAdPosition) {
+                  // Check if we haven't exceeded the maximum number of ads
+                  final int adNumber = (index + 1) ~/ 7 - 1;
+                  if (adNumber < adCount) {
+                    // Rotate through different ads
+                    final ad = AdModel.getAdByIndex(adNumber);
+                    return AdCardWidget(
+                      ad: ad,
+                      onTap: () {
+                        // Handle ad tap - could navigate to brand URL
+                      },
+                    );
+                  }
+                }
+                
+                // Calculate the actual listing index
+                // Count how many ads appear before this index
+                final int adsBeforeIndex = (index + 1) ~/ 7;
+                final int listingIndex = index - adsBeforeIndex;
+                
+                if (listingIndex >= listings.length) {
+                  return const SizedBox.shrink();
+                }
+                
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index == totalItemCount - 1 ? 0 : 20,
+                  ),
+                  child: _ModernListingCard(
+                    listing: listings[listingIndex],
+                    onTap: () => onListingTap(listings[listingIndex]),
+                  ),
+                );
+              },
             );
           },
         ),

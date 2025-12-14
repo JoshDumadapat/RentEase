@@ -51,16 +51,55 @@ class BAdminService {
   }
 
   /// Get all notifications (admin access)
+  /// Filters out verification notifications for users who are already verified
   Future<List<Map<String, dynamic>>> getAllNotifications() async {
     try {
       final snapshot = await _firestore
           .collection('notifications')
           .orderBy('createdAt', descending: true)
           .get();
-      return snapshot.docs.map((doc) => {
+      
+      final allNotifications = snapshot.docs.map((doc) => {
         'id': doc.id,
         ...doc.data(),
       }).toList();
+      
+      // Filter out verification notifications for users who are already verified or are admin
+      final filteredNotifications = <Map<String, dynamic>>[];
+      
+      for (final notification in allNotifications) {
+        final type = notification['type'] as String? ?? '';
+        final userId = notification['userId'] as String?;
+        
+        // Check if this is a verification-related notification
+        final isVerificationNotification = type.toLowerCase().contains('verification') ||
+            type.toLowerCase().contains('verify');
+        
+        if (isVerificationNotification && userId != null) {
+          // Check if user is already verified or is admin
+          try {
+            final userDoc = await _firestore.collection('users').doc(userId).get();
+            if (userDoc.exists) {
+              final userData = userDoc.data()!;
+              final isVerified = userData['isVerified'] as bool? ?? false;
+              final isAdmin = userData['role'] == 'admin';
+              
+              // Skip this notification if user is already verified or is admin
+              if (isVerified || isAdmin) {
+                debugPrint('⏭️ [BAdminService] Skipping verification notification for ${isAdmin ? "admin" : "already verified"} user: $userId');
+                continue;
+              }
+            }
+          } catch (e) {
+            debugPrint('⚠️ [BAdminService] Error checking user verification status: $e');
+            // If we can't check, include the notification to be safe
+          }
+        }
+        
+        filteredNotifications.add(notification);
+      }
+      
+      return filteredNotifications;
     } catch (e) {
       debugPrint('❌ [BAdminService] Error getting all notifications: $e');
       return [];
@@ -151,14 +190,27 @@ class BAdminService {
   }
 
   /// Verify user
+  /// Note: Does not send verification notifications to admin accounts
   Future<void> verifyUser(String userId) async {
     try {
+      // Check if user is admin before verifying
+      final userData = await _firestore.collection('users').doc(userId).get();
+      final isAdmin = userData.data()?['role'] == 'admin';
+      
       await _firestore.collection('users').doc(userId).update({
         'isVerified': true,
         'verifiedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      debugPrint('✅ [BAdminService] User verified: $userId');
+      
+      // Do not send verification notification to admin accounts
+      if (!isAdmin) {
+        // Note: If verification notifications are added in the future,
+        // they should be sent here, but only for non-admin users
+        // For now, no notifications are sent for verification
+      }
+      
+      debugPrint('✅ [BAdminService] User verified: $userId${isAdmin ? ' (admin - no notification sent)' : ''}');
     } catch (e) {
       debugPrint('❌ [BAdminService] Error verifying user: $e');
       rethrow;
@@ -519,17 +571,35 @@ class BAdminService {
   /// Get enhanced dashboard stats with trends
   Future<Map<String, dynamic>> getEnhancedDashboardStats() async {
     try {
+      debugPrint('📊 [BAdminService] Starting to fetch dashboard stats...');
       final now = DateTime.now();
       final thirtyDaysAgo = now.subtract(const Duration(days: 30));
       final sevenDaysAgo = now.subtract(const Duration(days: 7));
 
       // Get all data
+      debugPrint('📊 [BAdminService] Fetching users...');
       final usersSnapshot = await _firestore.collection('users').get();
+      debugPrint('✅ [BAdminService] Fetched ${usersSnapshot.docs.length} users');
+      
+      debugPrint('📊 [BAdminService] Fetching listings...');
       final listingsSnapshot = await _firestore.collection('listings').get();
+      debugPrint('✅ [BAdminService] Fetched ${listingsSnapshot.docs.length} listings');
+      
+      debugPrint('📊 [BAdminService] Fetching comments...');
       final commentsSnapshot = await _firestore.collection('comments').get();
+      debugPrint('✅ [BAdminService] Fetched ${commentsSnapshot.docs.length} comments');
+      
+      debugPrint('📊 [BAdminService] Fetching lookingForPosts...');
       final lookingForPostsSnapshot = await _firestore.collection('lookingForPosts').get();
+      debugPrint('✅ [BAdminService] Fetched ${lookingForPostsSnapshot.docs.length} lookingForPosts');
+      
+      debugPrint('📊 [BAdminService] Fetching notifications...');
       final notificationsSnapshot = await _firestore.collection('notifications').get();
+      debugPrint('✅ [BAdminService] Fetched ${notificationsSnapshot.docs.length} notifications');
+      
+      debugPrint('📊 [BAdminService] Fetching reports...');
       final reportsSnapshot = await _firestore.collection('reports').where('status', isEqualTo: 'pending').get();
+      debugPrint('✅ [BAdminService] Fetched ${reportsSnapshot.docs.length} pending reports');
 
       // Calculate trends
       int newUsersLast7Days = 0;
@@ -581,7 +651,67 @@ class BAdminService {
         categoryCount[category] = (categoryCount[category] ?? 0) + 1;
       }
 
-      return {
+      // ==================== MONETARY STATISTICS FOR VERIFIED USERS ====================
+      
+      // Get verified user IDs
+      final Set<String> verifiedUserIds = {};
+      for (final doc in usersSnapshot.docs) {
+        final data = doc.data();
+        if (data['isVerified'] == true) {
+          verifiedUserIds.add(doc.id);
+        }
+      }
+
+      // Calculate verified user statistics
+      int verifiedUserListings = 0;
+      int verifiedUserAvailableListings = 0;
+      double totalVerifiedRevenue = 0.0;
+      double averageVerifiedPrice = 0.0;
+      int verifiedUserActiveListings = 0;
+      
+      // Count listings from verified users
+      for (final doc in listingsSnapshot.docs) {
+        final data = doc.data();
+        final userId = data['userId'] as String?;
+        final isOwnerVerified = data['isOwnerVerified'] as bool? ?? false;
+        final status = data['status'] as String? ?? 'published';
+        final isDraft = data['isDraft'] as bool? ?? false;
+        
+        // Check if listing is from verified user or owner is verified
+        if (verifiedUserIds.contains(userId) || isOwnerVerified) {
+          verifiedUserListings++;
+          
+          // Check if listing is available (published and not draft)
+          if (status == 'published' && !isDraft) {
+            verifiedUserAvailableListings++;
+            verifiedUserActiveListings++;
+            
+            // Calculate revenue (monthly price)
+            final price = (data['price'] as num?)?.toDouble() ?? 0.0;
+            if (price > 0) {
+              totalVerifiedRevenue += price;
+            }
+          }
+        }
+      }
+      
+      // Calculate average price
+      if (verifiedUserActiveListings > 0) {
+        averageVerifiedPrice = totalVerifiedRevenue / verifiedUserActiveListings;
+      }
+      
+      // Calculate estimated monthly revenue (all active verified listings)
+      final estimatedMonthlyRevenue = totalVerifiedRevenue;
+      
+      // Calculate estimated annual revenue
+      final estimatedAnnualRevenue = estimatedMonthlyRevenue * 12;
+      
+      // Calculate potential revenue (if all verified listings were rented)
+      final potentialMonthlyRevenue = verifiedUserListings > 0 
+          ? (averageVerifiedPrice * verifiedUserListings)
+          : 0.0;
+
+      final result = {
         // Totals
         'totalUsers': usersSnapshot.docs.length,
         'totalListings': listingsSnapshot.docs.length,
@@ -603,9 +733,28 @@ class BAdminService {
         
         // Category breakdown
         'categoryBreakdown': categoryCount,
+        
+        // Monetary statistics for verified users
+        'verifiedUserListings': verifiedUserListings,
+        'verifiedUserAvailableListings': verifiedUserAvailableListings,
+        'verifiedUserActiveListings': verifiedUserActiveListings,
+        'totalVerifiedRevenue': totalVerifiedRevenue,
+        'averageVerifiedPrice': averageVerifiedPrice,
+        'estimatedMonthlyRevenue': estimatedMonthlyRevenue,
+        'estimatedAnnualRevenue': estimatedAnnualRevenue,
+        'potentialMonthlyRevenue': potentialMonthlyRevenue,
       };
-    } catch (e) {
+      
+      debugPrint('✅ [BAdminService] Dashboard stats calculated successfully');
+      debugPrint('   Total Users: ${result['totalUsers']}');
+      debugPrint('   Total Listings: ${result['totalListings']}');
+      debugPrint('   Verified Users: ${result['verifiedUsers']}');
+      debugPrint('   Monthly Revenue: ${result['estimatedMonthlyRevenue']}');
+      
+      return result;
+    } catch (e, stackTrace) {
       debugPrint('❌ [BAdminService] Error getting enhanced dashboard stats: $e');
+      debugPrint('❌ [BAdminService] Stack trace: $stackTrace');
       return {
         'totalUsers': 0,
         'totalListings': 0,
@@ -621,6 +770,15 @@ class BAdminService {
         'bannedUsers': 0,
         'verifiedUsers': 0,
         'categoryBreakdown': <String, int>{},
+        // Monetary statistics defaults
+        'verifiedUserListings': 0,
+        'verifiedUserAvailableListings': 0,
+        'verifiedUserActiveListings': 0,
+        'totalVerifiedRevenue': 0.0,
+        'averageVerifiedPrice': 0.0,
+        'estimatedMonthlyRevenue': 0.0,
+        'estimatedAnnualRevenue': 0.0,
+        'potentialMonthlyRevenue': 0.0,
       };
     }
   }

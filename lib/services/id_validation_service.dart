@@ -1602,10 +1602,10 @@ class IdValidationService {
       // Different person: 0.15-0.30
       // Borderline: 0.28-0.35
       
-      // Use 10% threshold for ID photos
+      // Use 12% threshold for ID photos
       // ID photos are often lower quality, older, and have different lighting/expression
       // Lower threshold helps reduce false negatives for legitimate ID verifications
-      final threshold = 0.10; // 10% threshold for ID photos
+      final threshold = 0.12; // 12% threshold for ID photos
       final isMatch = similarity >= threshold;
       
       // Additional validation: Check if similarity is in expected range
@@ -1626,7 +1626,7 @@ class IdValidationService {
       } else if (isInSamePersonWithVariations) {
         _log('⚠️  Similarity indicates SAME PERSON with variations');
         _log('   (hair, expression, lighting, age: 30-60%)');
-        _log('💡 This is normal for ID photos - using lenient 10% threshold');
+        _log('💡 This is normal for ID photos - using lenient 12% threshold');
       } else if (isInDifferentPersonRange) {
         _log('❌ Similarity indicates DIFFERENT PERSON (typical range: 15-30%)');
       } else if (isInBorderlineRange) {

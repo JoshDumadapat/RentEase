@@ -88,9 +88,20 @@ class _AdminCommentsPageState extends State<AdminCommentsPage> {
       }
       
       if (mounted) {
+        // Remove duplicates based on comment ID
+        final seenIds = <String>{};
+        final uniqueComments = <Map<String, dynamic>>[];
+        for (final comment in comments) {
+          final commentId = comment['id'] as String?;
+          if (commentId != null && commentId.isNotEmpty && !seenIds.contains(commentId)) {
+            seenIds.add(commentId);
+            uniqueComments.add(comment);
+          }
+        }
+        
         setState(() {
-          _allComments = comments;
-          _filteredComments = comments;
+          _allComments = uniqueComments;
+          _filteredComments = uniqueComments;
           _isLoading = false;
         });
         _applySearch();
@@ -444,11 +455,16 @@ class _AdminCommentsPageState extends State<AdminCommentsPage> {
                     : RefreshIndicator(
                         onRefresh: _loadComments,
                         child: ListView.builder(
+                          key: const PageStorageKey<String>('admin_comments_list'),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _filteredComments.length,
                           itemBuilder: (context, index) {
                             final comment = _filteredComments[index];
-                            final commentId = comment['id'] as String;
+                            final commentId = comment['id'] as String? ?? '';
+                            // Ensure we have a valid ID
+                            if (commentId.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
                             final text = comment['text'] as String? ?? '';
                             final username = comment['username'] as String? ?? 'Unknown';
                             final userId = comment['userId'] as String?;
@@ -457,6 +473,7 @@ class _AdminCommentsPageState extends State<AdminCommentsPage> {
                             final isSelected = _selectedCommentIds.contains(commentId);
 
                             return Card(
+                              key: ValueKey('comment_$commentId'),
                               margin: const EdgeInsets.only(bottom: 12),
                               color: isSelected 
                                 ? _themeColorDark.withValues(alpha: 0.2)

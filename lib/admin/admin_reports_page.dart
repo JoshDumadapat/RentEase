@@ -81,9 +81,20 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
       }
       
       if (mounted) {
+        // Remove duplicates based on report ID
+        final seenIds = <String>{};
+        final uniqueReports = <Map<String, dynamic>>[];
+        for (final report in reports) {
+          final reportId = report['id'] as String?;
+          if (reportId != null && reportId.isNotEmpty && !seenIds.contains(reportId)) {
+            seenIds.add(reportId);
+            uniqueReports.add(report);
+          }
+        }
+        
         setState(() {
-          _allReports = reports;
-          _filteredReports = reports;
+          _allReports = uniqueReports;
+          _filteredReports = uniqueReports;
           _isLoading = false;
         });
       }
@@ -439,11 +450,16 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                     : RefreshIndicator(
                         onRefresh: _loadReports,
                         child: ListView.builder(
+                          key: const PageStorageKey<String>('admin_reports_list'),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _filteredReports.length,
                           itemBuilder: (context, index) {
                             final report = _filteredReports[index];
-                            final reportId = report['id'] as String;
+                            final reportId = report['id'] as String? ?? '';
+                            // Ensure we have a valid ID
+                            if (reportId.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
                             final contentType = report['contentType'] as String? ?? 'unknown';
                             final contentId = report['contentId'] as String? ?? '';
                             final reason = report['reason'] as String? ?? '';
@@ -456,6 +472,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                             final statusColor = _getStatusColor(status);
 
                             return Card(
+                              key: ValueKey('report_$reportId'),
                               margin: const EdgeInsets.only(bottom: 12),
                               color: cardColor,
                               child: ExpansionTile(

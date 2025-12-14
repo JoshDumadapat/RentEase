@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:rentease_app/screens/home/home_page.dart';
 import 'package:rentease_app/screens/search/search_page.dart';
 import 'package:rentease_app/screens/notifications/notifications_page.dart';
 import 'package:rentease_app/screens/profile/profile_page.dart';
 import 'package:rentease_app/widgets/bottom_navigation_bar.dart';
 import 'package:rentease_app/widgets/post_type_selection_modal.dart';
+import 'package:rentease_app/services/notification_service.dart';
 
 class MainApp extends StatefulWidget {
   const MainApp({super.key});
@@ -15,6 +18,9 @@ class MainApp extends StatefulWidget {
 
 class _MainAppState extends State<MainApp> {
   int _currentBottomNavIndex = 0;
+  final NotificationService _notificationService = NotificationService();
+  int _unreadNotificationCount = 0;
+  StreamSubscription<User?>? _authStateSubscription;
 
   final List<Widget> _pages = [
     const HomePage(),
@@ -23,6 +29,50 @@ class _MainAppState extends State<MainApp> {
     const NotificationsPage(),
     const ProfilePage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize notification service and set up real-time listener
+    _notificationService.initialize();
+    _notificationService.addListener(_onNotificationUpdate);
+    // Initial update of unread count
+    _updateUnreadCount();
+    
+    // Also listen to auth state changes to reinitialize when user logs in
+    _authStateSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null && mounted) {
+        // Reinitialize notification service when user logs in
+        _notificationService.initialize();
+        _updateUnreadCount();
+      } else if (user == null && mounted) {
+        // Clear notifications when user logs out
+        setState(() {
+          _unreadNotificationCount = 0;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authStateSubscription?.cancel();
+    _notificationService.removeListener(_onNotificationUpdate);
+    _notificationService.dispose();
+    super.dispose();
+  }
+
+  void _onNotificationUpdate() {
+    _updateUnreadCount();
+  }
+
+  void _updateUnreadCount() {
+    if (mounted) {
+      setState(() {
+        _unreadNotificationCount = _notificationService.unreadCount;
+      });
+    }
+  }
 
   void _onNavTap(int index) {
     // If Add Post button (index 2) is tapped, show modal instead
@@ -52,6 +102,7 @@ class _MainAppState extends State<MainApp> {
       bottomNavigationBar: CustomBottomNavigationBar(
         currentIndex: _currentBottomNavIndex,
         onTap: _onNavTap,
+        unreadNotificationCount: _unreadNotificationCount,
       ),
     );
   }

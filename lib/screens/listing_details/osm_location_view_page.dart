@@ -4,7 +4,9 @@ import 'package:latlong2/latlong.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
+import 'dart:io';
 
 class OSMLocationViewPage extends StatefulWidget {
   final String address;
@@ -39,8 +41,10 @@ class _OSMLocationViewPageState extends State<OSMLocationViewPage> {
 
   Future<void> _getUserLocation() async {
     try {
+      debugPrint('📍 [OSMLocationView] Requesting user location...');
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
+        debugPrint('⚠️ [OSMLocationView] Location services are disabled');
         return;
       }
 
@@ -48,25 +52,34 @@ class _OSMLocationViewPageState extends State<OSMLocationViewPage> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
+          debugPrint('⚠️ [OSMLocationView] Location permission denied');
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
+        debugPrint('⚠️ [OSMLocationView] Location permission denied forever');
         return;
       }
 
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
 
+      final userLatLng = LatLng(position.latitude, position.longitude);
+      debugPrint('✅ [OSMLocationView] Got user location: ${userLatLng.latitude}, ${userLatLng.longitude}');
+
       setState(() {
-        _userLocation = LatLng(position.latitude, position.longitude);
+        _userLocation = userLatLng;
       });
 
       // Get route if we have both locations
-      if (_location != null && _userLocation != null) {
+      if (_location != null) {
+        debugPrint('🛣️ [OSMLocationView] Both locations available, fetching route...');
         _getRoute();
+      } else {
+        debugPrint('⏳ [OSMLocationView] Waiting for property location...');
       }
     } catch (e) {
       debugPrint('❌ [OSMLocationView] Error getting user location: $e');
@@ -75,6 +88,7 @@ class _OSMLocationViewPageState extends State<OSMLocationViewPage> {
 
   Future<void> _geocodeAddress() async {
     try {
+      debugPrint('🔍 [OSMLocationView] Geocoding address: ${widget.address}');
       setState(() {
         _isLoading = true;
         _errorMessage = null;
@@ -86,6 +100,7 @@ class _OSMLocationViewPageState extends State<OSMLocationViewPage> {
       if (locations.isNotEmpty) {
         final location = locations.first;
         final latLng = LatLng(location.latitude, location.longitude);
+        debugPrint('✅ [OSMLocationView] Geocoded address to: ${latLng.latitude}, ${latLng.longitude}');
         
         setState(() {
           _location = latLng;
@@ -101,7 +116,10 @@ class _OSMLocationViewPageState extends State<OSMLocationViewPage> {
 
         // Get route if we have user location
         if (_userLocation != null) {
+          debugPrint('🛣️ [OSMLocationView] Both locations available, fetching route...');
           _getRoute();
+        } else {
+          debugPrint('⏳ [OSMLocationView] Waiting for user location...');
         }
       } else {
         setState(() {
@@ -123,7 +141,16 @@ class _OSMLocationViewPageState extends State<OSMLocationViewPage> {
   }
 
   Future<void> _getRoute() async {
-    if (_userLocation == null || _location == null) return;
+    if (_userLocation == null || _location == null) {
+      debugPrint('⚠️ [OSMLocationView] Cannot get route: missing locations');
+      debugPrint('   User location: $_userLocation');
+      debugPrint('   Property location: $_location');
+      return;
+    }
+
+    debugPrint('🛣️ [OSMLocationView] Fetching route from OSRM...');
+    debugPrint('   From: ${_userLocation!.latitude}, ${_userLocation!.longitude}');
+    debugPrint('   To: ${_location!.latitude}, ${_location!.longitude}');
 
     setState(() {
       _isLoadingRoute = true;
@@ -141,10 +168,20 @@ class _OSMLocationViewPageState extends State<OSMLocationViewPage> {
         'https://router.project-osrm.org/route/v1/driving/$startLng,$startLat;$endLng,$endLat?overview=full&geometries=geojson',
       );
 
-      final response = await http.get(url);
+      debugPrint('🌐 [OSMLocationView] Requesting route from: $url');
+
+      final response = await http.get(url).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Route request timeout');
+        },
+      );
+      
+      debugPrint('📡 [OSMLocationView] Route API response status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        debugPrint('📊 [OSMLocationView] Route API response: ${data['code']}');
         
         if (data['code'] == 'Ok' && data['routes'] != null && data['routes'].isNotEmpty) {
           final route = data['routes'][0];
@@ -159,6 +196,11 @@ class _OSMLocationViewPageState extends State<OSMLocationViewPage> {
           final distance = route['distance'] as double; // in meters
           final duration = route['duration'] as double; // in seconds
 
+          debugPrint('✅ [OSMLocationView] Route calculated successfully!');
+          debugPrint('   Distance: ${_formatDistance(distance)}');
+          debugPrint('   Duration: ${_formatDuration(duration)}');
+          debugPrint('   Route points: ${routePoints.length}');
+
           setState(() {
             _routePoints = routePoints;
             _distance = distance;
@@ -167,21 +209,37 @@ class _OSMLocationViewPageState extends State<OSMLocationViewPage> {
           });
 
           // Fit map to show both locations and route
-          if (_routePoints.isNotEmpty && _mapReady) {
-            _fitBounds();
+          if (_routePoints.isNotEmpty) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (_mapReady) {
+                _fitBounds();
+              } else {
+                // Wait a bit for map to be ready
+                Future.delayed(const Duration(milliseconds: 500), () {
+                  if (mounted && _mapReady) {
+                    _fitBounds();
+                  }
+                });
+              }
+            });
           }
         } else {
+          debugPrint('⚠️ [OSMLocationView] Route API returned no valid route');
+          debugPrint('   Response: ${data.toString()}');
           setState(() {
             _isLoadingRoute = false;
           });
         }
       } else {
+        debugPrint('❌ [OSMLocationView] Route API error: ${response.statusCode}');
+        debugPrint('   Response body: ${response.body}');
         setState(() {
           _isLoadingRoute = false;
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('❌ [OSMLocationView] Error getting route: $e');
+      debugPrint('   Stack trace: $stackTrace');
       setState(() {
         _isLoadingRoute = false;
       });
@@ -237,6 +295,45 @@ class _OSMLocationViewPageState extends State<OSMLocationViewPage> {
       final hours = (durationInSeconds / 3600).floor();
       final minutes = ((durationInSeconds % 3600) / 60).floor();
       return '${hours}h ${minutes}m';
+    }
+  }
+
+  Future<void> _openGoogleMaps() async {
+    try {
+      final encodedAddress = Uri.encodeComponent(widget.address);
+      Uri mapsUrl;
+
+      if (Platform.isIOS) {
+        // Try Google Maps app first, fallback to Apple Maps
+        mapsUrl = Uri.parse('comgooglemaps://?q=$encodedAddress');
+        if (await canLaunchUrl(mapsUrl)) {
+          await launchUrl(mapsUrl);
+          return;
+        }
+        // Fallback to Apple Maps
+        mapsUrl = Uri.parse('http://maps.apple.com/?q=$encodedAddress');
+      } else {
+        // Android: Use Google Maps
+        mapsUrl = Uri.parse('https://www.google.com/maps/search/?api=1&query=$encodedAddress');
+      }
+
+      if (await canLaunchUrl(mapsUrl)) {
+        await launchUrl(mapsUrl, mode: LaunchMode.externalApplication);
+      } else {
+        // Final fallback: web Google Maps
+        final webUrl = Uri.parse('https://www.google.com/maps/search/?api=1&query=$encodedAddress');
+        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint('❌ [OSMLocationView] Error opening Google Maps: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Could not open Google Maps. Please check if it is installed.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -301,14 +398,25 @@ class _OSMLocationViewPageState extends State<OSMLocationViewPage> {
                         initialZoom: _location != null ? 15.0 : 12.0,
                         onMapEvent: (MapEvent event) {
                           // Mark map as ready on first event
-                          if (!_mapReady && _location != null) {
+                          if (!_mapReady) {
+                            debugPrint('🗺️ [OSMLocationView] Map is now ready');
                             setState(() {
                               _mapReady = true;
                             });
+                            
                             // Move to location once map is ready
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              _moveToLocation(_location!, 15.0);
-                            });
+                            if (_location != null) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                _moveToLocation(_location!, 15.0);
+                              });
+                            }
+                            
+                            // If we have route points, fit bounds
+                            if (_routePoints.isNotEmpty && _userLocation != null && _location != null) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                _fitBounds();
+                              });
+                            }
                           }
                         },
                       ),
@@ -397,16 +505,52 @@ class _OSMLocationViewPageState extends State<OSMLocationViewPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Route info (distance and duration)
-                      if (_isLoadingRoute)
-                        const Row(
+                      if (_userLocation == null)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                color: Colors.orange,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Enable location to see directions',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: _getUserLocation,
+                                child: const Text('Enable'),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (_isLoadingRoute)
+                        Row(
                           children: [
-                            SizedBox(
+                            const SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
-                            SizedBox(width: 8),
-                            Text('Getting directions...'),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Getting directions...',
+                              style: TextStyle(
+                                color: isDark ? Colors.grey[300] : Colors.grey[700],
+                              ),
+                            ),
                           ],
                         )
                       else if (_distance != null && _duration != null)
@@ -416,42 +560,107 @@ class _OSMLocationViewPageState extends State<OSMLocationViewPage> {
                             color: const Color(0xFF00B8E6).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Row(
+                          child: Column(
                             children: [
-                              Icon(
-                                Icons.directions,
-                                color: const Color(0xFF00B8E6),
-                                size: 20,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _formatDistance(_distance!),
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDark ? Colors.white : Colors.black87,
-                                      ),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.directions,
+                                    color: const Color(0xFF00B8E6),
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _formatDistance(_distance!),
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDark ? Colors.white : Colors.black87,
+                                          ),
+                                        ),
+                                        Text(
+                                          _formatDuration(_duration!),
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: isDark ? Colors.grey[300] : Colors.grey[600],
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    Text(
-                                      _formatDuration(_duration!),
+                                  ),
+                                  IconButton(
+                                    icon: Icon(_userLocation == null ? Icons.my_location : Icons.refresh),
+                                    onPressed: () {
+                                      if (_userLocation == null) {
+                                        _getUserLocation();
+                                      } else {
+                                        // Refresh route
+                                        _getRoute();
+                                      }
+                                    },
+                                    tooltip: _userLocation == null ? 'Get my location' : 'Refresh directions',
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _openGoogleMaps,
+                                  icon: const Icon(Icons.map, size: 18),
+                                  label: const Text('Open in Google Maps'),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (_userLocation != null)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.warning_amber_rounded,
+                                    color: Colors.orange,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Unable to calculate route. Use Google Maps for directions.',
                                       style: TextStyle(
                                         fontSize: 14,
-                                        color: isDark ? Colors.grey[300] : Colors.grey[600],
+                                        color: isDark ? Colors.grey[300] : Colors.grey[700],
                                       ),
                                     ),
-                                  ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _openGoogleMaps,
+                                  icon: const Icon(Icons.map, size: 18),
+                                  label: const Text('Open in Google Maps'),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
                                 ),
                               ),
-                              if (_userLocation == null)
-                                IconButton(
-                                  icon: const Icon(Icons.my_location),
-                                  onPressed: _getUserLocation,
-                                  tooltip: 'Get my location',
-                                ),
                             ],
                           ),
                         ),

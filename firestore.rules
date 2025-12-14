@@ -1,11 +1,20 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper function to check if current user is admin
+    function isAdmin() {
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
     match /users/{userId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId;
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && 
+        (request.auth.uid == userId || isAdmin());
+      allow delete: if request.auth != null && 
+        (request.auth.uid == userId || isAdmin());
     }
     
     match /listings/{listingId} {
@@ -15,26 +24,37 @@ service cloud.firestore {
         request.resource.data.userId == request.auth.uid;
       allow update: if request.auth != null && 
         (resource.data.userId == request.auth.uid ||
+         isAdmin() ||
          (request.resource.data.userId == resource.data.userId &&
           request.resource.data.title == resource.data.title &&
           request.resource.data.category == resource.data.category &&
           request.resource.data.location == resource.data.location &&
           request.resource.data.price == resource.data.price));
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
     }
     
     match /notifications/{notificationId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      // Allow read (both list and get) for real-time streams
+      // Users can read their own notifications, admins can read all
+      // For list queries with filters, Firestore evaluates per document
+      allow read: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if request.auth != null;
-      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
     }
     
     match /favorites/{favoriteId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
     }
     
     match /lookingForPosts/{postId} {
@@ -42,42 +62,56 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
       allow update: if request.auth != null && 
         (resource.data.userId == request.auth.uid ||
+         isAdmin() ||
          (request.resource.data.userId == resource.data.userId &&
           request.resource.data.description == resource.data.description &&
           request.resource.data.location == resource.data.location &&
           request.resource.data.budget == resource.data.budget &&
           request.resource.data.propertyType == resource.data.propertyType));
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
     }
     
     match /comments/{commentId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
     }
     
     match /reviews/{reviewId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    
+    // Reports collection - admins can read/write all, users can create
+    match /reports/{reportId} {
+      allow read: if request.auth != null && isAdmin();
+      allow create: if request.auth != null && 
+        request.resource.data.reporterId == request.auth.uid;
+      allow update, delete: if request.auth != null && isAdmin();
     }
     
     match /hiddenPosts/{hiddenPostId} {
       allow list: if request.auth != null;
-      allow get: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow get: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
       allow update: if false;
     }
     
     match /deactivated_accounts/{docId} {
       allow create: if request.auth != null;
-      allow read, update, delete: if false;
+      allow read, update, delete: if isAdmin();
     }
     
     match /deleted_accounts/{docId} {
       allow create: if request.auth != null;
-      allow read, update, delete: if false;
+      allow read, update, delete: if isAdmin();
     }
     
     match /{document=**} {
