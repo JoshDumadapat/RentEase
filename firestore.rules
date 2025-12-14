@@ -2,20 +2,36 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // ============================================
+    // HELPER FUNCTION: Check if user is admin
+    // ============================================
+    function isAdmin() {
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // ============================================
     // USERS COLLECTION
     // ============================================
     // Users can only read/write their own document
+    // Admins can read/write all user documents
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      // Individual document read
+      allow get: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      
+      // Collection queries: admins can query all, regular users cannot query collection
+      allow list: if request.auth != null && isAdmin();
+      
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId;
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
     }
     
     // ============================================
     // LISTINGS COLLECTION
     // ============================================
     // Property listings - authenticated users can read, owners can write
+    // Admins can read/write/delete all listings
     match /listings/{listingId} {
       // Anyone authenticated can read listings (for browsing)
       allow read: if request.auth != null;
@@ -24,23 +40,33 @@ service cloud.firestore {
       allow create: if request.auth != null && 
         request.resource.data.userId == request.auth.uid;
       
-      // Only owner can update their listing
+      // Only owner or admin can update their listing
       allow update: if request.auth != null && 
-        resource.data.userId == request.auth.uid;
+        (resource.data.userId == request.auth.uid || isAdmin());
       
-      // Only owner can delete their listing
+      // Only owner or admin can delete their listing
       allow delete: if request.auth != null && 
-        resource.data.userId == request.auth.uid;
+        (resource.data.userId == request.auth.uid || isAdmin());
     }
     
     // ============================================
     // NOTIFICATIONS COLLECTION
     // ============================================
     // Users can only read their own notifications
+    // Admins can read/delete all notifications
     match /notifications/{notificationId} {
-      // Users can only read their own notifications
-      allow read: if request.auth != null && 
-        resource.data.userId == request.auth.uid;
+      // Users can only read their own notifications, admins can read all
+      allow get: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // For collection queries: admins can query all, users can query with userId filter
+      allow list: if request.auth != null && 
+        (isAdmin() || 
+         (request.query.limit <= 100 && 
+          request.query.where != null && 
+          request.query.where[0].field == 'userId' && 
+          request.query.where[0].op == '==' && 
+          request.query.where[0].value == request.auth.uid));
       
       // System can create notifications (authenticated users)
       allow create: if request.auth != null;
@@ -49,9 +75,9 @@ service cloud.firestore {
       allow update: if request.auth != null && 
         resource.data.userId == request.auth.uid;
       
-      // Users can delete their own notifications
+      // Users can delete their own notifications, admins can delete all
       allow delete: if request.auth != null && 
-        resource.data.userId == request.auth.uid;
+        (resource.data.userId == request.auth.uid || isAdmin());
     }
     
     // ============================================

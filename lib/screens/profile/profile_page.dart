@@ -18,6 +18,8 @@ import 'package:rentease_app/screens/home/widgets/threedots.dart';
 import 'package:rentease_app/screens/profile/share_profile_qr_page.dart';
 import 'package:rentease_app/screens/profile/edit_profile_page.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
+import 'package:rentease_app/admin/utils/admin_auth_utils.dart';
+import 'package:rentease_app/admin/admin_dashboard_page.dart';
 
 /// Profile Page
 /// 
@@ -50,6 +52,7 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
   String _selectedTab = 'properties'; // 'properties' or 'favorites'
+  bool _isAdmin = false;
   
   // Filter state
   DateFilterOption? _currentFilter;
@@ -60,6 +63,16 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _loadProfileData();
+    _checkAdminStatus();
+  }
+
+  Future<void> _checkAdminStatus() async {
+    final isAdmin = await AdminAuthUtils.isCurrentUserAdmin();
+    if (mounted) {
+      setState(() {
+        _isAdmin = isAdmin;
+      });
+    }
   }
 
   @override
@@ -398,6 +411,19 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         centerTitle: false,
                         actions: [
+                          if (_isAdmin)
+                            IconButton(
+                              icon: const Icon(Icons.admin_panel_settings),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const AdminDashboardPage(),
+                                  ),
+                                );
+                              },
+                              tooltip: 'Admin Dashboard',
+                            ),
                           ThreeDotsMenu(),
                         ],
                       ),

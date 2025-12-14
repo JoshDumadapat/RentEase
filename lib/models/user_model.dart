@@ -24,6 +24,9 @@ class UserModel {
   // Optional social features
   final int? followersCount;
   final int? followingCount;
+  
+  // Admin role
+  final String? role; // 'admin', 'user', etc.
 
   UserModel({
     required this.id,
@@ -41,7 +44,11 @@ class UserModel {
     this.commentsReceived = 0,
     this.followersCount,
     this.followingCount,
+    this.role,
   });
+  
+  /// Check if user is admin
+  bool get isAdmin => role == 'admin';
 
   /// Creates a copy of this user with updated fields
   UserModel copyWith({
@@ -60,6 +67,7 @@ class UserModel {
     int? commentsReceived,
     int? followersCount,
     int? followingCount,
+    String? role,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -77,6 +85,7 @@ class UserModel {
       commentsReceived: commentsReceived ?? this.commentsReceived,
       followersCount: followersCount ?? this.followersCount,
       followingCount: followingCount ?? this.followingCount,
+      role: role ?? this.role,
     );
   }
 
@@ -140,6 +149,7 @@ class UserModel {
       commentsReceived: (data['commentsReceived'] as num?)?.toInt() ?? 0,
       followersCount: (data['followersCount'] as num?)?.toInt(),
       followingCount: (data['followingCount'] as num?)?.toInt(),
+      role: data['role'] as String?,
     );
   }
 
