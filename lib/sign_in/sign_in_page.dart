@@ -5,6 +5,8 @@ import 'package:rentease_app/sign_up/sign_up_page.dart';
 import 'package:rentease_app/main_app.dart';
 import 'package:rentease_app/services/auth_service.dart';
 import 'package:rentease_app/services/user_service.dart';
+import 'package:rentease_app/utils/snackbar_utils.dart';
+import 'package:rentease_app/sign_in/forgot_password_page.dart';
 
 /// Sign In Page with form and authentication options
 class SignInPage extends StatefulWidget {
@@ -123,6 +125,8 @@ class _SignInPageState extends State<SignInPage> {
 class _BackgroundImageWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final imageHeight = screenHeight * 0.30; // Top 30% of screen (smaller)
     
@@ -137,7 +141,7 @@ class _BackgroundImageWidget extends StatelessWidget {
         width: double.infinity,
         errorBuilder: (context, error, stackTrace) {
           return Container(
-            color: Colors.blue[100],
+            color: isDark ? Colors.grey[800] : Colors.grey[100],
             child: const Center(
               child: Icon(Icons.image, size: 100, color: Colors.grey),
             ),
@@ -158,6 +162,8 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final imageHeight = screenHeight * 0.30;
     
@@ -167,9 +173,9 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
       top: imageHeight - 40,
       bottom: 0,
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[900] : Colors.white,
+          borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(30),
             topRight: Radius.circular(30),
           ),
@@ -265,7 +271,11 @@ class _SignInContentWidget extends StatelessWidget {
                     ),
                     if (authError != null) ...[
                       const SizedBox(height: 4),
-                      Text(
+                      Builder(
+                        builder: (context) {
+                          final theme = Theme.of(context);
+                          final isDark = theme.brightness == Brightness.dark;
+                          return Text(
                         authError!,
                         style: TextStyle(
                           fontSize: isVerySmallScreen ? 11 : isSmallScreen ? 12 : 13,
@@ -273,6 +283,8 @@ class _SignInContentWidget extends StatelessWidget {
                           fontWeight: FontWeight.w500,
                         ),
                         textAlign: TextAlign.start,
+                          );
+                        },
                       ),
                     ],
                     SizedBox(height: isVerySmallScreen ? 5 : 7),
@@ -342,13 +354,16 @@ class _LogoWidget extends StatelessWidget {
       logoHeight *= 0.9;
     }
     
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Center(
       child: Image.asset(
         'assets/sign_in_up/signlogo.png',
         height: logoHeight,
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
-          return Icon(Icons.home, size: logoHeight, color: Colors.blue);
+          return Icon(Icons.home, size: logoHeight, color: isDark ? Colors.white : Colors.black87);
         },
       ),
     );
@@ -359,6 +374,8 @@ class _LogoWidget extends StatelessWidget {
 class _TitleWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
     final isVerySmallScreen = screenHeight < 600;
@@ -368,7 +385,7 @@ class _TitleWidget extends StatelessWidget {
       style: TextStyle(
         fontSize: isVerySmallScreen ? 20 : isSmallScreen ? 22 : 24,
         fontWeight: FontWeight.bold,
-        color: Colors.black87,
+        color: isDark ? Colors.white : Colors.black87,
       ),
     );
   }
@@ -378,6 +395,8 @@ class _TitleWidget extends StatelessWidget {
 class _WelcomeMessageWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
     final isVerySmallScreen = screenHeight < 600;
@@ -387,7 +406,7 @@ class _WelcomeMessageWidget extends StatelessWidget {
       style: TextStyle(
         fontSize: isVerySmallScreen ? 12 : isSmallScreen ? 13 : 14,
         fontWeight: FontWeight.normal,
-        color: Colors.grey[700],
+        color: isDark ? Colors.grey[400] : Colors.grey[700],
         height: 1.4,
       ),
     );
@@ -406,9 +425,18 @@ class _EmailInputWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
     final isVerySmallScreen = screenHeight < 600;
+    
+    final textColor = isDark ? Colors.white : Colors.black;
+    final labelColor = isDark ? Colors.grey[400] : Colors.grey[600];
+    final hintColor = isDark ? Colors.grey[500] : Colors.grey[400];
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey[300]!;
+    final focusedBorderColor = isDark ? Colors.grey[600]! : Colors.grey[400]!;
+    final fillColor = isDark ? Colors.grey[800]! : Colors.white;
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -418,7 +446,7 @@ class _EmailInputWidget extends StatelessWidget {
           style: TextStyle(
             fontSize: isVerySmallScreen ? 11 : isSmallScreen ? 12 : 13,
             fontWeight: FontWeight.w500,
-            color: Colors.grey[600],
+            color: labelColor,
           ),
         ),
         SizedBox(height: isVerySmallScreen ? 6 : 8),
@@ -427,27 +455,27 @@ class _EmailInputWidget extends StatelessWidget {
           keyboardType: TextInputType.emailAddress,
           style: TextStyle(
             fontSize: isVerySmallScreen ? 13 : 14,
-            color: Colors.black, // Black text color - explicitly black
+            color: textColor,
           ),
           decoration: InputDecoration(
             hintText: 'Enter your email',
             hintStyle: TextStyle(
-              color: Colors.grey[400],
+              color: hintColor,
               fontSize: isVerySmallScreen ? 13 : 14,
             ),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: fillColor,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderSide: BorderSide(color: borderColor),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderSide: BorderSide(color: borderColor),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[400]!),
+              borderSide: BorderSide(color: focusedBorderColor),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
@@ -501,9 +529,19 @@ class _PasswordInputWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
     final isVerySmallScreen = screenHeight < 600;
+    
+    final textColor = isDark ? Colors.white : Colors.black;
+    final labelColor = isDark ? Colors.grey[400] : Colors.grey[600];
+    final hintColor = isDark ? Colors.grey[500] : Colors.grey[400];
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey[300]!;
+    final focusedBorderColor = isDark ? Colors.grey[600]! : Colors.grey[400]!;
+    final fillColor = isDark ? Colors.grey[800]! : Colors.white;
+    final iconColor = isDark ? Colors.grey[400] : Colors.grey[600];
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -513,7 +551,7 @@ class _PasswordInputWidget extends StatelessWidget {
           style: TextStyle(
             fontSize: isVerySmallScreen ? 11 : isSmallScreen ? 12 : 13,
             fontWeight: FontWeight.w500,
-            color: Colors.grey[600],
+            color: labelColor,
           ),
         ),
         SizedBox(height: isVerySmallScreen ? 6 : 8),
@@ -522,27 +560,27 @@ class _PasswordInputWidget extends StatelessWidget {
           obscureText: obscurePassword,
           style: TextStyle(
             fontSize: isVerySmallScreen ? 13 : 14,
-            color: Colors.black, // Black text color - explicitly black
+            color: textColor,
           ),
           decoration: InputDecoration(
             hintText: 'Enter your password',
             hintStyle: TextStyle(
-              color: Colors.grey[400],
+              color: hintColor,
               fontSize: isVerySmallScreen ? 13 : 14,
             ),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: fillColor,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderSide: BorderSide(color: borderColor),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderSide: BorderSide(color: borderColor),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[400]!),
+              borderSide: BorderSide(color: focusedBorderColor),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
@@ -564,7 +602,7 @@ class _PasswordInputWidget extends StatelessWidget {
             suffixIcon: IconButton(
               icon: Icon(
                 obscurePassword ? Icons.visibility_off : Icons.visibility,
-                color: Colors.grey[600],
+                color: iconColor,
                 size: isVerySmallScreen ? 20 : 22,
               ),
               onPressed: onToggle,
@@ -597,29 +635,46 @@ class _RememberMeAndForgotPasswordWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.grey[300] : Colors.grey[700];
+    
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Checkbox(
               value: rememberMe,
               onChanged: onRememberMeChanged,
-              activeColor: Colors.blue,
+              activeColor: isDark ? Colors.white : Colors.black,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
             ),
             Text(
               'Remember me',
               style: TextStyle(
                 fontSize: 13,
-                color: Colors.grey[700],
+                color: textColor,
               ),
             ),
           ],
         ),
         TextButton(
           onPressed: () {
-            // Handle forgot password
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ForgotPasswordPage(),
+              ),
+            );
           },
+          style: TextButton.styleFrom(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
           child: const Text(
             'Forgot Password?',
             style: TextStyle(
@@ -715,10 +770,10 @@ class _SignInButtonWidgetState extends State<_SignInButtonWidget> {
         if (!userExists && mounted) {
           // User authenticated but not in Firestore - redirect to sign up
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please complete your registration.'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
+            SnackBarUtils.buildThemedSnackBar(
+              context,
+              'Please complete your registration.',
+              duration: const Duration(seconds: 3),
             ),
           );
           Navigator.of(context).pushReplacement(
@@ -751,6 +806,8 @@ class _SignInButtonWidgetState extends State<_SignInButtonWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
     final isVerySmallScreen = screenHeight < 600;
@@ -763,8 +820,8 @@ class _SignInButtonWidgetState extends State<_SignInButtonWidget> {
         child: ElevatedButton(
           onPressed: _handleSignIn,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.grey[850], // Always use same background color
-            foregroundColor: Colors.white,
+            backgroundColor: isDark ? Colors.white : Colors.black,
+            foregroundColor: isDark ? Colors.black : Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
@@ -803,12 +860,16 @@ class _SignUpLinkWidgetState extends State<_SignUpLinkWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.grey[300] : Colors.grey[700];
+    
     return Center(
       child: RichText(
         text: TextSpan(
           style: TextStyle(
             fontSize: 13,
-            color: Colors.grey[700],
+            color: textColor,
           ),
           children: [
             const TextSpan(text: "Doesn't have an account? "),
@@ -848,11 +909,16 @@ class _SignUpLinkWidgetState extends State<_SignUpLinkWidget> {
 class _DividerWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final dividerColor = isDark ? Colors.grey[700]! : Colors.grey[300]!;
+    final textColor = isDark ? Colors.grey[400] : Colors.grey[600];
+    
     return Row(
       children: [
         Expanded(
           child: Divider(
-            color: Colors.grey[300],
+            color: dividerColor,
             thickness: 1,
           ),
         ),
@@ -862,13 +928,13 @@ class _DividerWidget extends StatelessWidget {
             'Or sign in with',
             style: TextStyle(
               fontSize: 13,
-              color: Colors.grey[600],
+              color: textColor,
             ),
           ),
         ),
         Expanded(
           child: Divider(
-            color: Colors.grey[300],
+            color: dividerColor,
             thickness: 1,
           ),
         ),
@@ -1006,9 +1072,9 @@ class _GoogleSignInButtonWidgetState extends State<_GoogleSignInButtonWidget> {
         // Show error message with better formatting
         final errorMessage = e.toString().replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Sign in failed: $errorMessage'),
-            backgroundColor: Colors.red,
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Sign in failed: $errorMessage',
             duration: const Duration(seconds: 3),
           ),
         );
@@ -1018,9 +1084,15 @@ class _GoogleSignInButtonWidgetState extends State<_GoogleSignInButtonWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
     final isVerySmallScreen = screenHeight < 600;
+    
+    final backgroundColor = isDark ? Colors.grey[800]! : Colors.white;
+    final foregroundColor = isDark ? Colors.white : Colors.black87;
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey[300]!;
     
     return SizedBox(
       width: double.infinity,
@@ -1028,9 +1100,9 @@ class _GoogleSignInButtonWidgetState extends State<_GoogleSignInButtonWidget> {
       child: OutlinedButton(
         onPressed: _isLoading ? null : _handleGoogleSignIn,
         style: OutlinedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black87,
-          side: BorderSide(color: Colors.grey[300]!),
+          backgroundColor: backgroundColor,
+          foregroundColor: foregroundColor,
+          side: BorderSide(color: borderColor),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
@@ -1041,7 +1113,7 @@ class _GoogleSignInButtonWidgetState extends State<_GoogleSignInButtonWidget> {
                 width: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[600]!),
+                  valueColor: AlwaysStoppedAnimation<Color>(isDark ? Colors.grey[400]! : Colors.grey[600]!),
                 ),
               )
             : Row(
@@ -1057,9 +1129,9 @@ class _GoogleSignInButtonWidgetState extends State<_GoogleSignInButtonWidget> {
                         width: isVerySmallScreen ? 18 : 20,
                         height: isVerySmallScreen ? 18 : 20,
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: backgroundColor,
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: Colors.grey[300]!),
+                          border: Border.all(color: borderColor),
                         ),
                         child: Center(
                           child: Text(
@@ -1067,7 +1139,7 @@ class _GoogleSignInButtonWidgetState extends State<_GoogleSignInButtonWidget> {
                             style: TextStyle(
                               fontSize: isVerySmallScreen ? 13 : 15,
                               fontWeight: FontWeight.bold,
-                              color: Colors.blue,
+                              color: foregroundColor,
                             ),
                           ),
                         ),

@@ -7,21 +7,35 @@ import 'package:rentease_app/services/auth_service.dart';
 import 'package:rentease_app/services/user_service.dart';
 import 'package:rentease_app/main_app.dart';
 import 'package:rentease_app/utils/confirmation_dialog_utils.dart';
+import 'package:rentease_app/backend/BPhoneNumberUtils.dart';
+import 'package:rentease_app/utils/snackbar_utils.dart';
 
 /// Format a name so that each word has an uppercase first letter
 /// and the remaining letters are lowercase.
+/// Preserves spaces and allows multiple words.
 String _formatName(String input) {
-  final trimmed = input.trim();
-  if (trimmed.isEmpty) return '';
-
-  final words = trimmed.split(RegExp(r'\s+'));
+  if (input.isEmpty) return '';
+  
+  // Preserve leading spaces
+  String leadingSpaces = '';
+  String workingInput = input;
+  if (input.startsWith(' ')) {
+    final match = RegExp(r'^ +').firstMatch(input);
+    leadingSpaces = match?.group(0) ?? '';
+    workingInput = input.substring(leadingSpaces.length);
+  }
+  
+  if (workingInput.isEmpty) return leadingSpaces;
+  
+  // Split by spaces but preserve multiple spaces
+  final words = workingInput.split(RegExp(r' +'));
   final formattedWords = words.map((word) {
     if (word.isEmpty) return '';
     if (word.length == 1) return word.toUpperCase();
     return word[0].toUpperCase() + word.substring(1).toLowerCase();
   }).toList();
 
-  return formattedWords.join(' ');
+  return leadingSpaces + formattedWords.join(' ');
 }
 
 /// Student / Professional Sign Up Page with form validation
@@ -195,7 +209,7 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
         setState(() {
           _selectedDate = picked;
           _birthDateController.text =
-              '${picked.day}/${picked.month}/${picked.year}';
+              '${picked.month}/${picked.day}/${picked.year}';
         });
       }
     }
@@ -204,6 +218,12 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
   void _handleNext() {
     if (_formKey.currentState!.validate()) {
       // Form is valid, navigate to ID verification page with form data
+      // Get digits-only phone number for storage
+      final phoneDigits = BPhoneNumberUtils.getDigitsOnly(
+        _phoneNumberController.text.trim(),
+        _selectedCountryCode,
+      );
+      
       Navigator.of(context).push(
         _SlideUpPageRoute(
           page: StudentIDVerificationPage(
@@ -211,7 +231,7 @@ class _StudentSignUpPageState extends State<StudentSignUpPage> {
             lastName: _lastNameController.text.trim(),
             email: _emailController.text.trim(),
             birthday: _birthDateController.text.trim(),
-            phone: _phoneNumberController.text.trim(),
+            phone: phoneDigits,
             countryCode: _selectedCountryCode,
             googleData: widget.googleData,
             userType: widget.userType,
@@ -615,6 +635,9 @@ class _FirstNameInputWidget extends StatelessWidget {
           controller: controller,
           keyboardType: TextInputType.name,
           textCapitalization: TextCapitalization.words,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+          ],
           style: TextStyle(
             color: Colors.black87,
             fontSize: isVerySmallScreen ? 13 : isSmallScreen ? 14 : 15,
@@ -622,15 +645,18 @@ class _FirstNameInputWidget extends StatelessWidget {
           onChanged: (value) {
             final formatted = _formatName(value);
             if (formatted != value) {
+              final cursorPosition = controller.selection.baseOffset;
               controller.value = controller.value.copyWith(
                 text: formatted,
-                selection: TextSelection.collapsed(offset: formatted.length),
+                selection: TextSelection.collapsed(
+                  offset: cursorPosition <= formatted.length ? cursorPosition : formatted.length
+                ),
                 composing: TextRange.empty,
               );
             }
           },
           decoration: InputDecoration(
-            hintText: 'First Name',
+            hintText: 'e.g., Ivan Josh',
             hintStyle: TextStyle(
               color: Colors.grey[400],
               fontSize: 14,
@@ -704,6 +730,9 @@ class _LastNameInputWidget extends StatelessWidget {
           controller: controller,
           keyboardType: TextInputType.name,
           textCapitalization: TextCapitalization.words,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+          ],
           style: TextStyle(
             color: Colors.black87,
             fontSize: isVerySmallScreen ? 13 : isSmallScreen ? 14 : 15,
@@ -711,15 +740,18 @@ class _LastNameInputWidget extends StatelessWidget {
           onChanged: (value) {
             final formatted = _formatName(value);
             if (formatted != value) {
+              final cursorPosition = controller.selection.baseOffset;
               controller.value = controller.value.copyWith(
                 text: formatted,
-                selection: TextSelection.collapsed(offset: formatted.length),
+                selection: TextSelection.collapsed(
+                  offset: cursorPosition <= formatted.length ? cursorPosition : formatted.length
+                ),
                 composing: TextRange.empty,
               );
             }
           },
           decoration: InputDecoration(
-            hintText: 'Last Name',
+            hintText: 'e.g., Dela Cruz',
             hintStyle: TextStyle(
               color: Colors.grey[400],
               fontSize: 14,
@@ -797,7 +829,7 @@ class _EmailInputWidget extends StatelessWidget {
             fontSize: isVerySmallScreen ? 13 : isSmallScreen ? 14 : 15,
           ),
           decoration: InputDecoration(
-            hintText: 'Email',
+            hintText: 'e.g., juan.delacruz@email.com',
             hintStyle: TextStyle(
               color: Colors.grey[400],
               fontSize: 14,
@@ -881,7 +913,7 @@ class _BirthDateInputWidget extends StatelessWidget {
             fontSize: isVerySmallScreen ? 13 : isSmallScreen ? 14 : 15,
           ),
           decoration: InputDecoration(
-            hintText: 'Birth of date',
+            hintText: 'e.g., 01/15/2000',
             hintStyle: TextStyle(
               color: Colors.grey[400],
               fontSize: 14,
@@ -922,6 +954,28 @@ class _BirthDateInputWidget extends StatelessWidget {
             if (value == null || value.trim().isEmpty) {
               return 'Birth date is required';
             }
+            // Validate age (must be at least 18 years old)
+            try {
+              final parts = value.split('/');
+              if (parts.length == 3) {
+                final month = int.parse(parts[0]);
+                final day = int.parse(parts[1]);
+                final year = int.parse(parts[2]);
+                final birthDate = DateTime(year, month, day);
+                final today = DateTime.now();
+                
+                // Calculate the 18th birthday
+                final eighteenthBirthday = DateTime(birthDate.year + 18, birthDate.month, birthDate.day);
+                
+                // Check if the 18th birthday has occurred (or is today)
+                // Person must be at least 18, meaning 18th birthday must be <= today
+                if (eighteenthBirthday.isAfter(today)) {
+                  return 'You must be at least 18 years old to sign up';
+                }
+              }
+            } catch (e) {
+              return 'Please enter a valid birth date';
+            }
             return null;
           },
         ),
@@ -931,7 +985,7 @@ class _BirthDateInputWidget extends StatelessWidget {
 }
 
 /// Widget for phone number input field
-class _PhoneNumberInputWidget extends StatelessWidget {
+class _PhoneNumberInputWidget extends StatefulWidget {
   final TextEditingController controller;
   final String selectedCountryCode;
   final ValueChanged<String?> onCountryCodeChanged;
@@ -941,6 +995,37 @@ class _PhoneNumberInputWidget extends StatelessWidget {
     required this.selectedCountryCode,
     required this.onCountryCodeChanged,
   });
+
+  @override
+  State<_PhoneNumberInputWidget> createState() => _PhoneNumberInputWidgetState();
+}
+
+class _PhoneNumberInputWidgetState extends State<_PhoneNumberInputWidget> {
+  @override
+  void initState() {
+    super.initState();
+    // Format existing text when widget initializes
+    if (widget.controller.text.isNotEmpty) {
+      final formatted = BPhoneNumberUtils.formatPhoneNumber(
+        widget.controller.text,
+        widget.selectedCountryCode,
+      );
+      if (formatted != widget.controller.text) {
+        widget.controller.text = formatted;
+      }
+    }
+  }
+
+  void _formatPhoneNumber(String value) {
+    final formatted = BPhoneNumberUtils.formatPhoneNumber(value, widget.selectedCountryCode);
+    if (formatted != value) {
+      widget.controller.value = widget.controller.value.copyWith(
+        text: formatted,
+        selection: TextSelection.collapsed(offset: formatted.length),
+        composing: TextRange.empty,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -976,11 +1061,15 @@ class _PhoneNumberInputWidget extends StatelessWidget {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: selectedCountryCode,
+                  value: widget.selectedCountryCode,
                   isExpanded: true,
                   icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
-                  items: const [
-                    DropdownMenuItem(
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 14,
+                  ),
+                  items: [
+                    const DropdownMenuItem(
                       value: '+63',
                       child: Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8),
@@ -989,12 +1078,12 @@ class _PhoneNumberInputWidget extends StatelessWidget {
                           children: [
                             Text('🇵🇭', style: TextStyle(fontSize: 18)),
                             SizedBox(width: 6),
-                            Text('+63', style: TextStyle(fontSize: 14)),
+                            Text('+63', style: TextStyle(fontSize: 14, color: Colors.black87)),
                           ],
                         ),
                       ),
                     ),
-                    DropdownMenuItem(
+                    const DropdownMenuItem(
                       value: '+1',
                       child: Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8),
@@ -1003,12 +1092,12 @@ class _PhoneNumberInputWidget extends StatelessWidget {
                           children: [
                             Text('🇺🇸', style: TextStyle(fontSize: 18)),
                             SizedBox(width: 6),
-                            Text('+1', style: TextStyle(fontSize: 14)),
+                            Text('+1', style: TextStyle(fontSize: 14, color: Colors.black87)),
                           ],
                         ),
                       ),
                     ),
-                    DropdownMenuItem(
+                    const DropdownMenuItem(
                       value: '+44',
                       child: Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8),
@@ -1017,12 +1106,12 @@ class _PhoneNumberInputWidget extends StatelessWidget {
                           children: [
                             Text('🇬🇧', style: TextStyle(fontSize: 18)),
                             SizedBox(width: 6),
-                            Text('+44', style: TextStyle(fontSize: 14)),
+                            Text('+44', style: TextStyle(fontSize: 14, color: Colors.black87)),
                           ],
                         ),
                       ),
                     ),
-                    DropdownMenuItem(
+                    const DropdownMenuItem(
                       value: '+91',
                       child: Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8),
@@ -1031,12 +1120,12 @@ class _PhoneNumberInputWidget extends StatelessWidget {
                           children: [
                             Text('🇮🇳', style: TextStyle(fontSize: 18)),
                             SizedBox(width: 6),
-                            Text('+91', style: TextStyle(fontSize: 14)),
+                            Text('+91', style: TextStyle(fontSize: 14, color: Colors.black87)),
                           ],
                         ),
                       ),
                     ),
-                    DropdownMenuItem(
+                    const DropdownMenuItem(
                       value: '+86',
                       child: Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8),
@@ -1045,12 +1134,12 @@ class _PhoneNumberInputWidget extends StatelessWidget {
                           children: [
                             Text('🇨🇳', style: TextStyle(fontSize: 18)),
                             SizedBox(width: 6),
-                            Text('+86', style: TextStyle(fontSize: 14)),
+                            Text('+86', style: TextStyle(fontSize: 14, color: Colors.black87)),
                           ],
                         ),
                       ),
                     ),
-                    DropdownMenuItem(
+                    const DropdownMenuItem(
                       value: '+81',
                       child: Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8),
@@ -1059,13 +1148,19 @@ class _PhoneNumberInputWidget extends StatelessWidget {
                           children: [
                             Text('🇯🇵', style: TextStyle(fontSize: 18)),
                             SizedBox(width: 6),
-                            Text('+81', style: TextStyle(fontSize: 14)),
+                            Text('+81', style: TextStyle(fontSize: 14, color: Colors.black87)),
                           ],
                         ),
                       ),
                     ),
                   ],
-                  onChanged: onCountryCodeChanged,
+                  onChanged: (value) {
+                    widget.onCountryCodeChanged(value);
+                    // Reformat phone number when country code changes
+                    if (widget.controller.text.isNotEmpty) {
+                      _formatPhoneNumber(widget.controller.text);
+                    }
+                  },
                 ),
               ),
             ),
@@ -1073,7 +1168,7 @@ class _PhoneNumberInputWidget extends StatelessWidget {
             // Phone Number Input
             Expanded(
               child: TextFormField(
-                controller: controller,
+                controller: widget.controller,
                 keyboardType: TextInputType.phone,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
@@ -1082,8 +1177,13 @@ class _PhoneNumberInputWidget extends StatelessWidget {
                   color: Colors.black87,
                   fontSize: isVerySmallScreen ? 13 : isSmallScreen ? 14 : 15,
                 ),
+                onChanged: (value) {
+                  _formatPhoneNumber(value);
+                },
                 decoration: InputDecoration(
-                  hintText: 'Phone Number',
+                  hintText: widget.selectedCountryCode == '+63' 
+                      ? 'e.g., 936 666 9571' 
+                      : 'e.g., 123 456 7890',
                   hintStyle: TextStyle(
                     color: Colors.grey[400],
                     fontSize: 14,
@@ -1115,18 +1215,16 @@ class _PhoneNumberInputWidget extends StatelessWidget {
                     vertical: 10,
                   ),
                   errorStyle: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     height: 1.2,
                   ),
+                  errorMaxLines: 2,
                 ),
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Phone number is required';
-                  }
-                  if (value.length < 10) {
-                    return 'Please enter a valid phone number';
-                  }
-                  return null;
+                  return BPhoneNumberUtils.validatePhoneNumber(
+                    value ?? '',
+                    widget.selectedCountryCode,
+                  );
                 },
               ),
             ),
@@ -1397,9 +1495,9 @@ class _GoogleSignUpButtonWidgetState extends State<_GoogleSignUpButtonWidget> {
         // Show error message with better formatting
         final errorMessage = e.toString().replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Sign up failed: $errorMessage'),
-            backgroundColor: Colors.red,
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Sign up failed: $errorMessage',
             duration: const Duration(seconds: 4),
           ),
         );

@@ -33,6 +33,7 @@ class AvailabilitySection extends StatelessWidget {
           'Availability',
           style: textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
+            color: theme.brightness == Brightness.dark ? Colors.white : Colors.black87,
           ),
         ),
         const SizedBox(height: 24),
@@ -47,7 +48,9 @@ class AvailabilitySection extends StatelessWidget {
               vertical: 12,
             ),
             decoration: BoxDecoration(
-              color: colorScheme.surface,
+              color: theme.brightness == Brightness.dark 
+                  ? Colors.grey[800] 
+                  : colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: colorScheme.outline.withValues(alpha: 0.3),
@@ -83,12 +86,14 @@ class AvailabilitySection extends StatelessWidget {
         TextFormField(
           controller: maxOccupantsController,
           keyboardType: TextInputType.number,
+          textAlign: TextAlign.right,
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,
           ],
           decoration: _buildInputDecoration(
             hintText: 'e.g., 2',
             colorScheme: colorScheme,
+            theme: theme,
           ),
           onChanged: (value) {
             final intValue = int.tryParse(value);
@@ -132,6 +137,7 @@ class AvailabilitySection extends StatelessWidget {
   InputDecoration _buildInputDecoration({
     required String hintText,
     required ColorScheme colorScheme,
+    required ThemeData theme,
   }) {
     return InputDecoration(
       hintText: hintText,
@@ -140,7 +146,9 @@ class AvailabilitySection extends StatelessWidget {
         fontSize: 16,
       ),
       filled: true,
-      fillColor: colorScheme.surface,
+      fillColor: theme.brightness == Brightness.dark 
+          ? Colors.grey[800] 
+          : colorScheme.surface,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(

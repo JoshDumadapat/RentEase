@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rentease_app/models/listing_model.dart';
+import 'package:rentease_app/backend/BListingService.dart';
 import 'package:rentease_app/screens/add_property/widgets/property_media_section.dart';
 import 'package:rentease_app/screens/add_property/widgets/property_basic_info_section.dart';
 import 'package:rentease_app/screens/add_property/widgets/pricing_section.dart';
@@ -8,6 +11,10 @@ import 'package:rentease_app/screens/add_property/widgets/location_section.dart'
 import 'package:rentease_app/screens/add_property/widgets/amenities_section.dart';
 import 'package:rentease_app/screens/add_property/widgets/availability_section.dart';
 import 'package:rentease_app/screens/add_property/widgets/contact_section.dart';
+import 'package:rentease_app/screens/add_property/osm_location_picker_page.dart';
+import 'package:rentease_app/services/location_picker_service.dart';
+import 'package:rentease_app/utils/snackbar_utils.dart';
+import 'package:latlong2/latlong.dart';
 
 // Light blue theme constants aligned with HomePage
 const Color _themeColor = Color(0xFF00D1FF);
@@ -24,7 +31,14 @@ const Color _themeColorDark = Color(0xFF00B8E6);
 /// - Dark/light mode support
 /// - Responsive design
 class AddPropertyPage extends StatefulWidget {
-  const AddPropertyPage({super.key});
+  final String? draftId; // Optional draft ID to resume editing
+  final Map<String, dynamic>? draftData; // Optional draft data to load
+
+  const AddPropertyPage({
+    super.key,
+    this.draftId,
+    this.draftData,
+  });
 
   @override
   State<AddPropertyPage> createState() => _AddPropertyPageState();
@@ -67,10 +81,35 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   bool _petFriendly = false;
   bool _isSubmitting = false;
   double _uploadProgress = 0.0;
+  bool _hasUnsavedChanges = false;
 
   // Image management
   final List<XFile> _images = [];
   final ImagePicker _imagePicker = ImagePicker();
+  
+  // Services
+  final BListingService _listingService = BListingService();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  
+  // Track if we're editing a draft
+  String? _currentDraftId;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentDraftId = widget.draftId;
+    
+    // Load draft data if provided
+    if (widget.draftData != null) {
+      _loadDraftData(widget.draftData!);
+    }
+    
+    // Add listeners to track changes
+    _titleController.addListener(() => _hasUnsavedChanges = true);
+    _descriptionController.addListener(() => _hasUnsavedChanges = true);
+    _monthlyRentController.addListener(() => _hasUnsavedChanges = true);
+    _addressController.addListener(() => _hasUnsavedChanges = true);
+  }
 
   @override
   void dispose() {
@@ -87,6 +126,184 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     _maxOccupantsController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+  
+  void _loadDraftData(Map<String, dynamic> data) {
+    setState(() {
+      _titleController.text = data['title'] ?? '';
+      _descriptionController.text = data['description'] ?? '';
+      _propertyType = data['category'];
+      _monthlyRentController.text = data['price']?.toString() ?? '';
+      _depositController.text = data['deposit']?.toString() ?? '';
+      _advanceController.text = data['advance']?.toString() ?? '';
+      _addressController.text = data['location'] ?? '';
+      _landmarkController.text = data['landmark'] ?? '';
+      _phoneController.text = data['phone'] ?? '';
+      _messengerController.text = data['messenger'] ?? '';
+      _curfewController.text = data['curfew'] ?? '';
+      _maxOccupantsController.text = data['maxOccupants']?.toString() ?? '';
+      _currentStep = data['currentStep'] ?? 0;
+      _availableFrom = data['availableFrom'] != null 
+          ? (data['availableFrom'] as Timestamp).toDate()
+          : null;
+      _electricityIncluded = data['electricityIncluded'] ?? false;
+      _waterIncluded = data['waterIncluded'] ?? false;
+      _internetIncluded = data['internetIncluded'] ?? false;
+      _privateCR = data['privateCR'] ?? false;
+      _sharedCR = data['sharedCR'] ?? false;
+      _kitchenAccess = data['kitchenAccess'] ?? false;
+      _wifi = data['wifi'] ?? false;
+      _laundry = data['laundry'] ?? false;
+      _parking = data['parking'] ?? false;
+      _security = data['security'] ?? false;
+      _aircon = data['aircon'] ?? false;
+      _petFriendly = data['petFriendly'] ?? false;
+      _hasUnsavedChanges = false;
+    });
+  }
+  
+  Future<bool> _onWillPop() async {
+    if (!_hasUnsavedChanges) {
+      return true;
+    }
+    
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+        final backgroundColor = isDark ? Colors.grey[900] : Colors.white;
+        final textColor = isDark ? Colors.white : Colors.black87;
+        final borderColor = isDark ? Colors.grey[700]! : Colors.grey[300]!;
+        
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.5 : 0.2),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header with title and X button
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 12, 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Discard Changes?',
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context, 'cancel'),
+                        icon: Icon(
+                          Icons.close,
+                          color: textColor.withOpacity(0.7),
+                          size: 24,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Close',
+                      ),
+                    ],
+                  ),
+                ),
+                // Content
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    'You have unsaved changes. What would you like to do?',
+                    style: TextStyle(
+                      color: textColor.withOpacity(0.8),
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Buttons in one row
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  child: Row(
+                    children: [
+                      // Save as Draft button
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context, 'save_draft'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _themeColorDark,
+                            side: BorderSide(color: _themeColorDark, width: 1.5),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Save as Draft',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Discard button
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => Navigator.pop(context, 'discard'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Discard',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    
+    if (result == 'save_draft') {
+      await _submitForm(isDraft: true);
+      return true; // Allow navigation after saving draft
+    } else if (result == 'discard') {
+      return true; // Allow navigation to discard
+    }
+    
+    return false; // Cancel - don't navigate
   }
 
   Future<void> _pickImages() async {
@@ -122,14 +339,11 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
 
       if (source == null) return;
 
-      final remainingSlots = 10 - _images.length;
+      final remainingSlots = 18 - _images.length;
       if (remainingSlots <= 0) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Maximum 10 images allowed'),
-              backgroundColor: Colors.orange,
-            ),
+            SnackBarUtils.buildThemedSnackBar(context, 'Maximum 18 images allowed'),
           );
         }
         return;
@@ -179,10 +393,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error picking images: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBarUtils.buildThemedSnackBar(context, 'Error picking images: $e'),
         );
       }
     }
@@ -202,20 +413,91 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   void _setCoverImage(int index) {
     setState(() {
       _coverImageIndex = index;
+      // Move cover image to first position
+      if (index > 0 && index < _images.length) {
+        final coverImage = _images.removeAt(index);
+        _images.insert(0, coverImage);
+        _coverImageIndex = 0;
+      }
     });
+  }
+
+  /// Validate current step before proceeding to next step
+  bool _validateCurrentStep() {
+    switch (_currentStep) {
+      case 0:
+        // Step 1: Details - Validate images, title, description, property type
+        if (_images.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBarUtils.buildThemedSnackBar(context, 'Please add at least one photo'),
+          );
+          return false;
+        }
+        if (!_formKey.currentState!.validate()) {
+          // Scroll to first error
+          _scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+          return false;
+        }
+        if (_propertyType == null || _propertyType!.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBarUtils.buildThemedSnackBar(context, 'Please select a property type'),
+          );
+          return false;
+        }
+        return true;
+      case 1:
+        // Step 2: Pricing & Location - Validate monthly rent and address
+        if (!_formKey.currentState!.validate()) {
+          // Scroll to first error
+          _scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+          return false;
+        }
+        return true;
+      case 2:
+        // Step 3: Amenities & Contact - Validate available from date (required)
+        if (_availableFrom == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBarUtils.buildThemedSnackBar(context, 'Please select available from date'),
+          );
+          return false;
+        }
+        return true;
+      default:
+        return true;
+    }
   }
 
   void _reorderImage(int oldIndex, int newIndex) {
     setState(() {
+      if (oldIndex == newIndex) return;
+      
+      // Adjust newIndex if moving within list
       if (newIndex > oldIndex) {
         newIndex -= 1;
       }
+      
       final item = _images.removeAt(oldIndex);
       _images.insert(newIndex, item);
+      
+      // Update cover index
       if (_coverImageIndex == oldIndex) {
         _coverImageIndex = newIndex;
-      } else if (_coverImageIndex == newIndex) {
-        _coverImageIndex = oldIndex;
+      } else if (_coverImageIndex == newIndex && oldIndex < newIndex) {
+        _coverImageIndex = newIndex - 1;
+      } else if (_coverImageIndex == newIndex && oldIndex > newIndex) {
+        _coverImageIndex = newIndex + 1;
+      } else if (_coverImageIndex > oldIndex && _coverImageIndex <= newIndex) {
+        _coverImageIndex -= 1;
+      } else if (_coverImageIndex < oldIndex && _coverImageIndex >= newIndex) {
+        _coverImageIndex += 1;
       }
     });
   }
@@ -248,20 +530,22 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     // Validate required fields even for draft
     if (_images.isEmpty && !isDraft) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add at least one image'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBarUtils.buildThemedSnackBar(context, 'Please add at least one image'),
       );
       return;
     }
 
     if (_propertyType == null && !isDraft) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a property type'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBarUtils.buildThemedSnackBar(context, 'Please select a property type'),
+      );
+      return;
+    }
+
+    final user = _auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBarUtils.buildThemedSnackBar(context, 'Please sign in to continue'),
       );
       return;
     }
@@ -272,65 +556,100 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     });
 
     try {
-      // Set initial progress
-      if (mounted) {
-        setState(() {
-          _uploadProgress = 0.0;
-        });
-      }
-
-      // Note: API call implementation will be added when backend is ready
-      // await PropertyService.createProperty(...);
-
-      if (!mounted) return;
-
-      // Simulate creating a new listing at the top of the home feed
-      final newListing = ListingModel(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        title: _titleController.text.isEmpty
-            ? 'New Property Listing'
-            : _titleController.text,
-        category: _propertyType ?? 'Apartment',
-        location: _addressController.text.isEmpty
-            ? 'Location to be updated'
-            : _addressController.text,
-        price: double.tryParse(_monthlyRentController.text) ?? 0,
-        ownerName: 'You',
-        isOwnerVerified: true,
-        imagePaths: _images.isNotEmpty
-            ? _images.map((xfile) => xfile.path).toList()
-            : ListingModel.getMockListings().first.imagePaths,
-        description: _descriptionController.text.isEmpty
-            ? 'Description will be updated soon.'
-            : _descriptionController.text,
-        bedrooms: 1,
-        bathrooms: 1,
-        area: 20,
-        postedDate: DateTime.now(),
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isDraft
-                ? 'Property saved as draft'
-                : 'Property published! Showing on your home feed.',
+      if (isDraft) {
+        // Save as draft
+        final draftId = await _listingService.saveDraft(
+          userId: user.uid,
+          draftId: _currentDraftId,
+          title: _titleController.text.isNotEmpty ? _titleController.text : null,
+          category: _propertyType,
+          location: _addressController.text.isNotEmpty ? _addressController.text : null,
+          price: double.tryParse(_monthlyRentController.text),
+          description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
+          currentStep: _currentStep,
+          additionalData: {
+            'deposit': _depositController.text.isNotEmpty ? double.tryParse(_depositController.text) : null,
+            'advance': _advanceController.text.isNotEmpty ? double.tryParse(_advanceController.text) : null,
+            'landmark': _landmarkController.text.isNotEmpty ? _landmarkController.text : null,
+            'phone': _phoneController.text.isNotEmpty ? _phoneController.text : null,
+            'messenger': _messengerController.text.isNotEmpty ? _messengerController.text : null,
+            'curfew': _curfewController.text.isNotEmpty ? _curfewController.text : null,
+            'maxOccupants': _maxOccupantsController.text.isNotEmpty ? int.tryParse(_maxOccupantsController.text) : null,
+            'availableFrom': _availableFrom != null ? Timestamp.fromDate(_availableFrom!) : null,
+            'electricityIncluded': _electricityIncluded,
+            'waterIncluded': _waterIncluded,
+            'internetIncluded': _internetIncluded,
+            'privateCR': _privateCR,
+            'sharedCR': _sharedCR,
+            'kitchenAccess': _kitchenAccess,
+            'wifi': _wifi,
+            'laundry': _laundry,
+            'parking': _parking,
+            'security': _security,
+            'aircon': _aircon,
+            'petFriendly': _petFriendly,
+          },
+        );
+        
+        _currentDraftId = draftId;
+        _hasUnsavedChanges = false;
+        
+        if (!mounted) return;
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Property saved as draft',
+            duration: const Duration(seconds: 2),
           ),
-          backgroundColor: Colors.green,
-        ),
-      );
+        );
+      } else {
+        // Publish listing (existing logic)
+        // Note: Full implementation will be added when backend is ready
+        final newListing = ListingModel(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          title: _titleController.text.isEmpty
+              ? 'New Property Listing'
+              : _titleController.text,
+          category: _propertyType ?? 'Apartment',
+          location: _addressController.text.isEmpty
+              ? 'Location to be updated'
+              : _addressController.text,
+          price: double.tryParse(_monthlyRentController.text) ?? 0,
+          ownerName: 'You',
+          isOwnerVerified: true,
+          imagePaths: _images.isNotEmpty
+              ? _images.map((xfile) => xfile.path).toList()
+              : ListingModel.getMockListings().first.imagePaths,
+          description: _descriptionController.text.isEmpty
+              ? 'Description will be updated soon.'
+              : _descriptionController.text,
+          bedrooms: 1,
+          bathrooms: 1,
+          area: 20,
+          postedDate: DateTime.now(),
+        );
 
-      // Navigate back to Home and insert the new listing at the top via route result
-      if (!isDraft) {
+        // Delete draft if it exists
+        if (_currentDraftId != null) {
+          await _listingService.deleteDraft(_currentDraftId!);
+        }
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Property published! Showing on your home feed.',
+          ),
+        );
+
         Navigator.of(context).pop<ListingModel>(newListing);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBarUtils.buildThemedSnackBar(context, 'Error: $e'),
         );
       }
     } finally {
@@ -349,21 +668,38 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+        if (await _onWillPop()) {
+          if (mounted) Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         automaticallyImplyLeading: false,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.of(context).pop(),
+          icon: Icon(
+            Icons.arrow_back,
+            color: theme.brightness == Brightness.dark ? Colors.white : Colors.black87,
+          ),
+          onPressed: () async {
+            if (await _onWillPop()) {
+              if (mounted) Navigator.of(context).pop();
+            }
+          },
         ),
         title: Text(
           'Add Property',
           style: textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
+            fontWeight: FontWeight.w600,
+            color: theme.brightness == Brightness.dark ? Colors.white : Colors.black87,
           ),
         ),
         centerTitle: true,
@@ -423,6 +759,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
           ),
         ),
       ),
+      ),
     );
   }
 
@@ -430,7 +767,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     return SizedBox(
       width: double.infinity,
       child: FilledButton(
-        onPressed: _isSubmitting ? null : () => _submitForm(isDraft: false),
+        onPressed: _isSubmitting ? null : () => _showPublishConfirmation(),
         style: FilledButton.styleFrom(
           backgroundColor: _themeColorDark,
           foregroundColor: Colors.white,
@@ -445,9 +782,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                 width: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    Colors.white,
-                  ),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               )
             : Text(
@@ -458,6 +793,71 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
               ),
       ),
     );
+  }
+
+  Future<void> _showPublishConfirmation() async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? Colors.grey[900] : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: backgroundColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Text(
+          'Publish Listing',
+          style: TextStyle(
+            color: textColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
+        content: Text(
+          'Are you ready to publish your property listing? You can also save it as a draft to continue later.',
+          style: TextStyle(
+            color: textColor.withOpacity(0.8),
+            fontSize: 14,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'cancel'),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: textColor),
+            ),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context, 'save_draft'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _themeColorDark,
+              side: BorderSide(color: _themeColorDark),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            child: const Text('Save as Draft'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, 'publish'),
+            style: FilledButton.styleFrom(
+              backgroundColor: _themeColorDark,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            child: const Text('Publish'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == 'publish') {
+      await _submitForm(isDraft: false);
+    } else if (result == 'save_draft') {
+      await _submitForm(isDraft: true);
+    }
+    // If result is 'cancel' or null, do nothing
   }
 
   /// Builds the full step header matching the reference design:
@@ -494,7 +894,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // Keep titles as requested
+            // Only show text for current step
             Expanded(child: _StepLabelText('Details', 0)),
             Expanded(child: _StepLabelText('Pricing & Location', 1)),
             Expanded(child: _StepLabelText('Amenities & Contact', 2)),
@@ -621,19 +1021,37 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
             LocationSection(
               addressController: _addressController,
               landmarkController: _landmarkController,
-              onMapPicker: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Map picker coming soon'),
+              onMapPicker: () async {
+                final result = await Navigator.push<Map<String, dynamic>>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => OSMLocationPickerPage(
+                      initialAddress: _addressController.text,
+                    ),
                   ),
                 );
+                
+                if (result != null && mounted) {
+                  setState(() {
+                    _addressController.text = result['address'] ?? '';
+                  });
+                }
               },
-              onGPSFill: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('GPS auto-fill coming soon'),
-                  ),
-                );
+              onGPSFill: () async {
+                final result = await LocationPickerService.getCurrentLocation();
+                
+                if (result != null && !result.containsKey('error') && mounted) {
+                  setState(() {
+                    _addressController.text = result['address'] ?? '';
+                  });
+                } else if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBarUtils.buildThemedSnackBar(
+                      context,
+                      result?['error'] ?? 'Failed to get location',
+                    ),
+                  );
+                }
               },
             ),
             const SizedBox(height: 32),
@@ -768,6 +1186,10 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                   onPressed: _isSubmitting
                       ? null
                       : () {
+                          // Validate current step before proceeding
+                          if (!_validateCurrentStep()) {
+                            return;
+                          }
                           setState(() {
                             _currentStep =
                                 (_currentStep + 1).clamp(0, _totalSteps - 1);
@@ -838,6 +1260,11 @@ class _StepLabelText extends StatelessWidget {
       textAlign = TextAlign.right;
     } else {
       textAlign = TextAlign.center;
+    }
+
+    // Only show text if it's the current step
+    if (!isActive) {
+      return const SizedBox.shrink();
     }
 
     return Text(

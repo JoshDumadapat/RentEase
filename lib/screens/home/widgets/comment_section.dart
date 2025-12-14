@@ -75,8 +75,10 @@ class _CommentSectionState extends State<CommentSection> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 itemCount: _comments.length,
                 itemBuilder: (context, index) {
+                  final comment = _comments[index];
                   return _CommentItem(
-                    comment: _comments[index],
+                    key: ValueKey(comment.id),
+                    comment: comment,
                     onPropertyTap: (listingId) {
                       // Find the listing by ID
                       final allListings = ListingModel.getMockListings();
@@ -175,6 +177,7 @@ class _CommentItem extends StatelessWidget {
   final Function(String)? onPropertyTap;
 
   const _CommentItem({
+    super.key,
     required this.comment,
     this.onPropertyTap,
   });

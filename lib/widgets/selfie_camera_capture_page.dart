@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
+import '../backend/BCameraDetectionService.dart';
+import '../utils/snackbar_utils.dart';
 
 /// Selfie camera page for capturing face photos with oval guide overlay
 class SelfieCameraCapturePage extends StatefulWidget {
@@ -17,6 +21,11 @@ class _SelfieCameraCapturePageState extends State<SelfieCameraCapturePage> {
   List<CameraDescription>? _cameras;
   bool _isInitialized = false;
   bool _isCapturing = false;
+  BCameraDetectionService? _detectionService;
+  StreamSubscription<DetectionResult>? _detectionSubscription;
+  DetectionState _currentDetectionState = DetectionState.none;
+  String _currentInstruction = 'Place your face in the camera box';
+  bool _autoCaptureTriggered = false;
 
   @override
   void initState() {
@@ -30,10 +39,7 @@ class _SelfieCameraCapturePageState extends State<SelfieCameraCapturePage> {
       if (_cameras == null || _cameras!.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No cameras available'),
-              backgroundColor: Colors.red,
-            ),
+            SnackBarUtils.buildThemedSnackBar(context, 'No cameras available'),
           );
           Navigator.of(context).pop();
         }
@@ -64,22 +70,52 @@ class _SelfieCameraCapturePageState extends State<SelfieCameraCapturePage> {
         setState(() {
           _isInitialized = true;
         });
+        // Start detection after camera is initialized
+        _startDetection();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error initializing camera: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBarUtils.buildThemedSnackBar(context, 'Error initializing camera: $e'),
         );
         Navigator.of(context).pop();
       }
     }
   }
 
+  void _startDetection() {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    
+    _detectionService = BCameraDetectionService(isFaceDetection: true);
+    _detectionSubscription = _detectionService!.startDetection(_controller!).listen(
+      (result) {
+        if (!mounted) return;
+        
+        setState(() {
+          _currentDetectionState = result.state;
+          _currentInstruction = result.instruction;
+        });
+        
+        // Auto-capture when ready and not already triggered
+        if (result.shouldCapture && !_autoCaptureTriggered && !_isCapturing) {
+          _autoCaptureTriggered = true;
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted && !_isCapturing) {
+              _capturePhoto();
+            }
+          });
+        }
+      },
+      onError: (error) {
+        // Silently handle errors - don't show to user
+      },
+    );
+  }
+
   @override
   void dispose() {
+    _detectionSubscription?.cancel();
+    _detectionService?.stopDetection(_controller);
     _controller?.dispose();
     _controller = null;
     super.dispose();
@@ -126,45 +162,64 @@ class _SelfieCameraCapturePageState extends State<SelfieCameraCapturePage> {
       final rectLeft = faceCenterX - (faceWidth / 2);
       final rectTop = faceCenterY - (faceHeight / 2);
       
-      // Camera preview aspect ratio
-      final previewAspectRatio = previewSize.height / previewSize.width;
-      
-      // Calculate how the preview is displayed on screen
-      double displayWidth = screenWidth;
-      double displayHeight = screenWidth * previewAspectRatio;
-      double offsetX = 0;
-      double offsetY = 0;
-      
-      if (displayHeight > screenHeight) {
-        displayHeight = screenHeight;
-        displayWidth = screenHeight / previewAspectRatio;
-        offsetX = (screenWidth - displayWidth) / 2;
-      } else {
-        offsetY = (screenHeight - displayHeight) / 2;
-      }
+      // Since we use FittedBox with BoxFit.cover, the preview fills the entire screen
+      final displayWidth = screenWidth;
+      final displayHeight = screenHeight;
       
       // Calculate the crop area in the original image coordinates
-      final relativeLeft = (rectLeft - offsetX) / displayWidth;
-      final relativeTop = (rectTop - offsetY) / displayHeight;
+      final relativeLeft = rectLeft / displayWidth;
+      final relativeTop = rectTop / displayHeight;
       final relativeWidth = faceWidth / displayWidth;
       final relativeHeight = faceHeight / displayHeight;
       
+      // Account for BoxFit.cover: the image may be scaled and cropped
+      final previewAspectRatio = previewSize.height / previewSize.width;
+      final screenAspectRatio = screenHeight / screenWidth;
+      
+      double visibleImageWidth = originalImg.width.toDouble();
+      double visibleImageHeight = originalImg.height.toDouble();
+      double imageOffsetX = 0;
+      double imageOffsetY = 0;
+      
+      if (previewAspectRatio > screenAspectRatio) {
+        // Image is taller, cropped on sides
+        visibleImageHeight = originalImg.height.toDouble();
+        visibleImageWidth = visibleImageHeight / screenAspectRatio;
+        imageOffsetX = (originalImg.width - visibleImageWidth) / 2;
+      } else {
+        // Image is wider, cropped on top/bottom
+        visibleImageWidth = originalImg.width.toDouble();
+        visibleImageHeight = visibleImageWidth * screenAspectRatio;
+        imageOffsetY = (originalImg.height - visibleImageHeight) / 2;
+      }
+      
+      // Map relative coordinates to actual image coordinates
+      final cropX = (imageOffsetX + relativeLeft * visibleImageWidth).round();
+      final cropY = (imageOffsetY + relativeTop * visibleImageHeight).round();
+      final cropWidth = (relativeWidth * visibleImageWidth).round();
+      final cropHeight = (relativeHeight * visibleImageHeight).round();
+      
       // Ensure values are within bounds
-      final imageWidth = originalImg.width;
-      final imageHeight = originalImg.height;
-      final cropX = (relativeLeft.clamp(0.0, 1.0) * imageWidth).round();
-      final cropY = (relativeTop.clamp(0.0, 1.0) * imageHeight).round();
-      final cropWidth = ((relativeWidth.clamp(0.0, 1.0 - relativeLeft.clamp(0.0, 1.0)) * imageWidth).round()).clamp(1, imageWidth - cropX);
-      final cropHeight = ((relativeHeight.clamp(0.0, 1.0 - relativeTop.clamp(0.0, 1.0)) * imageHeight).round()).clamp(1, imageHeight - cropY);
+      final finalCropX = cropX.clamp(0, originalImg.width - 1);
+      final finalCropY = cropY.clamp(0, originalImg.height - 1);
+      final finalCropWidth = cropWidth.clamp(1, originalImg.width - finalCropX);
+      final finalCropHeight = cropHeight.clamp(1, originalImg.height - finalCropY);
       
       // Crop the image to face shape (oval proportions)
-      final croppedImg = img.copyCrop(
+      var croppedImg = img.copyCrop(
         originalImg,
-        x: cropX,
-        y: cropY,
-        width: cropWidth,
-        height: cropHeight,
+        x: finalCropX,
+        y: finalCropY,
+        width: finalCropWidth,
+        height: finalCropHeight,
       );
+      
+      // IMPORTANT: Flip horizontally to match preview orientation
+      // Front cameras show a mirrored preview, but save non-mirrored images
+      // We flip it back to match what the user sees in the preview
+      if (_controller != null && _controller!.description.lensDirection == CameraLensDirection.front) {
+        croppedImg = img.flipHorizontal(croppedImg);
+      }
       
       // Save cropped image
       final croppedBytes = img.encodeJpg(croppedImg, quality: 85);
@@ -197,6 +252,11 @@ class _SelfieCameraCapturePageState extends State<SelfieCameraCapturePage> {
     if (_isCapturing) return;
 
     if (!mounted) return;
+    
+    // Stop detection before capturing
+    _detectionSubscription?.cancel();
+    _detectionService?.stopDetection(_controller);
+    
     setState(() {
       _isCapturing = true;
     });
@@ -274,19 +334,22 @@ class _SelfieCameraCapturePageState extends State<SelfieCameraCapturePage> {
           setState(() {
             _isCapturing = false;
           });
+          // Restart detection after user rejection
+          _autoCaptureTriggered = false;
+          _startDetection();
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error capturing photo: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBarUtils.buildThemedSnackBar(context, 'Error capturing photo: $e'),
         );
         setState(() {
           _isCapturing = false;
         });
+        // Restart detection after error
+        _autoCaptureTriggered = false;
+        _startDetection();
       }
     }
   }
@@ -391,83 +454,32 @@ class _SelfieCameraCapturePageState extends State<SelfieCameraCapturePage> {
     // Camera preview
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Camera preview
-          if (_isInitialized && _controller != null)
-            SizedBox.expand(
-              child: CameraPreview(_controller!),
-            )
-          else
-            const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            ),
-
-          // Top section with title and close button
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Selfie',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarIconBrightness: Brightness.dark,
+          statusBarColor: Colors.transparent,
+        ),
+        child: Stack(
+          children: [
+            // Camera preview - normal display, fill screen
+            if (_isInitialized && _controller != null)
+              SizedBox.expand(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: _controller!.value.previewSize?.height ?? 1,
+                    height: _controller!.value.previewSize?.width ?? 1,
+                    child: CameraPreview(_controller!),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.black, size: 28),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Instructions text
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 60,
-            left: 16,
-            right: 16,
-            child: const Text(
-              'Position your face within the oval guide',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.black,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-
-          // Prompt to fit face in the guide
-          Positioned(
-            top: (screenHeight / 2) - (faceHeight / 2) - 50,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text(
-                  'Fit your face within the face guide',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black,
-                  ),
-                  textAlign: TextAlign.center,
+              )
+            else
+              const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               ),
-            ),
-          ),
+
 
           // Full white overlay outside face area (100% opacity)
           CustomPaint(
@@ -481,6 +493,61 @@ class _SelfieCameraCapturePageState extends State<SelfieCameraCapturePage> {
             ),
           ),
 
+          // Top section with white container, black text and black button - ON TOP OF WHITE OVERLAY
+          // Extended to top with some spacing
+          Container(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 16,
+              bottom: 12,
+              left: 16,
+              right: 16,
+            ),
+            color: Colors.white,
+            child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Header - Black text
+                        const Text(
+                          'Face ID',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        // Subheader - Black text
+                        const Text(
+                          'Position your face within the guide',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Close button - Black icon, aligned with header
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.black, size: 24),
+                    onPressed: () => Navigator.of(context).pop(),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                    alignment: Alignment.center,
+                  ),
+                ],
+              ),
+          ),
+
           // Face-shaped guide overlay (oval, taller than wide) with dashed border
           Center(
             child: SizedBox(
@@ -488,9 +555,49 @@ class _SelfieCameraCapturePageState extends State<SelfieCameraCapturePage> {
               height: faceHeight,
               child: CustomPaint(
                 painter: _DashedOvalBorderPainter(
-                  color: Colors.orange,
+                  color: _currentDetectionState == DetectionState.ready 
+                      ? Colors.green 
+                      : Colors.orange,
                   strokeWidth: 3,
                 ),
+              ),
+            ),
+          ),
+
+          // Instructions below the face guide oval (width aligned with face guide)
+          Positioned(
+            top: (screenHeight / 2) + (faceHeight / 2) + 20,
+            left: (screenWidth - faceWidth) / 2,
+            child: Container(
+              width: faceWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.5), // Lighter opacity
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    _currentInstruction,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _currentDetectionState == DetectionState.ready
+                        ? 'Keep holding steady...'
+                        : 'Ensure your face is centered and well-lit',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[300],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
           ),
@@ -548,7 +655,7 @@ class _SelfieCameraCapturePageState extends State<SelfieCameraCapturePage> {
           ),
         ],
       ),
-    );
+    ));
   }
 }
 
@@ -565,8 +672,10 @@ class _SelfieOverlayPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     // Create path that covers entire screen except face area
+    // Leave top safe area clear for header
+    final topSafeArea = 80.0; // Approximate safe area for header
     final path = Path()
-      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+      ..addRect(Rect.fromLTWH(0, topSafeArea, size.width, size.height - topSafeArea));
 
     // Subtract the face oval (make it transparent)
     final facePath = Path()
@@ -585,7 +694,7 @@ class _SelfieOverlayPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// Custom painter for dashed oval border
+/// Custom painter for solid oval border
 class _DashedOvalBorderPainter extends CustomPainter {
   final Color color;
   final double strokeWidth;
@@ -605,22 +714,8 @@ class _DashedOvalBorderPainter extends CustomPainter {
     final oval = Rect.fromLTWH(0, 0, size.width, size.height);
     final path = Path()..addOval(oval);
 
-    // Draw dashed border
-    final dashWidth = 8.0;
-    final dashSpace = 4.0;
-    final pathMetrics = path.computeMetrics();
-
-    for (final pathMetric in pathMetrics) {
-      var distance = 0.0;
-      while (distance < pathMetric.length) {
-        final extractPath = pathMetric.extractPath(
-          distance,
-          distance + dashWidth,
-        );
-        canvas.drawPath(extractPath, paint);
-        distance += dashWidth + dashSpace;
-      }
-    }
+    // Draw solid border
+    canvas.drawPath(path, paint);
   }
 
   @override

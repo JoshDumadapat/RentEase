@@ -41,53 +41,74 @@ class PropertyMediaSection extends StatelessWidget {
           'Property Photos',
           style: textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
+            color: theme.brightness == Brightness.dark ? Colors.white : Colors.black87,
           ),
         ),
         const SizedBox(height: 8),
         Text(
-          'Add up to 10 photos. Tap and hold to reorder.',
+          'Double tap to set cover • Drag to reorder',
           style: textTheme.bodySmall?.copyWith(
             color: colorScheme.onSurfaceVariant,
+            fontSize: 12,
           ),
         ),
         const SizedBox(height: 16),
-        // Image Grid
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            // Add Image Button
-            if (images.length < 10)
-              _AddImageButton(
-                onTap: onPickImages,
-                colorScheme: colorScheme,
-              ),
-            // Image Thumbnails
-            ...images.asMap().entries.map((entry) {
-              final index = entry.key;
-              final image = entry.value;
-              return _ImageThumbnail(
-                image: image,
-                index: index,
-                isCover: index == coverImageIndex,
-                onRemove: () => onRemoveImage(index),
-                onSetCover: () => onSetCoverImage(index),
-                colorScheme: colorScheme,
-              );
-            }),
-          ],
+        // Image Grid - 3 photos per row, max 18 photos, with drag to reorder
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final screenWidth = constraints.maxWidth;
+            final spacing = 12.0;
+            final itemWidth = (screenWidth - (spacing * 2)) / 3; // 3 items per row
+            
+            // Reorder images so cover is first
+            final orderedImages = List<XFile>.from(images);
+            if (orderedImages.isNotEmpty && coverImageIndex < orderedImages.length && coverImageIndex > 0) {
+              final coverImage = orderedImages.removeAt(coverImageIndex);
+              orderedImages.insert(0, coverImage);
+            }
+            
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
+                // Add Image Button
+                if (images.length < 18)
+                  SizedBox(
+                    width: itemWidth,
+                    height: itemWidth,
+                    child: _AddImageButton(
+                      onTap: onPickImages,
+                      colorScheme: colorScheme,
+                    ),
+                  ),
+                // Image Thumbnails - display 3 per row with drag to reorder
+                ...orderedImages.take(18).toList().asMap().entries.map((entry) {
+                  final displayIndex = entry.key;
+                  final image = entry.value;
+                  // Find original index
+                  final originalIndex = images.indexOf(image);
+                  final isCover = originalIndex == coverImageIndex;
+                  
+                  return SizedBox(
+                    key: ValueKey('image_$originalIndex'),
+                    width: itemWidth,
+                    height: itemWidth,
+                    child: _ImageThumbnail(
+                      image: image,
+                      index: originalIndex,
+                      isCover: isCover,
+                      onRemove: () => onRemoveImage(originalIndex),
+                      onSetCover: () => onSetCoverImage(originalIndex),
+                      onReorder: (newIndex) => onReorderImage(originalIndex, newIndex),
+                      totalImages: images.length,
+                      colorScheme: colorScheme,
+                    ),
+                  );
+                }),
+              ],
+            );
+          },
         ),
-        // Cover Image Indicator
-        if (images.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Text(
-            'Cover image: Tap a photo to set as cover',
-            style: textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontSize: 12,
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -107,8 +128,8 @@ class _AddImageButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 100,
-        height: 100,
+        width: double.infinity,
+        height: double.infinity,
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
@@ -141,60 +162,113 @@ class _AddImageButton extends StatelessWidget {
   }
 }
 
-class _ImageThumbnail extends StatelessWidget {
+class _ImageThumbnail extends StatefulWidget {
   final XFile image;
   final int index;
   final bool isCover;
   final VoidCallback onRemove;
   final VoidCallback onSetCover;
+  final Function(int) onReorder;
+  final int totalImages;
   final ColorScheme colorScheme;
 
   const _ImageThumbnail({
+    super.key,
     required this.image,
     required this.index,
     required this.isCover,
     required this.onRemove,
     required this.onSetCover,
+    required this.onReorder,
+    required this.totalImages,
     required this.colorScheme,
   });
 
   @override
+  State<_ImageThumbnail> createState() => _ImageThumbnailState();
+}
+
+class _ImageThumbnailState extends State<_ImageThumbnail> {
+  bool _isDragging = false;
+  Offset? _dragStartPosition;
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onSetCover,
+      onDoubleTap: widget.onSetCover,
+      onLongPressStart: (details) {
+        setState(() {
+          _isDragging = true;
+          _dragStartPosition = details.localPosition;
+        });
+      },
+      onLongPressEnd: (details) {
+        setState(() {
+          _isDragging = false;
+          _dragStartPosition = null;
+        });
+      },
+      onLongPressMoveUpdate: (details) {
+        if (_dragStartPosition == null) return;
+        
+        final deltaY = details.localPosition.dy - _dragStartPosition!.dy;
+        final threshold = 30.0;
+        
+        if (deltaY < -threshold && widget.index > 0) {
+          // Move up
+          widget.onReorder(widget.index - 1);
+          _dragStartPosition = details.localPosition;
+        } else if (deltaY > threshold && widget.index < widget.totalImages - 1) {
+          // Move down
+          widget.onReorder(widget.index + 1);
+          _dragStartPosition = details.localPosition;
+        }
+      },
       child: Stack(
         children: [
           Container(
-            width: 100,
-            height: 100,
+            width: double.infinity,
+            height: double.infinity,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isCover
-                    ? colorScheme.primary
-                    : colorScheme.outline.withValues(alpha: 0.3),
-                width: isCover ? 2.5 : 1.5,
+                color: widget.isCover
+                    ? widget.colorScheme.primary
+                    : widget.colorScheme.outline.withValues(alpha: 0.3),
+                width: widget.isCover ? 2.5 : 1.5,
               ),
+              boxShadow: _isDragging
+                  ? [
+                      BoxShadow(
+                        color: widget.colorScheme.primary.withOpacity(0.5),
+                        blurRadius: 8,
+                        spreadRadius: 2,
+                      ),
+                    ]
+                  : null,
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.file(
-                File(image.path),
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: colorScheme.surfaceContainerHighest,
-                    child: Icon(
-                      Icons.broken_image,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  );
-                },
+              child: Opacity(
+                opacity: _isDragging ? 0.7 : 1.0,
+                child: Image.file(
+                  File(widget.image.path),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: widget.colorScheme.surfaceContainerHighest,
+                      child: Icon(
+                        Icons.broken_image,
+                        color: widget.colorScheme.onSurfaceVariant,
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),
           // Cover Badge
-          if (isCover)
+          if (widget.isCover)
             Positioned(
               top: 4,
               left: 4,
@@ -204,7 +278,7 @@ class _ImageThumbnail extends StatelessWidget {
                   vertical: 2,
                 ),
                 decoration: BoxDecoration(
-                  color: colorScheme.primary,
+                  color: widget.colorScheme.primary,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -212,7 +286,7 @@ class _ImageThumbnail extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.bold,
-                    color: colorScheme.onPrimary,
+                    color: widget.colorScheme.onPrimary,
                   ),
                 ),
               ),
@@ -222,7 +296,7 @@ class _ImageThumbnail extends StatelessWidget {
             top: 4,
             right: 4,
             child: GestureDetector(
-              onTap: onRemove,
+              onTap: widget.onRemove,
               child: Container(
                 width: 24,
                 height: 24,
@@ -238,6 +312,23 @@ class _ImageThumbnail extends StatelessWidget {
               ),
             ),
           ),
+          // Drag indicator
+          if (_isDragging)
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: widget.colorScheme.primary.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.drag_handle,
+                    color: widget.colorScheme.primary,
+                    size: 32,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

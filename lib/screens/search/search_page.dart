@@ -4,6 +4,7 @@ import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
 import 'package:rentease_app/widgets/filter_sheet.dart';
 import 'package:rentease_app/screens/home/widgets/threedots.dart';
+import 'package:rentease_app/screens/search/widgets/search_skeleton.dart';
 
 // Theme color constants
 const Color _themeColor = Color(0xFF00D1FF);
@@ -19,17 +20,51 @@ class SearchPage extends StatefulWidget {
 
 class _SearchPageState extends State<SearchPage> {
   final TextEditingController _searchController = TextEditingController();
-  final List<ListingModel> _allListings = ListingModel.getMockListings();
+  List<ListingModel> _allListings = [];
   final FilterModel _filterModel = FilterModel();
   String? _selectedCategory;
+  bool _isLoading = true;
+  
+  // Cache filtered listings to avoid recalculating on every build
+  List<ListingModel>? _cachedFilteredListings;
+  String? _lastSelectedCategory;
+  double? _lastMinPrice;
+  double? _lastMaxPrice;
+  String? _lastBedrooms;
+  String? _lastBathrooms;
+  String? _lastPropertyType;
 
   @override
   void initState() {
     super.initState();
     _filterModel.addListener(_onFilterChanged);
+    _loadSearchData();
+  }
+
+  /// Load search data (simulate network delay for skeleton loading)
+  Future<void> _loadSearchData() async {
+    // Simulate network delay
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (mounted) {
+      setState(() {
+        _allListings = ListingModel.getMockListings();
+        _cachedFilteredListings = _allListings;
+        _isLoading = false;
+      });
+    }
+  }
+
+  /// Refresh search data
+  Future<void> _refreshSearchData() async {
+    setState(() {
+      _isLoading = true;
+    });
+    await _loadSearchData();
   }
 
   void _onFilterChanged() {
+    // Invalidate cache when filters change
+    _cachedFilteredListings = null;
     // CRITICAL FIX: Defer setState() until after the current build frame completes.
     // This prevents "setState() called during build" errors when FilterSheet's
     // initState() calls resetTemporaryFilters() which triggers notifyListeners()
@@ -52,111 +87,152 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   List<ListingModel> get _filteredListings {
-    var listings = _allListings;
+    // Check if cache is still valid
+    final currentMinPrice = _filterModel.minPrice;
+    final currentMaxPrice = _filterModel.maxPrice;
+    final currentBedrooms = _filterModel.selectedBedrooms;
+    final currentBathrooms = _filterModel.selectedBathrooms;
+    final currentPropertyType = _filterModel.selectedPropertyType;
+    
+    if (_cachedFilteredListings != null &&
+        _lastSelectedCategory == _selectedCategory &&
+        _lastMinPrice == currentMinPrice &&
+        _lastMaxPrice == currentMaxPrice &&
+        _lastBedrooms == currentBedrooms &&
+        _lastBathrooms == currentBathrooms &&
+        _lastPropertyType == currentPropertyType) {
+      return _cachedFilteredListings!;
+    }
 
-    // Apply category filter
-    if (_selectedCategory != null) {
-      final selected = _selectedCategory!.toLowerCase();
-      listings = listings.where((listing) {
+    // Cache current filter values
+    _lastSelectedCategory = _selectedCategory;
+    _lastMinPrice = currentMinPrice;
+    _lastMaxPrice = currentMaxPrice;
+    _lastBedrooms = currentBedrooms;
+    _lastBathrooms = currentBathrooms;
+    _lastPropertyType = currentPropertyType;
+
+    // Optimized: Single pass filtering instead of multiple where().toList() calls
+    final filtered = <ListingModel>[];
+    
+    for (final listing in _allListings) {
+      // Category filter
+      if (_selectedCategory != null) {
+        final selected = _selectedCategory!.toLowerCase();
         final listingCategory = listing.category.toLowerCase();
+        bool matches = false;
         if (selected == 'house') {
-          return listingCategory.contains('house');
+          matches = listingCategory.contains('house');
         } else if (selected == 'apartment') {
-          return listingCategory.contains('apartment');
+          matches = listingCategory.contains('apartment');
         } else if (selected == 'office') {
-          return true; // Office might not exist in listings
-        }
-        return listingCategory.contains(selected);
-      }).toList();
-    }
-
-    // Apply price filter
-    listings = listings.where((listing) {
-      return listing.price >= _filterModel.minPrice &&
-          listing.price <= _filterModel.maxPrice;
-    }).toList();
-
-    // Apply bedrooms filter
-    if (_filterModel.selectedBedrooms != null) {
-      final bedroomsFilter = _filterModel.selectedBedrooms!;
-      listings = listings.where((listing) {
-        if (bedroomsFilter == 'Studio') {
-          return listing.bedrooms == 0 || listing.bedrooms == 1;
-        } else if (bedroomsFilter == '4+') {
-          return listing.bedrooms >= 4;
+          matches = true; // Office might not exist in listings
         } else {
-          final count = int.tryParse(bedroomsFilter);
-          return count != null && listing.bedrooms == count;
+          matches = listingCategory.contains(selected);
         }
-      }).toList();
-    }
+        if (!matches) continue;
+      }
 
-    // Apply bathrooms filter
-    if (_filterModel.selectedBathrooms != null) {
-      final bathroomsFilter = _filterModel.selectedBathrooms!;
-      listings = listings.where((listing) {
-        if (bathroomsFilter == '4+') {
-          return listing.bathrooms >= 4;
+      // Price filter
+      if (listing.price < currentMinPrice || listing.price > currentMaxPrice) {
+        continue;
+      }
+
+      // Bedrooms filter
+      if (currentBedrooms != null) {
+        bool matches = false;
+        if (currentBedrooms == 'Studio') {
+          matches = listing.bedrooms == 0 || listing.bedrooms == 1;
+        } else if (currentBedrooms == '4+') {
+          matches = listing.bedrooms >= 4;
         } else {
-          final count = int.tryParse(bathroomsFilter);
-          return count != null && listing.bathrooms == count;
+          final count = int.tryParse(currentBedrooms);
+          matches = count != null && listing.bedrooms == count;
         }
-      }).toList();
-    }
+        if (!matches) continue;
+      }
 
-    // Apply property type filter
-    if (_filterModel.selectedPropertyType != null) {
-      final typeFilter = _filterModel.selectedPropertyType!.toLowerCase();
-      listings = listings.where((listing) {
+      // Bathrooms filter
+      if (currentBathrooms != null) {
+        bool matches = false;
+        if (currentBathrooms == '4+') {
+          matches = listing.bathrooms >= 4;
+        } else {
+          final count = int.tryParse(currentBathrooms);
+          matches = count != null && listing.bathrooms == count;
+        }
+        if (!matches) continue;
+      }
+
+      // Property type filter
+      if (currentPropertyType != null) {
+        final typeFilter = currentPropertyType.toLowerCase();
         final category = listing.category.toLowerCase();
+        bool matches = false;
         if (typeFilter == 'apartment') {
-          return category.contains('apartment');
+          matches = category.contains('apartment');
         } else if (typeFilter == 'house') {
-          return category.contains('house');
+          matches = category.contains('house');
         } else if (typeFilter == 'condo') {
-          return category.contains('condo');
+          matches = category.contains('condo');
         } else if (typeFilter == 'room') {
-          return category.contains('room');
+          matches = category.contains('room');
         } else if (typeFilter == 'villa') {
-          return category.contains('villa');
+          matches = category.contains('villa');
         }
-        return false;
-      }).toList();
+        if (!matches) continue;
+      }
+
+      filtered.add(listing);
     }
 
-    // Note: Amenities filtering would require adding amenities to ListingModel
-    // For now, we'll skip this as it's not in the current model
-
-    return listings;
+    _cachedFilteredListings = filtered;
+    return filtered;
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? Colors.grey[900] : Colors.white;
+    
+    // Show skeleton only during initial loading
+    if (_isLoading && _allListings.isEmpty) {
+      return SearchSkeleton(isDark: isDark);
+    }
+    
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: backgroundColor,
       appBar: _buildAppBar(),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(),
-            _buildSearchBar(),
-            const SizedBox(height: 12),
-            _buildCategoryFilters(),
-            const SizedBox(height: 24),
-            _buildFeaturedListings(),
-            const SizedBox(height: 24),
-            _buildPropertyNearby(),
-            const SizedBox(height: 16),
-          ],
+      body: RefreshIndicator(
+        onRefresh: _refreshSearchData,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(),
+              _buildSearchBar(),
+              const SizedBox(height: 12),
+              _buildCategoryFilters(),
+              const SizedBox(height: 24),
+              _buildFeaturedListings(),
+              const SizedBox(height: 24),
+              _buildPropertyNearby(),
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final appBarColor = isDark ? Colors.grey[900] : Colors.white;
+    
     return AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: appBarColor,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -170,7 +246,7 @@ class _SearchPageState extends State<SearchPage> {
           width: 120,
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) {
-            return const Icon(Icons.home, color: _themeColor, size: 32);
+            return Icon(Icons.home, color: _themeColor, size: 32);
           },
         ),
       ),
@@ -182,17 +258,22 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildHeader() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
+    
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Discover your new house!',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: textColor,
               letterSpacing: -0.5,
             ),
           ),
@@ -201,7 +282,7 @@ class _SearchPageState extends State<SearchPage> {
             'Find the perfect rental property',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey[600],
+              color: subtextColor,
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -211,6 +292,14 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildSearchBar() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey[300]!;
+    final fillColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final hintColor = isDark ? Colors.grey[400]! : Colors.grey[400]!;
+    final iconColor = isDark ? Colors.white : Colors.grey[600]!;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Row(
@@ -218,17 +307,18 @@ class _SearchPageState extends State<SearchPage> {
           Expanded(
             child: TextField(
               controller: _searchController,
+              style: TextStyle(color: textColor),
               decoration: InputDecoration(
                 hintText: 'Search',
-                hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                hintStyle: TextStyle(color: hintColor, fontSize: 14),
                 prefixIcon: Icon(
                   Icons.search,
-                  color: Colors.grey[600],
+                  color: iconColor,
                   size: 20,
                 ),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
-                        icon: Icon(Icons.clear, color: Colors.grey[600], size: 20),
+                        icon: Icon(Icons.clear, color: iconColor, size: 20),
                         onPressed: () {
                           setState(() {
                             _searchController.clear();
@@ -238,11 +328,11 @@ class _SearchPageState extends State<SearchPage> {
                     : null,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
+                  borderSide: BorderSide(color: borderColor),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
+                  borderSide: BorderSide(color: borderColor),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -252,6 +342,8 @@ class _SearchPageState extends State<SearchPage> {
                   horizontal: 16,
                   vertical: 12,
                 ),
+                filled: true,
+                fillColor: fillColor,
                 isDense: true,
               ),
               onChanged: (value) {
@@ -298,7 +390,8 @@ class _SearchPageState extends State<SearchPage> {
   Widget _buildCategoryFilters() {
     // Simplified category list matching the reference design
     final categoryFilters = ['House', 'Office', 'Apartment'];
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -313,6 +406,7 @@ class _SearchPageState extends State<SearchPage> {
               onTap: () {
                 setState(() {
                   _selectedCategory = isSelected ? null : category;
+                  _cachedFilteredListings = null; // Invalidate cache
                 });
               },
               child: Container(
@@ -321,12 +415,14 @@ class _SearchPageState extends State<SearchPage> {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: isSelected ? _themeColorDark : colorScheme.surface,
+                  color: isSelected
+                      ? _themeColorDark
+                      : (isDark ? const Color(0xFF2A2A2A) : Colors.white),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isSelected
                         ? _themeColorDark
-                        : colorScheme.outline.withValues(alpha: 0.3),
+                        : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
                     width: 1,
                   ),
                 ),
@@ -337,7 +433,7 @@ class _SearchPageState extends State<SearchPage> {
                     fontWeight: FontWeight.w600,
                     color: isSelected
                         ? Colors.white
-                        : colorScheme.onSurface,
+                        : (isDark ? Colors.grey[300]! : Colors.black87),
                   ),
                 ),
               ),
@@ -349,6 +445,9 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildFeaturedListings() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
     final filteredListings = _filteredListings;
 
     if (filteredListings.isEmpty) {
@@ -360,12 +459,12 @@ class _SearchPageState extends State<SearchPage> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: const Text(
+          child: Text(
             'Featured Properties',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: textColor,
             ),
           ),
         ),
@@ -377,18 +476,21 @@ class _SearchPageState extends State<SearchPage> {
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             itemCount: filteredListings.length,
             itemBuilder: (context, index) {
+              final listing = filteredListings[index];
               return Padding(
+                key: ValueKey(listing.id),
                 padding: EdgeInsets.only(
                   right: index == filteredListings.length - 1 ? 0 : 16,
                 ),
                 child: _FeaturedListingCard(
-                  listing: filteredListings[index],
+                  listing: listing,
+                  isDark: isDark,
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => ListingDetailsPage(
-                          listing: filteredListings[index],
+                          listing: listing,
                         ),
                       ),
                     );
@@ -403,6 +505,10 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildPropertyNearby() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -411,12 +517,12 @@ class _SearchPageState extends State<SearchPage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Property Nearby',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: textColor,
                 ),
               ),
               TextButton(
@@ -436,28 +542,39 @@ class _SearchPageState extends State<SearchPage> {
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _filteredListings.length > 3
-                ? 3
-                : _filteredListings.length,
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: EdgeInsets.only(bottom: index == 2 ? 0 : 16),
-                child: _NearbyListingCard(
-                  listing: _filteredListings[index],
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ListingDetailsPage(
-                          listing: _filteredListings[index],
-                        ),
-                      ),
-                    );
-                  },
-                ),
+          child: Builder(
+            builder: (context) {
+              final filteredListings = _filteredListings;
+              final nearbyListings = filteredListings.length > 3
+                  ? filteredListings.sublist(0, 3)
+                  : filteredListings;
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: nearbyListings.length,
+                itemBuilder: (context, index) {
+                  final listing = nearbyListings[index];
+                  return Padding(
+                    key: ValueKey(listing.id),
+                    padding: EdgeInsets.only(
+                      bottom: index == nearbyListings.length - 1 ? 0 : 16,
+                    ),
+                    child: _NearbyListingCard(
+                      listing: listing,
+                      isDark: isDark,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ListingDetailsPage(
+                              listing: listing,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -469,25 +586,50 @@ class _SearchPageState extends State<SearchPage> {
 
 class _FeaturedListingCard extends StatelessWidget {
   final ListingModel listing;
+  final bool isDark;
   final VoidCallback onTap;
 
-  const _FeaturedListingCard({required this.listing, required this.onTap});
+  const _FeaturedListingCard({
+    super.key,
+    required this.listing,
+    required this.isDark,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final cardColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
+    final iconColor = isDark ? Colors.white : Colors.grey[500]!;
+    final placeholderColor = isDark ? Colors.grey[700]! : Colors.grey[200]!;
+    
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 260,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardColor,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
+          boxShadow: isDark ? [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: Colors.black.withValues(alpha: 0.3),
               spreadRadius: 0,
               blurRadius: 12,
               offset: const Offset(0, 4),
+            ),
+          ] : [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              spreadRadius: 0,
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              spreadRadius: 0,
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
@@ -510,24 +652,24 @@ class _FeaturedListingCard extends StatelessWidget {
                             height: double.infinity,
                             errorBuilder: (context, error, stackTrace) {
                               return Container(
-                                color: Colors.grey[200],
-                                child: const Center(
+                                color: placeholderColor,
+                                child: Center(
                                   child: Icon(
                                     Icons.image_outlined,
                                     size: 48,
-                                    color: Colors.grey,
+                                    color: iconColor,
                                   ),
                                 ),
                               );
                             },
                           )
                         : Container(
-                            color: Colors.grey[200],
-                            child: const Center(
+                            color: placeholderColor,
+                            child: Center(
                               child: Icon(
                                 Icons.image_outlined,
                                 size: 48,
-                                color: Colors.grey,
+                                color: iconColor,
                               ),
                             ),
                           ),
@@ -570,7 +712,9 @@ class _FeaturedListingCard extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: _themeColorLight,
+                        color: isDark 
+                            ? _themeColorDark.withOpacity(0.25)
+                            : _themeColorLight,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -586,10 +730,10 @@ class _FeaturedListingCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(
                       listing.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        color: textColor,
                         height: 1.3,
                       ),
                       maxLines: 2,
@@ -601,7 +745,7 @@ class _FeaturedListingCard extends StatelessWidget {
                         Icon(
                           Icons.location_on_outlined,
                           size: 14,
-                          color: Colors.grey[500],
+                          color: iconColor,
                         ),
                         const SizedBox(width: 4),
                         Expanded(
@@ -609,7 +753,7 @@ class _FeaturedListingCard extends StatelessWidget {
                             listing.location,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[600],
+                              color: subtextColor,
                               fontWeight: FontWeight.w400,
                             ),
                             maxLines: 1,
@@ -623,7 +767,7 @@ class _FeaturedListingCard extends StatelessWidget {
                       listing.timeAgo,
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.grey[500],
+                        color: subtextColor,
                         fontWeight: FontWeight.w400,
                       ),
                     ),
@@ -640,12 +784,24 @@ class _FeaturedListingCard extends StatelessWidget {
 
 class _NearbyListingCard extends StatelessWidget {
   final ListingModel listing;
+  final bool isDark;
   final VoidCallback onTap;
 
-  const _NearbyListingCard({required this.listing, required this.onTap});
+  const _NearbyListingCard({
+    super.key,
+    required this.listing,
+    required this.isDark,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final cardColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600]!;
+    final iconColor = isDark ? Colors.white : Colors.grey[500]!;
+    final placeholderColor = isDark ? Colors.grey[700]! : Colors.grey[200]!;
+    
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -656,12 +812,16 @@ class _NearbyListingCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.grey[50],
+            color: cardColor,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Colors.grey[200]!,
-              width: 1,
-            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
+                blurRadius: 12,
+                spreadRadius: 0,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -675,7 +835,7 @@ class _NearbyListingCard extends StatelessWidget {
                     width: 100,
                     height: 130,
                     child: Container(
-                      color: Colors.grey[200],
+                      color: placeholderColor,
                       child: listing.imagePaths.isNotEmpty
                           ? Image.asset(
                               listing.imagePaths[0],
@@ -684,24 +844,24 @@ class _NearbyListingCard extends StatelessWidget {
                               height: 130,
                               errorBuilder: (context, error, stackTrace) {
                                 return Container(
-                                  color: Colors.grey[200],
-                                  child: const Center(
+                                  color: placeholderColor,
+                                  child: Center(
                                     child: Icon(
                                       Icons.image_outlined,
                                       size: 32,
-                                      color: Colors.grey,
+                                      color: iconColor,
                                     ),
                                   ),
                                 );
                               },
                             )
                           : Container(
-                              color: Colors.grey[200],
-                              child: const Center(
+                              color: placeholderColor,
+                              child: Center(
                                 child: Icon(
                                   Icons.image_outlined,
                                   size: 32,
-                                  color: Colors.grey,
+                                  color: iconColor,
                                 ),
                               ),
                             ),
@@ -723,7 +883,9 @@ class _NearbyListingCard extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: _themeColorLight,
+                          color: isDark 
+                              ? _themeColorDark.withOpacity(0.25)
+                              : _themeColorLight,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -739,10 +901,10 @@ class _NearbyListingCard extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         listing.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: textColor,
                           height: 1.2,
                         ),
                         maxLines: 2,
@@ -754,7 +916,7 @@ class _NearbyListingCard extends StatelessWidget {
                           Icon(
                             Icons.location_on_rounded,
                             size: 14,
-                            color: Colors.grey[500],
+                            color: iconColor,
                           ),
                           const SizedBox(width: 4),
                           Expanded(
@@ -762,7 +924,7 @@ class _NearbyListingCard extends StatelessWidget {
                               listing.location,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey[600],
+                                color: subtextColor,
                                 fontWeight: FontWeight.w400,
                               ),
                               maxLines: 1,
@@ -776,7 +938,7 @@ class _NearbyListingCard extends StatelessWidget {
                         listing.timeAgo,
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey[500],
+                          color: subtextColor,
                           fontWeight: FontWeight.w400,
                         ),
                       ),
@@ -798,7 +960,7 @@ class _NearbyListingCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.normal,
-                              color: Colors.grey[600],
+                              color: subtextColor,
                             ),
                           ),
                         ],

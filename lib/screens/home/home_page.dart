@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:rentease_app/models/category_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/models/looking_for_post_model.dart';
@@ -10,7 +11,9 @@ import 'package:rentease_app/screens/posts/posts_page.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
 import 'package:rentease_app/screens/looking_for_post_detail/looking_for_post_detail_page.dart';
 import 'package:rentease_app/screens/home/widgets/home_skeleton.dart';
+import 'package:rentease_app/screens/home/widgets/looking_for_skeleton.dart';
 import 'package:rentease_app/screens/home/widgets/threedots.dart';
+import 'package:rentease_app/utils/snackbar_utils.dart';
 
 // Theme color constants
 const Color _themeColor = Color(0xFF00D1FF);
@@ -26,13 +29,14 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   late TabController _tabController;
   bool _isLoading = true;
-  bool _showTabs = false; // Initially hidden when welcome section is visible
+  bool _isLoadingLookingFor = true;
+  bool _isFirstTimeUser = true;
   final ScrollController _listingsScrollController = ScrollController();
   final ScrollController _lookingForScrollController = ScrollController();
-  final ValueNotifier<bool> _tabsVisibilityNotifier = ValueNotifier<bool>(false);
+  static bool _hasAnimatedOnce = false; // Track if animations have been shown
 
   final List<CategoryModel> _categories = CategoryModel.getMockCategories();
   final List<ListingModel> _listings = [...ListingModel.getMockListings()];
@@ -44,78 +48,34 @@ class _HomePageState extends State<HomePage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(_onTabChanged);
-    _setupScrollListeners();
+    _checkFirstTimeUser();
     _loadData();
   }
 
-  void _onTabChanged() {
+  Future<void> _checkFirstTimeUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isFirstTime = prefs.getBool('is_first_time_user') ?? true;
     if (mounted) {
-      // When switching tabs, update tab visibility
-      if (_tabController.index == 1) {
-        // Always show tabs on "Looking For" tab
-        if (!_showTabs) {
-          setState(() {
-            _showTabs = true;
-          });
-          _tabsVisibilityNotifier.value = true;
-        }
-      } else {
-        // For "Listings" tab, check scroll position
-        _handleScroll();
-      }
-    }
-  }
-
-  void _setupScrollListeners() {
-    _listingsScrollController.addListener(_handleScroll);
-
-    _lookingForScrollController.addListener(_handleScroll);
-  }
-
-  void _handleScroll() {
-    final ScrollController activeController = _tabController.index == 0
-        ? _listingsScrollController
-        : _lookingForScrollController;
-
-    if (!activeController.hasClients) return;
-
-    // Always show tabs when on "Looking For" tab (index 1)
-    if (_tabController.index == 1) {
-      if (!_showTabs) {
-        setState(() {
-          _showTabs = true;
-        });
-        _tabsVisibilityNotifier.value = true;
-      }
-      return;
-    }
-
-    final double currentScrollPosition = activeController.position.pixels;
-    
-    // Approximate height of welcome section + featured categories section
-    // Welcome section: ~80px (text + padding)
-    // Featured categories: ~400px (large card + small cards)
-    // Spacing: ~32px
-    const double welcomeAndCategoriesHeight = 512.0;
-    
-    // Hide tabs when welcome section and categories are visible (only for Listings tab)
-    // Show tabs only when scrolled past these sections
-    final bool shouldShow = currentScrollPosition >= welcomeAndCategoriesHeight;
-
-    if (_showTabs != shouldShow) {
       setState(() {
-        _showTabs = shouldShow;
+        _isFirstTimeUser = isFirstTime;
       });
-      _tabsVisibilityNotifier.value = shouldShow;
+      // Mark as not first-time user after first view
+      if (isFirstTime) {
+        await prefs.setBool('is_first_time_user', false);
+      }
     }
   }
+
+  @override
+  bool get wantKeepAlive => true; // Preserve scroll position when navigating away
 
   Future<void> _loadData() async {
-    // Load data immediately without artificial delay
+    // Simulate network delay for skeleton loading (minimal delay for smooth UX)
+    await Future.delayed(const Duration(milliseconds: 800));
     if (mounted) {
       setState(() {
         _isLoading = false;
+        _isLoadingLookingFor = false;
       });
     }
   }
@@ -138,30 +98,35 @@ class _HomePageState extends State<HomePage>
 
   @override
   void dispose() {
-    _listingsScrollController.removeListener(_handleScroll);
-    _lookingForScrollController.removeListener(_handleScroll);
     _listingsScrollController.dispose();
     _lookingForScrollController.dispose();
-    _tabsVisibilityNotifier.dispose();
-    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? Colors.grey[900] : Colors.white;
+    final unselectedTabColor = isDark ? Colors.grey[400] : Colors.grey[600];
+    
     if (_isLoading) {
-      return const HomeSkeleton();
+      return HomeSkeleton(isDark: isDark, isFirstTimeUser: _isFirstTimeUser);
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: backgroundColor,
       body: Column(
         children: [
           // Fixed App Bar
           AppBar(
-            backgroundColor: Colors.white,
+            backgroundColor: backgroundColor,
             elevation: 0,
+            scrolledUnderElevation: 0,
+            surfaceTintColor: Colors.transparent,
             leadingWidth: 200,
             leading: Container(
               padding: const EdgeInsets.only(left: 16.0),
@@ -172,7 +137,7 @@ class _HomePageState extends State<HomePage>
                 width: 120,
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) {
-                  return const Icon(Icons.home, color: _themeColor, size: 32);
+                  return Icon(Icons.home, color: _themeColor, size: 32);
                 },
               ),
             ),
@@ -181,38 +146,57 @@ class _HomePageState extends State<HomePage>
               const SizedBox(width: 8),
             ],
           ),
-          // Fixed Tabs below App Bar - completely hidden when welcome is visible
-          ValueListenableBuilder<bool>(
-            valueListenable: _tabsVisibilityNotifier,
-            builder: (context, isVisible, child) {
-              // Completely remove tabs from widget tree when not visible (zero space)
-              if (!isVisible) {
-                return const SizedBox(height: 0, width: double.infinity);
-              }
-              return _AnimatedTabBar(
-                visibilityNotifier: _tabsVisibilityNotifier,
-                height: 36.0,
-                tabBar: TabBar(
-                  controller: _tabController,
-                  labelColor: _themeColorDark,
-                  unselectedLabelColor: Colors.grey[600],
-                  indicatorColor: _themeColorDark,
-                  indicatorWeight: 2.5,
-                  labelStyle: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+          // Fixed Tabs below App Bar - always visible
+          Container(
+            color: backgroundColor,
+            padding: const EdgeInsets.only(top: 4),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TabBar(
+                    controller: _tabController,
+                    labelColor: _themeColorDark,
+                    unselectedLabelColor: unselectedTabColor,
+                    indicatorColor: _themeColorDark,
+                    indicatorWeight: 2.5,
+                    dividerColor: Colors.transparent, // Remove bottom outline
+                    labelStyle: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    tabs: const [
+                      Tab(text: 'Listings'),
+                      Tab(text: 'Looking For'),
+                    ],
                   ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w400,
-                  ),
-                  tabs: const [
-                    Tab(text: 'Listings'),
-                    Tab(text: 'Looking For'),
-                  ],
                 ),
-              );
-            },
+                // Shadow only at the bottom
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: -8,
+                  height: 8,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 8,
+                          offset: const Offset(0, 0),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           // Scrollable Content
           Expanded(
@@ -226,55 +210,146 @@ class _HomePageState extends State<HomePage>
     );
   }
 
+  Future<void> _refreshListings() async {
+    // Reload listings data
+    setState(() {
+      _isLoading = true;
+    });
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   Widget _buildListingsTab() {
-    return CustomScrollView(
-      controller: _listingsScrollController,
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
-            child: _WelcomeSection(),
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 20)),
-
-        SliverToBoxAdapter(
-          child: _FeaturedCategoriesSection(
-            categories: _categories,
-            onCategoryTap: (category) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => PostsPage(category: category),
-                ),
-              );
-            },
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
-
-        SliverToBoxAdapter(
-          child: _VisitListingsSection(
-            listings: _listings,
-            onListingTap: (listing) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ListingDetailsPage(listing: listing),
-                ),
-              );
-            },
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 16)),
-      ],
+    return _ListingsSection(
+      categories: _categories,
+      listings: _listings,
+      scrollController: _listingsScrollController,
+      onRefresh: _refreshListings,
+      hasAnimatedOnce: _hasAnimatedOnce,
+      isFirstTimeUser: _isFirstTimeUser,
     );
   }
 
+  Future<void> _refreshLookingFor() async {
+    // Reload looking for posts data
+    setState(() {
+      _isLoadingLookingFor = true;
+    });
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (mounted) {
+      setState(() {
+        _isLoadingLookingFor = false;
+      });
+    }
+  }
+
   Widget _buildLookingForTab() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    if (_isLoadingLookingFor) {
+      return LookingForSkeleton(isDark: isDark);
+    }
     return _LookingForSection(
       posts: _lookingForPosts,
       scrollController: _lookingForScrollController,
+      onRefresh: _refreshLookingFor,
+    );
+  }
+}
+
+class _ListingsSection extends StatefulWidget {
+  final List<CategoryModel> categories;
+  final List<ListingModel> listings;
+  final ScrollController? scrollController;
+  final Future<void> Function()? onRefresh;
+  final bool hasAnimatedOnce;
+  final bool isFirstTimeUser;
+
+  const _ListingsSection({
+    required this.categories,
+    required this.listings,
+    this.scrollController,
+    this.onRefresh,
+    required this.hasAnimatedOnce,
+    required this.isFirstTimeUser,
+  });
+
+  @override
+  State<_ListingsSection> createState() => _ListingsSectionState();
+}
+
+class _ListingsSectionState extends State<_ListingsSection>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true; // Preserve scroll position when switching tabs
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    
+    return RefreshIndicator(
+      onRefresh: widget.onRefresh ?? () async {},
+      child: CustomScrollView(
+        controller: widget.scrollController,
+        slivers: [
+          if (widget.isFirstTimeUser)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+                child: _AnimatedFadeSlide(
+                  delay: 0,
+                  skipAnimation: widget.hasAnimatedOnce,
+                  child: _WelcomeSection(),
+                ),
+              ),
+            ),
+          if (widget.isFirstTimeUser)
+            const SliverToBoxAdapter(child: SizedBox(height: 20)),
+          if (!widget.isFirstTimeUser)
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          SliverToBoxAdapter(
+            child: _AnimatedFadeSlide(
+              delay: widget.isFirstTimeUser ? 100 : 0,
+              skipAnimation: widget.hasAnimatedOnce,
+              child: _FeaturedCategoriesSection(
+                categories: widget.categories,
+                isFirstTimeUser: widget.isFirstTimeUser,
+                onCategoryTap: (category) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PostsPage(category: category),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 32)),
+          SliverToBoxAdapter(
+            child: _AnimatedFadeSlide(
+              delay: 200,
+              skipAnimation: widget.hasAnimatedOnce,
+              child: _VisitListingsSection(
+                listings: widget.listings,
+                onListingTap: (listing) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ListingDetailsPage(listing: listing),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+        ],
+      ),
     );
   }
 }
@@ -282,23 +357,28 @@ class _HomePageState extends State<HomePage>
 class _WelcomeSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Welcome to RentEase!',
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
-            color: Colors.black87,
+            color: textColor,
           ),
         ),
         const SizedBox(height: 6),
         RichText(
           text: TextSpan(
             style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[600],
+              fontSize: 12,
+              color: subtextColor,
               height: 1.4,
             ),
             children: [
@@ -329,10 +409,12 @@ class _WelcomeSection extends StatelessWidget {
 class _FeaturedCategoriesSection extends StatelessWidget {
   final List<CategoryModel> categories;
   final Function(CategoryModel) onCategoryTap;
+  final bool isFirstTimeUser;
 
   const _FeaturedCategoriesSection({
     required this.categories,
     required this.onCategoryTap,
+    required this.isFirstTimeUser,
   });
 
   @override
@@ -372,9 +454,13 @@ class _FeaturedCategoriesSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _LargeCategoryCard(
-              category: houseRentals,
-              onTap: () => onCategoryTap(houseRentals),
+            _AnimatedFadeSlide(
+              delay: isFirstTimeUser ? 200 : 50,
+              skipAnimation: _HomePageState._hasAnimatedOnce,
+              child: _LargeCategoryCard(
+                category: houseRentals,
+                onTap: () => onCategoryTap(houseRentals),
+              ),
             ),
             const SizedBox(height: 12),
             Row(
@@ -383,14 +469,22 @@ class _FeaturedCategoriesSection extends StatelessWidget {
                 Expanded(
                   child: Column(
                     children: [
-                      _TallCategoryCard(
-                        category: apartments,
-                        onTap: () => onCategoryTap(apartments),
+                      _AnimatedFadeSlide(
+                        delay: isFirstTimeUser ? 300 : 100,
+                        skipAnimation: _HomePageState._hasAnimatedOnce,
+                        child: _TallCategoryCard(
+                          category: apartments,
+                          onTap: () => onCategoryTap(apartments),
+                        ),
                       ),
                       const SizedBox(height: 12),
-                      _SmallCategoryCard(
-                        category: condoRentals,
-                        onTap: () => onCategoryTap(condoRentals),
+                      _AnimatedFadeSlide(
+                        delay: isFirstTimeUser ? 400 : 150,
+                        skipAnimation: _HomePageState._hasAnimatedOnce,
+                        child: _SmallCategoryCard(
+                          category: condoRentals,
+                          onTap: () => onCategoryTap(condoRentals),
+                        ),
                       ),
                     ],
                   ),
@@ -399,19 +493,31 @@ class _FeaturedCategoriesSection extends StatelessWidget {
                 Expanded(
                   child: Column(
                     children: [
-                      _SmallCategoryCard(
-                        category: rooms,
-                        onTap: () => onCategoryTap(rooms),
+                      _AnimatedFadeSlide(
+                        delay: isFirstTimeUser ? 350 : 120,
+                        skipAnimation: _HomePageState._hasAnimatedOnce,
+                        child: _SmallCategoryCard(
+                          category: rooms,
+                          onTap: () => onCategoryTap(rooms),
+                        ),
                       ),
                       const SizedBox(height: 12),
-                      _SmallCategoryCard(
-                        category: boardingHouse,
-                        onTap: () => onCategoryTap(boardingHouse),
+                      _AnimatedFadeSlide(
+                        delay: isFirstTimeUser ? 450 : 180,
+                        skipAnimation: _HomePageState._hasAnimatedOnce,
+                        child: _SmallCategoryCard(
+                          category: boardingHouse,
+                          onTap: () => onCategoryTap(boardingHouse),
+                        ),
                       ),
                       const SizedBox(height: 12),
-                      _SmallCategoryCard(
-                        category: studentDorms,
-                        onTap: () => onCategoryTap(studentDorms),
+                      _AnimatedFadeSlide(
+                        delay: isFirstTimeUser ? 500 : 200,
+                        skipAnimation: _HomePageState._hasAnimatedOnce,
+                        child: _SmallCategoryCard(
+                          category: studentDorms,
+                          onTap: () => onCategoryTap(studentDorms),
+                        ),
                       ),
                     ],
                   ),
@@ -695,6 +801,11 @@ class _VisitListingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -703,12 +814,12 @@ class _VisitListingsSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Visit Listings',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
-                  color: Colors.black87,
+                  color: textColor,
                   letterSpacing: -0.5,
                 ),
               ),
@@ -717,7 +828,7 @@ class _VisitListingsSection extends StatelessWidget {
                 'Listings from Trusted users',
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.grey[600],
+                  color: subtextColor,
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -731,14 +842,19 @@ class _VisitListingsSection extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           itemCount: listings.length,
-          itemBuilder: (context, index) {
+            itemBuilder: (context, index) {
+            final listing = listings[index];
             return Padding(
+              key: ValueKey(listing.id),
               padding: EdgeInsets.only(
                 bottom: index == listings.length - 1 ? 0 : 20,
               ),
-              child: _ModernListingCard(
-                listing: listings[index],
-                onTap: () => onListingTap(listings[index]),
+              child: _AnimatedFadeSlide(
+                delay: 400 + (index * 80), // Staggered animation with more spacing
+                child: _ModernListingCard(
+                  listing: listing,
+                  onTap: () => onListingTap(listing),
+                ),
               ),
             );
           },
@@ -756,6 +872,12 @@ class _ModernListingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
+    
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -765,19 +887,26 @@ class _ModernListingCard extends StatelessWidget {
         highlightColor: _themeColor.withValues(alpha: 0.05),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardColor,
             borderRadius: BorderRadius.circular(20),
-            boxShadow: [
+            boxShadow: isDark ? [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
+                color: Colors.black.withValues(alpha: 0.3),
                 spreadRadius: 0,
                 blurRadius: 20,
                 offset: const Offset(0, 4),
               ),
+            ] : [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
+                color: Colors.black.withValues(alpha: 0.08),
                 spreadRadius: 0,
-                blurRadius: 8,
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                spreadRadius: 0,
+                blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
             ],
@@ -893,14 +1022,18 @@ class _ModernListingCard extends StatelessWidget {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: _themeColorLight,
+                            color: isDark 
+                                ? _themeColorDark.withValues(alpha: 0.25)
+                                : _themeColorLight,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             listing.category,
                             style: TextStyle(
                               fontSize: 11,
-                              color: _themeColorDark,
+                              color: isDark 
+                                  ? _themeColorDark
+                                  : _themeColorDark,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.5,
                             ),
@@ -910,7 +1043,7 @@ class _ModernListingCard extends StatelessWidget {
                           listing.timeAgo,
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.grey[500],
+                            color: subtextColor,
                             fontWeight: FontWeight.w400,
                           ),
                         ),
@@ -919,10 +1052,10 @@ class _ModernListingCard extends StatelessWidget {
                     const SizedBox(height: 12),
                     Text(
                       listing.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        color: Colors.black87,
+                        color: textColor,
                         height: 1.3,
                         letterSpacing: -0.3,
                       ),
@@ -935,7 +1068,7 @@ class _ModernListingCard extends StatelessWidget {
                         Icon(
                           Icons.location_on_rounded,
                           size: 16,
-                          color: Colors.grey[500],
+                          color: subtextColor,
                         ),
                         const SizedBox(width: 6),
                         Expanded(
@@ -943,7 +1076,7 @@ class _ModernListingCard extends StatelessWidget {
                             listing.location,
                             style: TextStyle(
                               fontSize: 13,
-                              color: Colors.grey[600],
+                              color: subtextColor,
                               fontWeight: FontWeight.w400,
                             ),
                             maxLines: 1,
@@ -973,7 +1106,7 @@ class _ModernListingCard extends StatelessWidget {
                               'per month',
                               style: TextStyle(
                                 fontSize: 11,
-                                color: Colors.grey[500],
+                                color: subtextColor,
                                 fontWeight: FontWeight.w400,
                               ),
                             ),
@@ -985,7 +1118,7 @@ class _ModernListingCard extends StatelessWidget {
                               listing.ownerName,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey[600],
+                                color: subtextColor,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -994,13 +1127,13 @@ class _ModernListingCard extends StatelessWidget {
                               Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
-                                  color: _themeColorLight,
+                                  color: _themeColorDark.withValues(alpha: 0.2), // Glowing blue background
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   Icons.verified,
                                   size: 14,
-                                  color: _themeColorDark,
+                                  color: _themeColorDark, // Blue icon
                                 ),
                               ),
                             ],
@@ -1009,7 +1142,11 @@ class _ModernListingCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Divider(height: 1, thickness: 1, color: Colors.grey[200]),
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: isDark ? Colors.grey[700] : Colors.grey[200],
+                    ),
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -1073,10 +1210,10 @@ class _ModernListingCard extends StatelessWidget {
                       Clipboard.setData(ClipboardData(text: postLink));
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Link copied to clipboard'),
-                          duration: Duration(seconds: 2),
-                          behavior: SnackBarBehavior.floating,
+                        SnackBarUtils.buildThemedSnackBar(
+                          context,
+                          'Link copied to clipboard',
+                          duration: const Duration(seconds: 2),
                         ),
                       );
                     },
@@ -1294,49 +1431,75 @@ class _ShareOption extends StatelessWidget {
   }
 }
 
-class _LookingForSection extends StatelessWidget {
+class _LookingForSection extends StatefulWidget {
   final List<LookingForPostModel> posts;
   final ScrollController? scrollController;
+  final Future<void> Function()? onRefresh;
 
-  const _LookingForSection({required this.posts, this.scrollController});
+  const _LookingForSection({
+    required this.posts,
+    this.scrollController,
+    this.onRefresh,
+  });
+
+  @override
+  State<_LookingForSection> createState() => _LookingForSectionState();
+}
+
+class _LookingForSectionState extends State<_LookingForSection>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true; // Preserve scroll position when navigating away
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      controller: scrollController,
-      slivers: [
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    
+    return RefreshIndicator(
+      onRefresh: widget.onRefresh ?? () async {},
+      child: CustomScrollView(
+        controller: widget.scrollController,
+        slivers: [
         // Header Section
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
-            child: Row(
-              children: [
-                const Text(
-                  'Looking For',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${posts.length} posts',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF6C63FF),
+          child: Builder(
+            builder: (context) {
+              final theme = Theme.of(context);
+              final isDark = theme.brightness == Brightness.dark;
+              final textColor = isDark ? Colors.white : Colors.black87;
+              
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+                child: Row(
+                  children: [
+                    Text(
+                      'Looking For',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${widget.posts.length} posts',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6C63FF),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           ),
         ),
         // Posts List
@@ -1346,14 +1509,15 @@ class _LookingForSection extends StatelessWidget {
             delegate: SliverChildBuilderDelegate((context, index) {
               return Padding(
                 padding: EdgeInsets.only(
-                  bottom: index == posts.length - 1 ? 32 : 16,
+                  bottom: index == widget.posts.length - 1 ? 32 : 16,
                 ),
-                child: _LookingForPostCard(post: posts[index]),
+                child: _LookingForPostCard(post: widget.posts[index]),
               );
-            }, childCount: posts.length),
+            }, childCount: widget.posts.length),
           ),
         ),
       ],
+      ),
     );
   }
 }
@@ -1385,56 +1549,81 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.visibility_off, color: Colors.black87),
-                title: const Text(
-                  'Hide post',
-                  style: TextStyle(color: Colors.black87),
-                ),
+      builder: (context) {
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+        final bgColor = isDark ? Colors.grey[800] : Colors.white;
+        final textColor = isDark ? Colors.white : Colors.black87;
+        
+        return Container(
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(Icons.visibility_off, color: textColor),
+                  title: Text(
+                    'Hide post',
+                    style: TextStyle(color: textColor),
+                  ),
                 onTap: () {
                   Navigator.pop(context);
                   // Note: Hide post functionality will be implemented when backend is ready
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.block, color: Colors.red),
-                title: const Text(
-                  'Remove from feed',
-                  style: TextStyle(color: Colors.red),
+                ListTile(
+                  leading: const Icon(Icons.block, color: Colors.red),
+                  title: const Text(
+                    'Remove from feed',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    // Note: Remove post functionality will be implemented when backend is ready
+                  },
                 ),
-                onTap: () {
-                  Navigator.pop(context);
-                  // Note: Remove post functionality will be implemented when backend is ready
-                },
-              ),
-              const SizedBox(height: 8),
-            ],
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
+        boxShadow: isDark ? [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            spreadRadius: 0,
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ] : [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            spreadRadius: 0,
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
             spreadRadius: 0,
-            blurRadius: 8,
+            blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
@@ -1470,10 +1659,10 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                     child: Text(
                       widget.post.description,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w400,
-                        color: Colors.black87,
+                        color: textColor,
                         height: 1.6,
                       ),
                       maxLines: 3,
@@ -1494,7 +1683,7 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
                           color: const Color(0xFF6C63FF),
                         ),
                         _ModernTag(
-                          icon: Icons.home_outlined,
+                          iconAssetPath: 'assets/icons/navbar/home_outlined.svg',
                           text: widget.post.propertyType,
                           color: const Color(0xFF4CAF50),
                         ),
@@ -1516,6 +1705,7 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
             likeCount: _likeCount,
             commentCount: _commentCount,
             isLiked: _isLiked,
+            isDark: isDark,
             onLikeTap: () {
               setState(() {
                 _isLiked = !_isLiked;
@@ -1548,6 +1738,12 @@ class _PostHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
+    final iconColor = isDark ? Colors.white : Colors.grey[600];
+    
     return Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
         child: Row(
@@ -1587,10 +1783,10 @@ class _PostHeader extends StatelessWidget {
                     children: [
                       Text(
                         post.username,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                          color: textColor,
                         ),
                       ),
                       if (post.isVerified) ...[
@@ -1598,13 +1794,13 @@ class _PostHeader extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(3),
                           decoration: BoxDecoration(
-                            color: _themeColorLight,
+                            color: _themeColorDark.withValues(alpha: 0.2), // Glowing blue background
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
                             Icons.verified,
                             size: 16,
-                            color: _themeColorDark,
+                            color: _themeColorDark, // Blue icon
                           ),
                         ),
                       ],
@@ -1613,7 +1809,7 @@ class _PostHeader extends StatelessWidget {
                         post.timeAgo,
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.grey[600],
+                          color: subtextColor,
                           fontWeight: FontWeight.w400,
                         ),
                       ),
@@ -1634,7 +1830,7 @@ class _PostHeader extends StatelessWidget {
                     child: Icon(
                       Icons.more_horiz,
                       size: 22,
-                      color: Colors.grey[600],
+                      color: iconColor,
                     ),
                   ),
                 ),
@@ -1646,15 +1842,17 @@ class _PostHeader extends StatelessWidget {
 }
 
 class _ModernTag extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final String? iconAssetPath; // SVG asset path for navbar-style icons
   final String text;
   final Color color;
 
   const _ModernTag({
-    required this.icon,
+    this.icon,
+    this.iconAssetPath,
     required this.text,
     required this.color,
-  });
+  }) : assert(icon != null || iconAssetPath != null, 'Either icon or iconAssetPath must be provided');
 
   @override
   Widget build(BuildContext context) {
@@ -1667,11 +1865,22 @@ class _ModernTag extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 16,
-            color: color,
-          ),
+          if (iconAssetPath != null)
+            SvgPicture.asset(
+              iconAssetPath!,
+              width: 16,
+              height: 16,
+              colorFilter: ColorFilter.mode(
+                color,
+                BlendMode.srcIn,
+              ),
+            )
+          else
+            Icon(
+              icon!,
+              size: 16,
+              color: color,
+            ),
           const SizedBox(width: 8),
           Text(
             text,
@@ -1692,6 +1901,7 @@ class _PostActionBar extends StatelessWidget {
   final int likeCount;
   final int commentCount;
   final bool isLiked;
+  final bool isDark;
   final VoidCallback onLikeTap;
   final VoidCallback onCommentTap;
 
@@ -1699,18 +1909,21 @@ class _PostActionBar extends StatelessWidget {
     required this.likeCount,
     required this.commentCount,
     required this.isLiked,
+    required this.isDark,
     required this.onLikeTap,
     required this.onCommentTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey[200]!;
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(
-            color: Colors.grey[200]!,
+            color: borderColor,
             width: 0.5,
           ),
         ),
@@ -1724,6 +1937,7 @@ class _PostActionBar extends StatelessWidget {
                 : 'assets/icons/navbar/heart_outlined.svg',
             count: likeCount,
             isActive: isLiked,
+            isDark: isDark,
             onTap: onLikeTap,
           ),
           const SizedBox(width: 32),
@@ -1732,6 +1946,7 @@ class _PostActionBar extends StatelessWidget {
           _ActionButton(
             iconPath: 'assets/icons/navbar/comment_outlined.svg',
             count: commentCount,
+            isDark: isDark,
             onTap: onCommentTap,
           ),
         ],
@@ -1744,17 +1959,22 @@ class _ActionButton extends StatelessWidget {
   final String iconPath;
   final int count;
   final bool isActive;
+  final bool isDark;
   final VoidCallback onTap;
 
   const _ActionButton({
     required this.iconPath,
     required this.count,
     this.isActive = false,
+    required this.isDark,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final inactiveColor = isDark ? Colors.white : Colors.grey[600]!;
+    final inactiveTextColor = isDark ? Colors.white : Colors.grey[600]!;
+    
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1772,7 +1992,7 @@ class _ActionButton extends StatelessWidget {
                 colorFilter: ColorFilter.mode(
                   isActive
                       ? const Color(0xFFE91E63)
-                      : Colors.grey[600]!,
+                      : inactiveColor,
                   BlendMode.srcIn,
                 ),
               ),
@@ -1784,7 +2004,7 @@ class _ActionButton extends StatelessWidget {
                   fontWeight: FontWeight.w500,
                   color: isActive
                       ? const Color(0xFFE91E63)
-                      : Colors.grey[600],
+                      : inactiveTextColor,
                 ),
               ),
             ],
@@ -1859,6 +2079,109 @@ class _AnimatedTabBar extends StatefulWidget {
   State<_AnimatedTabBar> createState() => _AnimatedTabBarState();
 }
 
+/// Minimal fade and slide animation widget for content loading
+class _AnimatedFadeSlide extends StatefulWidget {
+  final Widget child;
+  final int delay; // Delay in milliseconds
+  final bool skipAnimation; // Skip animation if true
+  
+  const _AnimatedFadeSlide({
+    required this.child,
+    this.delay = 0,
+    this.skipAnimation = false,
+  });
+  
+  @override
+  State<_AnimatedFadeSlide> createState() => _AnimatedFadeSlideState();
+}
+
+class _AnimatedFadeSlideState extends State<_AnimatedFadeSlide>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+  bool _hasStarted = false;
+  
+  @override
+  void initState() {
+    super.initState();
+    
+    // If animation should be skipped, show content immediately
+    if (widget.skipAnimation) {
+      _hasStarted = true;
+      return;
+    }
+    
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600), // Slower for visibility
+    );
+    
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOut,
+      ),
+    );
+    
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.15), // More visible slide (15% down)
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOut,
+      ),
+    );
+    
+    // Start animation after delay (wait for skeleton to disappear + stagger)
+    Future.delayed(Duration(milliseconds: 850 + widget.delay), () {
+      if (mounted && !_hasStarted) {
+        setState(() {
+          _hasStarted = true;
+        });
+        _controller.forward();
+        // Mark that animations have been shown
+        _HomePageState._hasAnimatedOnce = true;
+      }
+    });
+  }
+  
+  @override
+  void dispose() {
+    if (!widget.skipAnimation) {
+      _controller.dispose();
+    }
+    super.dispose();
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    // If animation is skipped, show content immediately
+    if (widget.skipAnimation) {
+      return widget.child;
+    }
+    
+    if (!_hasStarted) {
+      return Opacity(
+        opacity: 0,
+        child: widget.child,
+      );
+    }
+    
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 class _AnimatedTabBarState extends State<_AnimatedTabBar>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
@@ -1870,29 +2193,29 @@ class _AnimatedTabBarState extends State<_AnimatedTabBar>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 3000),
+      duration: const Duration(milliseconds: 350),
       vsync: this,
     );
 
-    // Very slow and smooth fade animation with easeInOut curve
+    // Smooth fade animation with easeOutCubic curve for natural feel
     _fadeAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
     ).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: Curves.easeInOut,
+        curve: Curves.easeOutCubic,
       ),
     );
 
-    // Very slow and smooth slide down animation with easeInOut curve
+    // Smooth slide down animation with easeOutCubic curve
     _slideAnimation = Tween<double>(
-      begin: -30.0,
+      begin: -20.0,
       end: 0.0,
     ).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: Curves.easeInOut,
+        curve: Curves.easeOutCubic,
       ),
     );
 

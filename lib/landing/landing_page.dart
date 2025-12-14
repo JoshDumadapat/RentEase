@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:rentease_app/landing/widgets/shiny_light_effect.dart';
 import 'package:rentease_app/get_started/get_started_page.dart';
+import 'package:rentease_app/main_app.dart';
+import 'package:rentease_app/sign_in/sign_in_page.dart';
 
 /// Landing page that displays the landing background with animated logo
 /// Acts as a loading screen and redirects to get started page if first time use
@@ -64,7 +67,23 @@ class _LandingPageState extends State<LandingPage>
 
       if (!mounted) return;
 
+      // Check if user is already authenticated
+      final user = FirebaseAuth.instance.currentUser;
+      
+      if (user != null) {
+        // User is logged in, navigate directly to main app
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const MainApp()),
+          );
+        }
+        return;
+      }
+
+      // User is not logged in, check first time status
       final prefs = await SharedPreferences.getInstance();
+      // Reload to ensure we have the latest persisted data
+      await prefs.reload();
       final isFirstTime = prefs.getBool('is_first_time') ?? true;
 
       // Debug: Uncomment the line below to force reset first time flag for testing
@@ -72,33 +91,26 @@ class _LandingPageState extends State<LandingPage>
 
       if (!mounted) return;
 
-      // Navigate to get started page if first time
-      if (isFirstTime) {
-        if (mounted) {
+      // Navigate based on first time status
+      if (mounted) {
+        if (isFirstTime) {
+          // First time opening the app - show Get Started onboarding
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const GetStartedPage()),
           );
-        }
-      } else {
-        // Navigate to home/main screen if not first time
-        // Note: Replace with your home/main screen when available
-        // if (mounted) {
-        //   Navigator.of(context).pushReplacement(
-        //     MaterialPageRoute(builder: (context) => const HomePage()),
-        //   );
-        // }
-        // For now, if not first time but no home screen, still go to get started
-        if (mounted) {
+        } else {
+          // App has been opened before - go directly to Sign In page
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const GetStartedPage()),
+            MaterialPageRoute(builder: (context) => const SignInPage()),
           );
         }
       }
     } catch (e) {
-      // If there's an error, still try to navigate to get started
+      // If there's an error, default to Sign In page (not Get Started)
+      // since if there's an error reading preferences, assume it's not first time
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const GetStartedPage()),
+          MaterialPageRoute(builder: (context) => const SignInPage()),
         );
       }
     }

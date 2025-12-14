@@ -36,23 +36,29 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
   }
 
   void _showPostOptions() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final iconColor = isDark ? Colors.white : Colors.black87;
+    
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.visibility_off, color: Colors.black87),
-                title: const Text(
+                leading: Icon(Icons.visibility_off, color: iconColor),
+                title: Text(
                   'Hide post',
-                  style: TextStyle(color: Colors.black87),
+                  style: TextStyle(color: textColor),
                 ),
                 onTap: () {
                   Navigator.pop(context);
@@ -78,21 +84,30 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? Colors.grey[900] : Colors.grey[100];
+    final appBarColor = isDark ? Colors.grey[900] : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final iconColor = isDark ? Colors.white : Colors.black87;
+    
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: appBarColor,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: iconColor),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Post',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: Colors.black87,
+            color: textColor,
           ),
         ),
         centerTitle: true,
@@ -109,7 +124,7 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
                     margin: const EdgeInsets.fromLTRB(24, 20, 24, 0),
                     padding: const EdgeInsets.only(bottom: 0),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
@@ -127,6 +142,7 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
                         _PostHeader(
                           post: widget.post,
                           onMoreTap: _showPostOptions,
+                          isDark: isDark,
                         ),
 
                         // Post Body
@@ -134,10 +150,10 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                           child: Text(
                             widget.post.description,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w400,
-                              color: Colors.black87,
+                              color: textColor,
                               height: 1.6,
                             ),
                           ),
@@ -156,7 +172,7 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
                                 color: const Color(0xFF6C63FF),
                               ),
                               _ModernTag(
-                                icon: Icons.home_outlined,
+                                iconAssetPath: 'assets/icons/navbar/home_outlined.svg',
                                 text: widget.post.propertyType,
                                 color: const Color(0xFF4CAF50),
                               ),
@@ -174,6 +190,7 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
                           likeCount: _likeCount,
                           commentCount: _commentCount,
                           isLiked: _isLiked,
+                          isDark: isDark,
                           onLikeTap: () {
                             setState(() {
                               _isLiked = !_isLiked;
@@ -181,26 +198,42 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
                             });
                           },
                         ),
-
-                        // Comments List (inside same card)
-                        _CommentsList(
-                          comments: _comments,
-                          onPropertyTap: (listingId) {
-                            final allListings = ListingModel.getMockListings();
-                            final listing = allListings.firstWhere(
-                              (l) => l.id == listingId,
-                              orElse: () => allListings.first,
-                            );
-
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ListingDetailsPage(listing: listing),
-                              ),
-                            );
-                          },
+                      ],
+                    ),
+                  ),
+                  // Comments in separate card
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                    padding: const EdgeInsets.only(bottom: 0),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          spreadRadius: 0,
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
                         ),
                       ],
+                    ),
+                    child: _CommentsList(
+                      comments: _comments,
+                      isDark: isDark,
+                      onPropertyTap: (listingId) {
+                        final allListings = ListingModel.getMockListings();
+                        final listing = allListings.firstWhere(
+                          (l) => l.id == listingId,
+                          orElse: () => allListings.first,
+                        );
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ListingDetailsPage(listing: listing),
+                          ),
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -211,6 +244,7 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
           
           // Fixed Comment Input at Bottom (Facebook-style)
           _FixedCommentInput(
+            isDark: isDark,
             onCommentAdded: (commentText, propertyListingId) {
               setState(() {
                 _commentCount++;
@@ -235,14 +269,20 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
 class _PostHeader extends StatelessWidget {
   final LookingForPostModel post;
   final VoidCallback onMoreTap;
+  final bool isDark;
 
   const _PostHeader({
     required this.post,
     required this.onMoreTap,
+    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
+    final iconColor = isDark ? Colors.white : Colors.grey[600];
+    
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
       child: Row(
@@ -279,10 +319,10 @@ class _PostHeader extends StatelessWidget {
               children: [
                 Text(
                   post.username,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    color: textColor,
                   ),
                 ),
                 if (post.isVerified) ...[
@@ -290,13 +330,13 @@ class _PostHeader extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
-                      color: _themeColorLight,
+                      color: _themeColorDark.withOpacity(0.2), // Glowing blue background
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       Icons.verified,
                       size: 16,
-                      color: _themeColorDark,
+                      color: _themeColorDark, // Blue icon
                     ),
                   ),
                 ],
@@ -305,7 +345,7 @@ class _PostHeader extends StatelessWidget {
                   post.timeAgo,
                   style: TextStyle(
                     fontSize: 13,
-                    color: Colors.grey[600],
+                    color: subtextColor,
                     fontWeight: FontWeight.w400,
                   ),
                 ),
@@ -323,7 +363,7 @@ class _PostHeader extends StatelessWidget {
                 child: Icon(
                   Icons.more_horiz,
                   size: 22,
-                  color: Colors.grey[600],
+                  color: iconColor,
                 ),
               ),
             ),
@@ -335,15 +375,17 @@ class _PostHeader extends StatelessWidget {
 }
 
 class _ModernTag extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final String? iconAssetPath; // SVG asset path for navbar-style icons
   final String text;
   final Color color;
 
   const _ModernTag({
-    required this.icon,
+    this.icon,
+    this.iconAssetPath,
     required this.text,
     required this.color,
-  });
+  }) : assert(icon != null || iconAssetPath != null, 'Either icon or iconAssetPath must be provided');
 
   @override
   Widget build(BuildContext context) {
@@ -356,11 +398,22 @@ class _ModernTag extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 16,
-            color: color,
-          ),
+          if (iconAssetPath != null)
+            SvgPicture.asset(
+              iconAssetPath!,
+              width: 16,
+              height: 16,
+              colorFilter: ColorFilter.mode(
+                color,
+                BlendMode.srcIn,
+              ),
+            )
+          else
+            Icon(
+              icon!,
+              size: 16,
+              color: color,
+            ),
           const SizedBox(width: 8),
           Text(
             text,
@@ -380,23 +433,27 @@ class _PostActionBar extends StatelessWidget {
   final int likeCount;
   final int commentCount;
   final bool isLiked;
+  final bool isDark;
   final VoidCallback onLikeTap;
 
   const _PostActionBar({
     required this.likeCount,
     required this.commentCount,
     required this.isLiked,
+    required this.isDark,
     required this.onLikeTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey[200]!;
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(
-            color: Colors.grey[200]!,
+            color: borderColor,
             width: 0.5,
           ),
         ),
@@ -410,6 +467,7 @@ class _PostActionBar extends StatelessWidget {
                 : 'assets/icons/navbar/heart_outlined.svg',
             count: likeCount,
             isActive: isLiked,
+            isDark: isDark,
             onTap: onLikeTap,
           ),
           const SizedBox(width: 32),
@@ -418,6 +476,7 @@ class _PostActionBar extends StatelessWidget {
           _ActionButton(
             iconPath: 'assets/icons/navbar/comment_outlined.svg',
             count: commentCount,
+            isDark: isDark,
             onTap: () {},
           ),
         ],
@@ -430,17 +489,22 @@ class _ActionButton extends StatelessWidget {
   final String iconPath;
   final int count;
   final bool isActive;
+  final bool isDark;
   final VoidCallback onTap;
 
   const _ActionButton({
     required this.iconPath,
     required this.count,
     this.isActive = false,
+    required this.isDark,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final inactiveColor = isDark ? Colors.white : Colors.grey[600]!;
+    final inactiveTextColor = isDark ? Colors.white : Colors.grey[600]!;
+    
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -458,7 +522,7 @@ class _ActionButton extends StatelessWidget {
                 colorFilter: ColorFilter.mode(
                   isActive
                       ? const Color(0xFFE91E63)
-                      : Colors.grey[600]!,
+                      : inactiveColor,
                   BlendMode.srcIn,
                 ),
               ),
@@ -470,7 +534,7 @@ class _ActionButton extends StatelessWidget {
                   fontWeight: FontWeight.w500,
                   color: isActive
                       ? const Color(0xFFE91E63)
-                      : Colors.grey[600],
+                      : inactiveTextColor,
                 ),
               ),
             ],
@@ -491,15 +555,21 @@ class _ActionButton extends StatelessWidget {
 // Comments List Widget
 class _CommentsList extends StatelessWidget {
   final List<CommentModel> comments;
+  final bool isDark;
   final Function(String)? onPropertyTap;
 
   const _CommentsList({
     required this.comments,
+    required this.isDark,
     this.onPropertyTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
+    final dividerColor = isDark ? Colors.grey[700]! : Colors.grey[200]!;
+    
     if (comments.isEmpty) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
@@ -507,7 +577,7 @@ class _CommentsList extends StatelessWidget {
           'No comments yet',
           style: TextStyle(
             fontSize: 14,
-            color: Colors.grey[600],
+            color: subtextColor,
           ),
           textAlign: TextAlign.center,
         ),
@@ -521,14 +591,14 @@ class _CommentsList extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
           child: Text(
             'Comments',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: textColor,
             ),
           ),
         ),
-        const Divider(height: 1, thickness: 0.5),
+        Divider(height: 1, thickness: 0.5, color: dividerColor),
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -541,6 +611,7 @@ class _CommentsList extends StatelessWidget {
               ),
               child: _CommentItem(
                 comment: comments[index],
+                isDark: isDark,
                 onPropertyTap: onPropertyTap,
               ),
             );
@@ -554,16 +625,20 @@ class _CommentsList extends StatelessWidget {
 // Comment Item Widget
 class _CommentItem extends StatelessWidget {
   final CommentModel comment;
+  final bool isDark;
   final Function(String)? onPropertyTap;
 
   const _CommentItem({
     required this.comment,
+    required this.isDark,
     this.onPropertyTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final hasPropertyLink = comment.propertyListingId != null;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
     
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -602,10 +677,10 @@ class _CommentItem extends StatelessWidget {
                 children: [
                   Text(
                     comment.username,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                      color: textColor,
                     ),
                   ),
                   if (comment.isVerified) ...[
@@ -613,13 +688,13 @@ class _CommentItem extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(3),
                       decoration: BoxDecoration(
-                        color: _themeColorLight,
+                        color: _themeColorDark.withOpacity(0.2), // Glowing blue background
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         Icons.verified,
                         size: 14,
-                        color: _themeColorDark,
+                        color: _themeColorDark, // Blue icon
                       ),
                     ),
                   ],
@@ -628,7 +703,7 @@ class _CommentItem extends StatelessWidget {
                     comment.timeAgo,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey[600],
+                      color: subtextColor,
                     ),
                   ),
                 ],
@@ -636,9 +711,9 @@ class _CommentItem extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 comment.text,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  color: Colors.black87,
+                  color: textColor,
                   height: 1.5,
                 ),
               ),
@@ -706,9 +781,11 @@ class _CommentItem extends StatelessWidget {
 
 // Fixed Comment Input Widget (Facebook-style)
 class _FixedCommentInput extends StatefulWidget {
+  final bool isDark;
   final Function(String, String?) onCommentAdded;
 
   const _FixedCommentInput({
+    required this.isDark,
     required this.onCommentAdded,
   });
 
@@ -770,6 +847,13 @@ class _FixedCommentInputState extends State<_FixedCommentInput> {
 
   @override
   Widget build(BuildContext context) {
+    final backgroundColor = widget.isDark ? Colors.grey[900] : Colors.white;
+    final borderColor = widget.isDark ? Colors.grey[700]! : Colors.grey[200]!;
+    final inputBorderColor = widget.isDark ? Colors.grey[600]! : Colors.grey[300]!;
+    final fillColor = widget.isDark ? Colors.grey[800]! : Colors.grey[50]!;
+    final hintColor = widget.isDark ? Colors.grey[400]! : Colors.grey[500]!;
+    final textColor = widget.isDark ? Colors.white : Colors.black87;
+    
     return Container(
       padding: EdgeInsets.only(
         left: 24,
@@ -778,9 +862,9 @@ class _FixedCommentInputState extends State<_FixedCommentInput> {
         bottom: MediaQuery.of(context).padding.bottom + 12,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: backgroundColor,
         border: Border(
-          top: BorderSide(color: Colors.grey[200]!, width: 0.5),
+          top: BorderSide(color: borderColor, width: 0.5),
         ),
         boxShadow: [
           BoxShadow(
@@ -797,19 +881,20 @@ class _FixedCommentInputState extends State<_FixedCommentInput> {
             Expanded(
               child: TextField(
                 controller: _commentController,
+                style: TextStyle(color: textColor),
                 decoration: InputDecoration(
                   hintText: 'Share your property listing...',
                   hintStyle: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey[500],
+                    color: hintColor,
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide(color: Colors.grey[300]!),
+                    borderSide: BorderSide(color: inputBorderColor),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide(color: Colors.grey[300]!),
+                    borderSide: BorderSide(color: inputBorderColor),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
@@ -820,7 +905,7 @@ class _FixedCommentInputState extends State<_FixedCommentInput> {
                     vertical: 12,
                   ),
                   filled: true,
-                  fillColor: Colors.grey[50],
+                  fillColor: fillColor,
                 ),
                 maxLines: null,
                 textInputAction: TextInputAction.send,

@@ -34,7 +34,11 @@ class _MainAppState extends State<MainApp> {
 
     // For other tabs, navigate normally
     if (index != _currentBottomNavIndex) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      // CRITICAL FIX: Do NOT use popUntil((route) => route.isFirst)
+      // This was causing navigation to pop back to GuestApp when switching tabs
+      // IndexedStack handles tab switching and preserves state independently
+      // Each tab maintains its own navigation stack, so we don't need to pop
+      // when switching tabs - just update the index
       setState(() {
         _currentBottomNavIndex = index;
       });

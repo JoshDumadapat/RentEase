@@ -1,12 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:rentease_app/main_app.dart';
+import 'package:rentease_app/services/auth_service.dart';
+import 'package:rentease_app/services/user_service.dart';
+import 'package:rentease_app/utils/snackbar_utils.dart';
 
 /// Password Creation Page
 /// 
 /// Allows user to set a new password after verification
 /// with password strength indicator and requirements
 class PasswordCreationPage extends StatefulWidget {
-  const PasswordCreationPage({super.key});
+  final String email;
+  final String firstName;
+  final String lastName;
+  final String? birthday;
+  final String phone;
+  final String countryCode;
+  final String idNumber;
+  final XFile frontIdImage;
+  final XFile selfieImage;
+  final GoogleSignInTempData? googleData;
+  final User? firebaseUser; // For Google accounts (already created)
+  final String? userType;
+
+  const PasswordCreationPage({
+    super.key,
+    required this.email,
+    required this.firstName,
+    required this.lastName,
+    required this.phone,
+    required this.countryCode,
+    required this.idNumber,
+    required this.frontIdImage,
+    required this.selfieImage,
+    this.birthday,
+    this.googleData,
+    this.firebaseUser,
+    this.userType,
+  });
 
   @override
   State<PasswordCreationPage> createState() => _PasswordCreationPageState();
@@ -17,6 +49,8 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  final AuthService _authService = AuthService();
+  final UserService _userService = UserService();
   
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -24,6 +58,7 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
   bool _passwordsMatch = false;
   bool _passwordsDoNotMatch = false;
   bool _isProcessing = false;
+  String? _errorMessage;
   
   // Individual requirement states (persist once checked)
   bool _hasMinLength = false;
@@ -52,8 +87,22 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
     _passwordController.addListener(() {
       _checkPasswordStrength();
       _checkPasswordMatch(); // Also check match when password changes
+      // Clear error message when user types
+      if (_errorMessage != null) {
+        setState(() {
+          _errorMessage = null;
+        });
+      }
     });
-    _confirmPasswordController.addListener(_checkPasswordMatch);
+    _confirmPasswordController.addListener(() {
+      _checkPasswordMatch();
+      // Clear error message when user types
+      if (_errorMessage != null) {
+        setState(() {
+          _errorMessage = null;
+        });
+      }
+    });
   }
 
   @override
@@ -67,7 +116,7 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
   void _checkPasswordStrength() {
     final password = _passwordController.text;
     
-    // Check individual requirements (persist once met)
+    // Check individual requirements based on current password state
     final hasMinLength = password.length >= 12;
     final hasUppercase = password.contains(RegExp(r'[A-Z]'));
     final hasLowercase = password.contains(RegExp(r'[a-z]'));
@@ -75,19 +124,24 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
     final hasSpecialChar = password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>_\-+=/\\\[\]~`]'));
     
     setState(() {
-      // Update requirement states (only set to true, never back to false once checked)
-      if (hasMinLength) _hasMinLength = true;
-      if (hasUppercase) _hasUppercase = true;
-      if (hasLowercase) _hasLowercase = true;
-      if (hasNumber) _hasNumber = true;
-      if (hasSpecialChar) _hasSpecialChar = true;
+      // Update requirement states based on current password state
+      _hasMinLength = hasMinLength;
+      _hasUppercase = hasUppercase;
+      _hasLowercase = hasLowercase;
+      _hasNumber = hasNumber;
+      _hasSpecialChar = hasSpecialChar;
       
-      // Determine password strength based on CURRENT password state (check all requirements directly)
+      // Determine password strength based on CURRENT password state
+      // Strong requires: minLength, uppercase, lowercase, number (special char is optional)
       if (password.isEmpty) {
         _passwordStrength = PasswordStrength.none;
-      } else if (hasMinLength && hasUppercase && hasLowercase && hasNumber && hasSpecialChar) {
-        // ALL requirements currently met = Strong (Good)
+      } else if (hasMinLength && hasUppercase && hasLowercase && hasNumber) {
+        // Core requirements met (special char optional) = Strong (Good)
         _passwordStrength = PasswordStrength.strong;
+        // Clear error messages related to password requirements (but not match errors)
+        if (_errorMessage != null && _errorMessage != 'Passwords do not match') {
+          _errorMessage = null;
+        }
       } else if (password.length >= 8 && (hasUppercase || hasLowercase || hasNumber)) {
         // Some requirements met = Moderate
         _passwordStrength = PasswordStrength.moderate;
@@ -126,6 +180,10 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
       } else if (password == confirmPassword) {
         _passwordsMatch = true;
         _passwordsDoNotMatch = false;
+        // Clear error message when passwords match (if it's a password match error)
+        if (_errorMessage != null && _errorMessage == 'Passwords do not match') {
+          _errorMessage = null;
+        }
       } else {
         _passwordsMatch = false;
         _passwordsDoNotMatch = true;
@@ -133,23 +191,113 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
     });
   }
 
+  bool _isPasswordValid() {
+    final password = _passwordController.text;
+    final hasMinLength = password.length >= 12;
+    final hasUppercase = password.contains(RegExp(r'[A-Z]'));
+    final hasLowercase = password.contains(RegExp(r'[a-z]'));
+    final hasNumber = password.contains(RegExp(r'[0-9]'));
+    
+    return hasMinLength && hasUppercase && hasLowercase && hasNumber && _passwordsMatch;
+  }
+
   Future<void> _handleSetPassword() async {
-    if (_formKey.currentState!.validate()) {
-      if (_passwordStrength == PasswordStrength.strong && _passwordsMatch) {
-        setState(() {
-          _isProcessing = true;
-        });
+    if (!_isPasswordValid()) {
+      // Set error message when requirements aren't met
+      setState(() {
+        final password = _passwordController.text;
+        final hasMinLength = password.length >= 12;
+        final hasUppercase = password.contains(RegExp(r'[A-Z]'));
+        final hasLowercase = password.contains(RegExp(r'[a-z]'));
+        final hasNumber = password.contains(RegExp(r'[0-9]'));
         
-        // Simulate processing time (you can replace this with actual password setting logic)
-        await Future.delayed(const Duration(seconds: 2));
+        if (!_passwordsMatch) {
+          _errorMessage = 'Passwords do not match';
+        } else if (!hasMinLength) {
+          _errorMessage = 'Password must be at least 12 characters long';
+        } else if (!hasUppercase) {
+          _errorMessage = 'Password must contain at least one uppercase letter';
+        } else if (!hasLowercase) {
+          _errorMessage = 'Password must contain at least one lowercase letter';
+        } else if (!hasNumber) {
+          _errorMessage = 'Password must contain at least one number';
+        } else {
+          _errorMessage = 'Please meet all password requirements';
+        }
+      });
+      return;
+    }
+
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isProcessing = true;
+      });
+      
+      try {
+        User? user = widget.firebaseUser; // For Google accounts
+        
+        // For email/password accounts: Create Firebase Auth account now
+        if (widget.googleData == null) {
+          try {
+            final password = _passwordController.text;
+            final userCredential = await _authService.signUpWithEmailAndPassword(
+              widget.email,
+              password,
+            );
+            user = userCredential.user;
+            
+            if (user == null) {
+              throw Exception('Failed to create account');
+            }
+          } catch (e) {
+            if (!mounted) return;
+            setState(() {
+              _isProcessing = false;
+              _errorMessage = 'Failed to create account: ${e.toString().replaceAll('Exception: ', '')}';
+            });
+            return;
+          }
+        } else {
+          // For Google accounts, user should already exist from VerificationLoadingPage
+          user = widget.firebaseUser;
+          if (user == null) {
+            throw Exception('Firebase user not found for Google account');
+          }
+        }
+        
+        // Get photo URL from Google data
+        String? photoUrl;
+        if (widget.googleData != null && widget.googleData!.photoUrl != null) {
+          photoUrl = widget.googleData!.photoUrl;
+        } else if (user.photoURL != null) {
+          photoUrl = user.photoURL;
+        }
+        
+        // Save all user data to Firestore
+        await _userService.createOrUpdateUser(
+          uid: user.uid,
+          email: widget.email,
+          fname: widget.firstName,
+          lname: widget.lastName,
+          birthday: widget.birthday,
+          phone: widget.phone,
+          countryCode: widget.countryCode,
+          idNumber: widget.idNumber,
+          idImageFrontUrl: 'PENDING', // Will be uploaded later
+          idImageBackUrl: 'PENDING',
+          faceWithIdUrl: 'PENDING',
+          userType: widget.userType ?? 'student',
+          password: widget.googleData == null ? _passwordController.text : null,
+          profileImageUrl: photoUrl,
+        );
         
         if (!mounted) return;
         
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Password set successfully!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Account created successfully!',
+            duration: const Duration(seconds: 2),
           ),
         );
         
@@ -160,6 +308,12 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
           ),
           (route) => false,
         );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _isProcessing = false;
+          _errorMessage = 'Error: ${e.toString().replaceAll('Exception: ', '')}';
+        });
       }
     }
   }
@@ -189,7 +343,7 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
                   ),
                 ),
                 const SizedBox(height: 40),
-                // Verification Successful
+                // Validation Successful
                 Center(
                   child: Container(
                     width: 80,
@@ -229,7 +383,7 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
                 const SizedBox(height: 24),
                 const Center(
                   child: Text(
-                    'Verification Successful',
+                    'Validation Successful',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -252,8 +406,11 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
+                  enableInteractiveSelection: false,
+                  style: const TextStyle(color: Colors.black),
                   decoration: InputDecoration(
                     labelText: 'Set new password',
+                    labelStyle: const TextStyle(color: Colors.black),
                     hintText: 'Enter your password',
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -318,8 +475,11 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
                 TextFormField(
                   controller: _confirmPasswordController,
                   obscureText: _obscureConfirmPassword,
+                  enableInteractiveSelection: false,
+                  style: const TextStyle(color: Colors.black),
                   decoration: InputDecoration(
                     labelText: 'Confirm password',
+                    labelStyle: const TextStyle(color: Colors.black),
                     hintText: 'Re-enter your password',
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -363,8 +523,8 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
                   },
                 ),
                 const SizedBox(height: 12),
-                // Password match/mismatch indicator
-                if (_confirmPasswordController.text.isNotEmpty) ...[
+                // Password match/mismatch indicator (only show when no error message)
+                if (_confirmPasswordController.text.isNotEmpty && _errorMessage == null) ...[
                   if (_passwordsMatch)
                     Row(
                       children: [
@@ -394,66 +554,74 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
                       ],
                     ),
                 ],
+                // Error message display
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(Icons.error_outline, color: Colors.red[600], size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: TextStyle(
+                            color: Colors.red[600],
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 40),
                 // Set Password button
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: (_passwordStrength == PasswordStrength.strong && _passwordsMatch && !_isProcessing)
-                        ? _handleSetPassword
-                        : null,
+                    onPressed: _isProcessing ? null : _handleSetPassword,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
                       backgroundColor: Colors.grey[850],
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey[850],
+                      disabledForegroundColor: Colors.white,
                     ),
                     child: _isProcessing
-                        ? SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
+                        ? Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Setting up your account...',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
                           )
                         : const Text(
                             'Set Password',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
+                              color: Colors.white,
                             ),
                           ),
                   ),
                 ),
-                const SizedBox(height: 12),
-                // Processing message
-                if (_isProcessing)
-                  Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[600]!),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Setting up your account...',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[600],
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 const SizedBox(height: 24),
               ],
             ),

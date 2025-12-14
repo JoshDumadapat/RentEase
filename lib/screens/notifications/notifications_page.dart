@@ -105,16 +105,18 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
     return Scaffold(
       backgroundColor: isDark ? Colors.grey[900] : Colors.grey[100],
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Notifications',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: Colors.black87,
+            color: isDark ? Colors.white : Colors.black87,
           ),
         ),
         backgroundColor: isDark ? Colors.grey[900] : Colors.white,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         actions: [
           ThreeDotsMenu(),
         ],
@@ -124,8 +126,8 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
             color: isDark ? Colors.grey[900] : Colors.white,
             child: TabBar(
               controller: _tabController,
-              indicatorColor: isDark ? Colors.blue[300] : Colors.blue[600],
-              labelColor: isDark ? Colors.blue[300] : Colors.blue[600],
+              indicatorColor: const Color(0xFF00B8E6),
+              labelColor: const Color(0xFF00B8E6),
               unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
               tabs: const [
                 Tab(text: 'All'),
@@ -141,7 +143,7 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
 
   Widget _buildBody(bool isDark) {
     if (_controller.isLoading && _controller.notifications.isEmpty) {
-      return const NotificationSkeleton();
+      return NotificationSkeleton(isDark: isDark);
     }
 
     if (_controller.error != null && _controller.notifications.isEmpty) {
@@ -215,7 +217,7 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Container(
         decoration: BoxDecoration(
-          color: isDark ? Colors.grey[900] : Colors.white,
+          color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
@@ -258,8 +260,7 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
                           'See all',
                           style: TextStyle(
                             fontSize: 14,
-                            color:
-                                isDark ? Colors.blue[300] : Colors.blue[600],
+                            color: const Color(0xFF00B8E6),
                           ),
                         ),
                       ),

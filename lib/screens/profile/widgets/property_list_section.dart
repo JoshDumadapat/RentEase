@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/profile/widgets/property_tile.dart';
+import 'package:rentease_app/screens/drafts/drafts_page.dart';
+import 'package:rentease_app/utils/snackbar_utils.dart';
+
+const Color _themeColorDark = Color(0xFF00B8E6);
 
 /// Property List Section Widget
 /// 
@@ -29,11 +33,11 @@ class PropertyListSection extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
+              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
               spreadRadius: 0,
               blurRadius: 8,
               offset: const Offset(0, 2),
@@ -53,16 +57,33 @@ class PropertyListSection extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
-                if (properties.isNotEmpty)
-                  Text(
-                    '${properties.length}',
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const DraftsPage(),
+                      ),
+                    );
+                  },
+                  icon: Icon(
+                    Icons.drafts_outlined,
+                    size: 18,
+                    color: _themeColorDark,
+                  ),
+                  label: Text(
+                    'Drafts',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
+                      color: _themeColorDark,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                   ),
               ],
@@ -90,17 +111,13 @@ class PropertyListSection extends StatelessWidget {
                         onEdit: () {
                           // Note: Navigation to edit property page will be implemented when backend is ready
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Edit property: ${property.title}'),
-                            ),
+                            SnackBarUtils.buildThemedSnackBar(context, 'Edit property: ${property.title}'),
                           );
                         },
                         onDelete: () {
                           // Note: Delete confirmation and property deletion will be implemented when backend is ready
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Delete property: ${property.title}'),
-                            ),
+                            SnackBarUtils.buildThemedSnackBar(context, 'Delete property: ${property.title}'),
                           );
                         },
                       );

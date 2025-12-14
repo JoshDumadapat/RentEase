@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/models/looking_for_post_model.dart';
 import 'package:rentease_app/guest/guest_listing_details_page.dart';
 import 'package:rentease_app/guest/widgets/sign_in_required_modal.dart';
-import 'package:rentease_app/widgets/bottom_navigation_bar.dart';
+import 'package:rentease_app/sign_up/sign_up_page.dart';
+
+/// COMPLETELY ISOLATED GUEST UI - NO SHARED COMPONENTS WITH MAIN APP
+/// This page is completely separate from MainApp to prevent navigation bugs
+/// NOTE: Bottom navigation is handled by GuestNavigationContainer, not this page
 
 // Theme color constants (matching main home page)
 const Color _themeColor = Color(0xFF00D1FF);
@@ -21,7 +26,6 @@ class GuestHomePage extends StatefulWidget {
 class _GuestHomePageState extends State<GuestHomePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  int _currentBottomNavIndex = 0;
   final ScrollController _listingsScrollController = ScrollController();
   final ScrollController _lookingForScrollController = ScrollController();
 
@@ -48,38 +52,6 @@ class _GuestHomePageState extends State<GuestHomePage>
     super.dispose();
   }
 
-  void _onNavTap(int index) {
-    // If Add Post button (index 2) is tapped, show modal instead
-    if (index == 2) {
-      SignInRequiredModal.show(
-        context,
-        message: 'Sign up to create a post',
-      );
-      return;
-    }
-
-    // For other tabs, show sign-in modal
-    if (index != _currentBottomNavIndex && index != 0) {
-      String message = 'Sign in to access this feature';
-      if (index == 1) {
-        message = 'Sign in to search for properties';
-      } else if (index == 3) {
-        message = 'Sign in to view notifications';
-      } else if (index == 4) {
-        message = 'Sign in to view your profile';
-      }
-      SignInRequiredModal.show(context, message: message);
-      return;
-    }
-
-    // For home tab, navigate normally
-    if (index != _currentBottomNavIndex) {
-      setState(() {
-        _currentBottomNavIndex = index;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -97,11 +69,12 @@ class _GuestHomePageState extends State<GuestHomePage>
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.person_outline, color: Colors.black87),
+            icon: const Icon(Icons.exit_to_app, color: Colors.black87),
             onPressed: () {
-              SignInRequiredModal.show(
-                context,
-                message: 'Sign in to view your profile',
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => const SignUpPage(),
+                ),
               );
             },
           ),
@@ -126,22 +99,10 @@ class _GuestHomePageState extends State<GuestHomePage>
           ],
         ),
       ),
-      body: IndexedStack(
-        index: _currentBottomNavIndex,
-        children: [
-          TabBarView(
-            controller: _tabController,
-            children: [_buildListingsTab(), _buildLookingForTab()],
-          ),
-          const SizedBox.shrink(), // Search
-          const SizedBox.shrink(), // Add Post
-          const SizedBox.shrink(), // Notifications
-          const SizedBox.shrink(), // Profile
-        ],
-      ),
-      bottomNavigationBar: CustomBottomNavigationBar(
-        currentIndex: _currentBottomNavIndex,
-        onTap: _onNavTap,
+      // Guest UI only shows TabBarView - navigation handled by GuestNavigationContainer
+      body: TabBarView(
+        controller: _tabController,
+        children: [_buildListingsTab(), _buildLookingForTab()],
       ),
     );
   }
@@ -696,7 +657,7 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
                   color: const Color(0xFF6C63FF),
                 ),
                 _ModernTag(
-                  icon: Icons.home_outlined,
+                  iconAssetPath: 'assets/icons/navbar/home_outlined.svg',
                   text: widget.post.propertyType,
                   color: const Color(0xFF4CAF50),
                 ),
@@ -759,15 +720,17 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
 }
 
 class _ModernTag extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final String? iconAssetPath; // SVG asset path for navbar-style icons
   final String text;
   final Color color;
 
   const _ModernTag({
-    required this.icon,
+    this.icon,
+    this.iconAssetPath,
     required this.text,
     required this.color,
-  });
+  }) : assert(icon != null || iconAssetPath != null, 'Either icon or iconAssetPath must be provided');
 
   @override
   Widget build(BuildContext context) {
@@ -781,7 +744,18 @@ class _ModernTag extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
+          if (iconAssetPath != null)
+            SvgPicture.asset(
+              iconAssetPath!,
+              width: 14,
+              height: 14,
+              colorFilter: ColorFilter.mode(
+                color,
+                BlendMode.srcIn,
+              ),
+            )
+          else
+            Icon(icon!, size: 14, color: color),
           const SizedBox(width: 6),
           Text(
             text,

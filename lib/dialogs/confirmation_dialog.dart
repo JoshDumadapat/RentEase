@@ -48,12 +48,35 @@ class ConfirmationDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[700];
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey[300]!;
+    const Color _themeColorDark = Color(0xFF00B8E6);
+
     return AlertDialog(
+      backgroundColor: backgroundColor,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(20),
       ),
-      title: Text(title),
-      content: Text(message),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      content: Text(
+        message,
+        style: TextStyle(
+          color: subtextColor,
+          fontSize: 14,
+          height: 1.5,
+        ),
+      ),
       actions: [
         TextButton(
           onPressed: () {
@@ -62,10 +85,18 @@ class ConfirmationDialog extends StatelessWidget {
           },
           style: TextButton.styleFrom(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          ),
+          child: Text(
+            cancelText,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          child: Text(cancelText),
         ),
         FilledButton(
           onPressed: () {
@@ -73,12 +104,20 @@ class ConfirmationDialog extends StatelessWidget {
             Navigator.of(context).pop(true);
           },
           style: FilledButton.styleFrom(
-            backgroundColor: confirmColor ?? Theme.of(context).colorScheme.error,
+            backgroundColor: confirmColor ?? (isDark ? _themeColorDark : _themeColorDark),
+            foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          ),
+          child: Text(
+            confirmText,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          child: Text(confirmText),
         ),
       ],
     );
@@ -102,6 +141,7 @@ Future<bool> showDiscardChangesDialog(
     message: message,
     confirmText: confirmText,
     cancelText: cancelText,
+    confirmColor: Colors.red[600],
   );
 }
 

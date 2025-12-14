@@ -43,7 +43,10 @@ class PricingSection extends StatelessWidget {
       children: [
         Text(
           'Pricing',
-          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          style: textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.brightness == Brightness.dark ? Colors.white : Colors.black87,
+          ),
         ),
         const SizedBox(height: 24),
         // Monthly Rent
@@ -52,6 +55,7 @@ class PricingSection extends StatelessWidget {
         TextFormField(
           controller: monthlyRentController,
           keyboardType: TextInputType.number,
+          textAlign: TextAlign.right,
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,
             _CurrencyInputFormatter(),
@@ -60,6 +64,7 @@ class PricingSection extends StatelessWidget {
             hintText: '0',
             prefixText: '₱',
             colorScheme: colorScheme,
+            theme: theme,
           ),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
@@ -79,6 +84,7 @@ class PricingSection extends StatelessWidget {
         TextFormField(
           controller: depositController,
           keyboardType: TextInputType.number,
+          textAlign: TextAlign.right,
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,
             _CurrencyInputFormatter(),
@@ -87,6 +93,7 @@ class PricingSection extends StatelessWidget {
             hintText: '0 (optional)',
             prefixText: '₱',
             colorScheme: colorScheme,
+            theme: theme,
           ),
         ),
         const SizedBox(height: 24),
@@ -96,6 +103,7 @@ class PricingSection extends StatelessWidget {
         TextFormField(
           controller: advanceController,
           keyboardType: TextInputType.number,
+          textAlign: TextAlign.right,
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,
             _CurrencyInputFormatter(),
@@ -104,13 +112,17 @@ class PricingSection extends StatelessWidget {
             hintText: '0 (optional)',
             prefixText: '₱',
             colorScheme: colorScheme,
+            theme: theme,
           ),
         ),
         const SizedBox(height: 24),
         // Utility Toggles
         Text(
           'Utilities Included',
-          style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          style: textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: theme.brightness == Brightness.dark ? Colors.white : Colors.black87,
+          ),
         ),
         const SizedBox(height: 12),
         _buildUtilityToggle(
@@ -193,6 +205,7 @@ class PricingSection extends StatelessWidget {
     required String hintText,
     String? prefixText,
     required ColorScheme colorScheme,
+    required ThemeData theme,
   }) {
     return InputDecoration(
       hintText: hintText,
@@ -202,12 +215,14 @@ class PricingSection extends StatelessWidget {
       ),
       prefixText: prefixText,
       prefixStyle: TextStyle(
-        color: colorScheme.onSurface,
+        color: theme.brightness == Brightness.dark ? Colors.white : colorScheme.onSurface,
         fontSize: 16,
         fontWeight: FontWeight.w600,
       ),
       filled: true,
-      fillColor: colorScheme.surface,
+      fillColor: theme.brightness == Brightness.dark 
+          ? Colors.grey[800] 
+          : colorScheme.surface,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(

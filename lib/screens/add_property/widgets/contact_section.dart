@@ -30,9 +30,10 @@ class ContactSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Contact Information',
+          'Contact',
           style: textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
+            color: theme.brightness == Brightness.dark ? Colors.white : Colors.black87,
           ),
         ),
         const SizedBox(height: 8),
@@ -91,6 +92,7 @@ class ContactSection extends StatelessWidget {
             hintText: '09XX XXX XXXX',
             prefixIcon: Icons.phone_outlined,
             colorScheme: colorScheme,
+            theme: theme,
           ),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
@@ -113,6 +115,7 @@ class ContactSection extends StatelessWidget {
             hintText: 'Username or link',
             prefixIcon: Icons.message_outlined,
             colorScheme: colorScheme,
+            theme: theme,
           ),
         ),
       ],
@@ -153,6 +156,7 @@ class ContactSection extends StatelessWidget {
     required String hintText,
     IconData? prefixIcon,
     required ColorScheme colorScheme,
+    required ThemeData theme,
   }) {
     return InputDecoration(
       hintText: hintText,
@@ -168,7 +172,9 @@ class ContactSection extends StatelessWidget {
             )
           : null,
       filled: true,
-      fillColor: colorScheme.surface,
+      fillColor: theme.brightness == Brightness.dark 
+          ? Colors.grey[800] 
+          : colorScheme.surface,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(

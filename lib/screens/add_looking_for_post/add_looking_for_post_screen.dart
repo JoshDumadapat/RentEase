@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:rentease_app/models/looking_for_post_model.dart';
+import 'package:rentease_app/utils/snackbar_utils.dart';
 
 // Light blue theme constants aligned with HomePage / Add Property
 const Color _themeColor = Color(0xFF00D1FF);
@@ -93,10 +94,7 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
 
     // Show success message
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Post created! Showing on your feed.'),
-        backgroundColor: Colors.green,
-      ),
+      SnackBarUtils.buildThemedSnackBar(context, 'Post created! Showing on your feed.'),
     );
 
     // Navigate back with the new post so Home can insert it at the top
@@ -107,22 +105,29 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? Colors.grey[900] : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
+    final iconColor = isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        backgroundColor: theme.scaffoldBackgroundColor,
+        backgroundColor: backgroundColor,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         automaticallyImplyLeading: false,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: iconColor),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
           'Looking For a Place',
           style: textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
-            color: Colors.black87,
+            color: textColor,
           ),
         ),
         centerTitle: true,
@@ -134,21 +139,26 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
             secondary: _themeColor,
           ),
           inputDecorationTheme: InputDecorationTheme(
-            filled: false,
+            filled: true,
+            fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: _themeColorLight2),
+              borderSide: BorderSide(
+                color: isDark ? Colors.grey[700]! : _themeColorLight2,
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: _themeColorLight2),
+              borderSide: BorderSide(
+                color: isDark ? Colors.grey[700]! : _themeColorLight2,
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: _themeColorDark, width: 1.5),
             ),
             hintStyle: textTheme.bodyMedium?.copyWith(
-              color: Colors.grey[500],
+              color: isDark ? Colors.grey[400] : Colors.grey[500],
             ),
           ),
         ),
@@ -168,14 +178,14 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
                         'Tell us what you\'re looking for',
                         style: textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                          color: textColor,
                         ),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         'Share a few details so we can surface the best matching listings for you.',
                         style: textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[600],
+                          color: subtextColor,
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -190,6 +200,7 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _locationController,
+                            style: TextStyle(color: textColor),
                             decoration: const InputDecoration(
                               hintText: 'e.g., Cebu City, IT Park',
                               contentPadding: EdgeInsets.symmetric(
@@ -219,9 +230,10 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
                             items: _propertyTypes.map((String type) {
                               return DropdownMenuItem<String>(
                                 value: type,
-                                child: Text(type),
+                                child: Text(type, style: TextStyle(color: textColor)),
                               );
                             }).toList(),
+                            style: TextStyle(color: textColor),
                             onChanged: (String? value) {
                               setState(() {
                                 _propertyType = value;
@@ -251,6 +263,7 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
                                 child: TextFormField(
                                   controller: _minBudgetController,
                                   keyboardType: TextInputType.number,
+                                  style: TextStyle(color: textColor),
                                   decoration: const InputDecoration(
                                     hintText: 'Min',
                                     prefixText: '₱',
@@ -271,11 +284,11 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
                                 ),
                               ),
                               const SizedBox(width: 16),
-                              const Text(
+                              Text(
                                 'to',
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: Colors.grey,
+                                  color: subtextColor,
                                 ),
                               ),
                               const SizedBox(width: 16),
@@ -283,6 +296,7 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
                                 child: TextFormField(
                                   controller: _maxBudgetController,
                                   keyboardType: TextInputType.number,
+                                  style: TextStyle(color: textColor),
                                   decoration: const InputDecoration(
                                     hintText: 'Max',
                                     prefixText: '₱',
@@ -324,15 +338,17 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
                                 vertical: 16,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: isDark ? Colors.grey[800] : Colors.white,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: _themeColorLight2),
+                                border: Border.all(
+                                  color: isDark ? Colors.grey[700]! : _themeColorLight2,
+                                ),
                               ),
                               child: Row(
                                 children: [
                                   Icon(
                                     Icons.calendar_today,
-                                    color: Colors.grey[600],
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
                                     size: 20,
                                   ),
                                   const SizedBox(width: 12),
@@ -343,8 +359,8 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
                                     style: TextStyle(
                                       fontSize: 16,
                                       color: _moveInDate != null
-                                          ? Colors.black87
-                                          : Colors.grey[500],
+                                          ? textColor
+                                          : (isDark ? Colors.grey[400] : Colors.grey[500]),
                                     ),
                                   ),
                                   const Spacer(),
@@ -353,7 +369,7 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
                                       icon: Icon(
                                         Icons.clear,
                                         size: 20,
-                                        color: Colors.grey[600],
+                                        color: isDark ? Colors.grey[400] : Colors.grey[600],
                                       ),
                                       onPressed: () {
                                         setState(() {
@@ -379,6 +395,7 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
                           TextFormField(
                             controller: _descriptionController,
                             maxLines: 5,
+                            style: TextStyle(color: textColor),
                             decoration: const InputDecoration(
                               hintText:
                                   'Describe what you\'re looking for in a comfortable, friendly way...',
@@ -403,10 +420,10 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: theme.scaffoldBackgroundColor,
+                  color: backgroundColor,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
+                      color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
                       spreadRadius: 0,
                       blurRadius: 8,
                       offset: const Offset(0, -2),
@@ -449,16 +466,20 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
   }) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -471,7 +492,7 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
             title,
             style: textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: textColor,
             ),
           ),
           if (subtitle != null) ...[
@@ -479,7 +500,7 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
             Text(
               subtitle,
               style: textTheme.bodySmall?.copyWith(
-                color: Colors.grey[600],
+                color: subtextColor,
               ),
             ),
           ],
@@ -491,12 +512,16 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
   }
 
   Widget _buildSectionTitle(String title) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w600,
-        color: Colors.black87,
+        color: textColor,
       ),
     );
   }

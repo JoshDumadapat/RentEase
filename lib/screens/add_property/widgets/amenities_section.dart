@@ -67,8 +67,11 @@ class AmenitiesSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Amenities & Rules',
-          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          'Amenities',
+          style: textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.brightness == Brightness.dark ? Colors.white : Colors.black87,
+          ),
         ),
         const SizedBox(height: 24),
         // Amenities Grid
@@ -147,12 +150,11 @@ class AmenitiesSection extends StatelessWidget {
         // Curfew Input
         _buildLabel('Curfew (Optional)', colorScheme),
         const SizedBox(height: 8),
-        TextFormField(
-          controller: curfewController,
-          decoration: _buildInputDecoration(
-            hintText: 'e.g., 10:00 PM',
+        _buildCurfewTimePicker(
+          curfewController: curfewController,
             colorScheme: colorScheme,
-          ),
+            theme: theme,
+          context: context,
         ),
       ],
     );
@@ -198,9 +200,126 @@ class AmenitiesSection extends StatelessWidget {
     );
   }
 
+  Widget _buildCurfewTimePicker({
+    required TextEditingController curfewController,
+    required ColorScheme colorScheme,
+    required ThemeData theme,
+    required BuildContext context,
+  }) {
+    // Format time to 12-hour format with AM/PM
+    String _formatTime(TimeOfDay time) {
+      final hour = time.hourOfPeriod;
+      final minute = time.minute.toString().padLeft(2, '0');
+      final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+      return '$hour:$minute $period';
+    }
+
+    // Parse time from string (if already set)
+    TimeOfDay? _parseTime(String? timeStr) {
+      if (timeStr == null || timeStr.isEmpty) return null;
+      
+      try {
+        // Try to parse formats like "10:00 PM" or "22:00"
+        final parts = timeStr.replaceAll(' ', '').toUpperCase();
+        final isPM = parts.contains('PM');
+        final isAM = parts.contains('AM');
+        
+        final timeOnly = parts.replaceAll('AM', '').replaceAll('PM', '');
+        final timeParts = timeOnly.split(':');
+        
+        if (timeParts.length == 2) {
+          int hour = int.parse(timeParts[0]);
+          int minute = int.parse(timeParts[1]);
+          
+          if (isPM && hour != 12) hour += 12;
+          if (isAM && hour == 12) hour = 0;
+          
+          return TimeOfDay(hour: hour, minute: minute);
+        }
+      } catch (e) {
+        // If parsing fails, return null
+      }
+      return null;
+    }
+
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: curfewController,
+      builder: (context, value, child) {
+        final currentTime = _parseTime(value.text);
+        final displayText = value.text.isNotEmpty 
+            ? value.text 
+            : 'Select curfew time';
+
+        return InkWell(
+          onTap: () async {
+            final pickedTime = await showTimePicker(
+              context: context,
+              initialTime: currentTime ?? const TimeOfDay(hour: 22, minute: 0),
+              builder: (context, child) {
+                return Theme(
+                  data: theme.copyWith(
+                    colorScheme: colorScheme,
+                  ),
+                  child: child!,
+                );
+              },
+            );
+
+            if (pickedTime != null) {
+              curfewController.text = _formatTime(pickedTime);
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: theme.brightness == Brightness.dark 
+                  ? Colors.grey[800] 
+                  : colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: colorScheme.outline.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.access_time,
+                      color: value.text.isNotEmpty
+                          ? colorScheme.onSurface
+                          : colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      displayText,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: value.text.isNotEmpty
+                            ? colorScheme.onSurface
+                            : colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+                Icon(
+                  Icons.arrow_drop_down,
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   InputDecoration _buildInputDecoration({
     required String hintText,
     required ColorScheme colorScheme,
+    required ThemeData theme,
   }) {
     return InputDecoration(
       hintText: hintText,
@@ -209,7 +328,9 @@ class AmenitiesSection extends StatelessWidget {
         fontSize: 16,
       ),
       filled: true,
-      fillColor: colorScheme.surface,
+      fillColor: theme.brightness == Brightness.dark 
+          ? Colors.grey[800] 
+          : colorScheme.surface,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(

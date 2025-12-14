@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rentease_app/utils/snackbar_utils.dart';
 
 /// Settings Section Widget
 /// 
@@ -58,7 +59,7 @@ class SettingsSection extends StatelessWidget {
                 onTap: () {
                   // Note: Navigation to change email page will be implemented when backend is ready
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Change email feature coming soon')),
+                    SnackBarUtils.buildThemedSnackBar(context, 'Change email feature coming soon'),
                   );
                 },
                 isDark: isDark,
@@ -69,7 +70,7 @@ class SettingsSection extends StatelessWidget {
                 onTap: () {
                   // Note: Navigation to change phone page will be implemented when backend is ready
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Change phone feature coming soon')),
+                    SnackBarUtils.buildThemedSnackBar(context, 'Change phone feature coming soon'),
                   );
                 },
                 isDark: isDark,
@@ -90,7 +91,7 @@ class SettingsSection extends StatelessWidget {
                 onTap: () {
                   // Note: Navigation to notification settings will be implemented when needed
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Notification settings coming soon')),
+                    SnackBarUtils.buildThemedSnackBar(context, 'Notification settings coming soon'),
                   );
                 },
                 isDark: isDark,
@@ -103,8 +104,9 @@ class SettingsSection extends StatelessWidget {
                   onChanged: (value) {
                     // Note: Theme toggle functionality will be implemented when theme management is added
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Theme toggle coming soon (currently: ${value ? "Dark" : "Light"})'),
+                      SnackBarUtils.buildThemedSnackBar(
+                        context,
+                        'Theme toggle coming soon (currently: ${value ? "Dark" : "Light"})',
                       ),
                     );
                   },
@@ -148,10 +150,7 @@ class SettingsSection extends StatelessWidget {
               onPressed: () {
                 // Note: Delete account confirmation dialog will be implemented when backend is ready
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Delete account feature coming soon'),
-                    backgroundColor: Colors.red,
-                  ),
+                  SnackBarUtils.buildThemedSnackBar(context, 'Delete account feature coming soon'),
                 );
               },
               child: Text(
@@ -206,6 +205,20 @@ class _SettingsGroup extends StatelessWidget {
               color: isDark ? Colors.grey[700]! : Colors.grey[200]!,
               width: 1,
             ),
+            boxShadow: isDark ? null : [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 12,
+                spreadRadius: 0,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 6,
+                spreadRadius: 0,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Column(
             children: items,

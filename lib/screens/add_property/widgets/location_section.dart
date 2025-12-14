@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 /// Includes:
 /// - Address input
 /// - Landmark
-/// - Map picker button (placeholder)
-/// - GPS auto-fill button (placeholder)
+/// - Map picker button
+/// - GPS auto-fill button
 class LocationSection extends StatelessWidget {
   final TextEditingController addressController;
   final TextEditingController landmarkController;
@@ -34,6 +34,7 @@ class LocationSection extends StatelessWidget {
           'Location',
           style: textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
+            color: theme.brightness == Brightness.dark ? Colors.white : Colors.black87,
           ),
         ),
         const SizedBox(height: 24),
@@ -46,6 +47,7 @@ class LocationSection extends StatelessWidget {
           decoration: _buildInputDecoration(
             hintText: 'Enter full address',
             colorScheme: colorScheme,
+            theme: theme,
           ),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
@@ -63,39 +65,82 @@ class LocationSection extends StatelessWidget {
           decoration: _buildInputDecoration(
             hintText: 'e.g., Near SM Mall, Behind University',
             colorScheme: colorScheme,
+            theme: theme,
           ),
         ),
         const SizedBox(height: 24),
-        // Action Buttons
+        // Action Buttons - Enhanced with lighter borders
         Row(
           children: [
             Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onMapPicker,
-                icon: const Icon(Icons.map_outlined),
-                label: const Text('Pick on Map'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: colorScheme.onSurface,
-                  side: BorderSide(color: colorScheme.outline),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: colorScheme.outline.withValues(alpha: 0.2), // Lighter border
+                    width: 1.5,
+                  ),
+                ),
+                child: OutlinedButton.icon(
+                  onPressed: onMapPicker,
+                  icon: Icon(
+                    Icons.map_outlined,
+                    size: 20,
+                    color: colorScheme.primary,
+                  ),
+                  label: Text(
+                    'Pick on Map',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colorScheme.primary,
+                    side: BorderSide.none, // Remove default border, using container border
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    backgroundColor: colorScheme.primaryContainer.withValues(alpha: 0.1),
                   ),
                 ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onGPSFill,
-                icon: const Icon(Icons.my_location),
-                label: const Text('Use GPS'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: colorScheme.onSurface,
-                  side: BorderSide(color: colorScheme.outline),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: colorScheme.outline.withValues(alpha: 0.2), // Lighter border
+                    width: 1.5,
+                  ),
+                ),
+                child: OutlinedButton.icon(
+                  onPressed: onGPSFill,
+                  icon: Icon(
+                    Icons.my_location,
+                    size: 20,
+                    color: colorScheme.primary,
+                  ),
+                  label: Text(
+                    'Use GPS',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colorScheme.primary,
+                    side: BorderSide.none, // Remove default border, using container border
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    backgroundColor: colorScheme.primaryContainer.withValues(alpha: 0.1),
                   ),
                 ),
               ),
@@ -139,6 +184,7 @@ class LocationSection extends StatelessWidget {
   InputDecoration _buildInputDecoration({
     required String hintText,
     required ColorScheme colorScheme,
+    required ThemeData theme,
   }) {
     return InputDecoration(
       hintText: hintText,
@@ -147,7 +193,9 @@ class LocationSection extends StatelessWidget {
         fontSize: 16,
       ),
       filled: true,
-      fillColor: colorScheme.surface,
+      fillColor: theme.brightness == Brightness.dark 
+          ? Colors.grey[800] 
+          : colorScheme.surface,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(

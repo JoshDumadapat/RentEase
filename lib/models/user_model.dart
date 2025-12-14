@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// User Model
@@ -109,10 +110,24 @@ class UserModel {
       }
     }
 
+    // Parse username - handle both null and empty string cases
+    String? username;
+    if (data['username'] != null) {
+      final usernameValue = data['username'];
+      if (usernameValue is String && usernameValue.trim().isNotEmpty) {
+        username = usernameValue.trim();
+      }
+    }
+    
+    // Debug: Log username parsing
+    if (kDebugMode) {
+      debugPrint('🔍 [UserModel] Parsing username from Firestore data: ${data['username']} -> $username');
+    }
+
     return UserModel(
       id: id,
       displayName: displayName,
-      username: data['username'] as String?,
+      username: username,
       bio: data['bio'] as String?,
       email: data['email'] as String? ?? '',
       phone: data['phone'] as String?,

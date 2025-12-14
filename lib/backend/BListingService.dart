@@ -201,5 +201,81 @@ class BListingService {
       return [];
     }
   }
+
+  /// Create or update a draft listing
+  Future<String> saveDraft({
+    required String userId,
+    String? draftId,
+    String? title,
+    String? category,
+    String? location,
+    double? price,
+    String? description,
+    int? bedrooms,
+    int? bathrooms,
+    double? area,
+    List<String>? imageUrls,
+    int? currentStep,
+    Map<String, dynamic>? additionalData,
+  }) async {
+    try {
+      final draftData = <String, dynamic>{
+        'userId': userId,
+        'isDraft': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+        if (title != null) 'title': title,
+        if (category != null) 'category': category,
+        if (location != null) 'location': location,
+        if (price != null) 'price': price,
+        if (description != null) 'description': description,
+        if (bedrooms != null) 'bedrooms': bedrooms,
+        if (bathrooms != null) 'bathrooms': bathrooms,
+        if (area != null) 'area': area,
+        if (imageUrls != null) 'imageUrls': imageUrls,
+        if (currentStep != null) 'currentStep': currentStep,
+        if (additionalData != null) ...additionalData,
+      };
+
+      if (draftId != null) {
+        // Update existing draft
+        await _firestore.collection(_collectionName).doc(draftId).update(draftData);
+        return draftId;
+      } else {
+        // Create new draft
+        draftData['createdAt'] = FieldValue.serverTimestamp();
+        final docRef = await _firestore.collection(_collectionName).add(draftData);
+        return docRef.id;
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Get draft listings by user ID
+  Future<List<Map<String, dynamic>>> getDraftsByUser(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection(_collectionName)
+          .where('userId', isEqualTo: userId)
+          .where('isDraft', isEqualTo: true)
+          .orderBy('updatedAt', descending: true)
+          .get();
+      return snapshot.docs.map((doc) => {
+        'id': doc.id,
+        ...doc.data(),
+      }).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Delete draft
+  Future<void> deleteDraft(String draftId) async {
+    try {
+      await _firestore.collection(_collectionName).doc(draftId).delete();
+    } catch (e) {
+      rethrow;
+    }
+  }
 }
 

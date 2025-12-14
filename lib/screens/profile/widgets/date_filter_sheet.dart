@@ -75,8 +75,20 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? Colors.grey[900] : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[300]! : Colors.grey[600]!;
+    final iconColor = isDark ? Colors.white : Colors.black87;
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey[300]!;
 
     return Container(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(20),
+        ),
+      ),
       padding: EdgeInsets.only(
         left: 24,
         right: 24,
@@ -96,10 +108,11 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
+                  color: textColor,
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.close, size: 20),
+                icon: Icon(Icons.close, size: 20, color: iconColor),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -118,6 +131,10 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                         child: _QuickFilterButton(
                           label: 'All Time',
                           isSelected: _selectedFilter == DateFilterOption.all,
+                          isDark: isDark,
+                          textColor: textColor,
+                          subtextColor: subtextColor,
+                          borderColor: borderColor,
                           onTap: () {
                             setState(() {
                               _selectedFilter = DateFilterOption.all;
@@ -132,6 +149,10 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                         child: _QuickFilterButton(
                           label: 'Today',
                           isSelected: _selectedFilter == DateFilterOption.today,
+                          isDark: isDark,
+                          textColor: textColor,
+                          subtextColor: subtextColor,
+                          borderColor: borderColor,
                           onTap: () {
                             setState(() {
                               _selectedFilter = DateFilterOption.today;
@@ -146,6 +167,10 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                         child: _QuickFilterButton(
                           label: 'Last Week',
                           isSelected: _selectedFilter == DateFilterOption.lastWeek,
+                          isDark: isDark,
+                          textColor: textColor,
+                          subtextColor: subtextColor,
+                          borderColor: borderColor,
                           onTap: () {
                             setState(() {
                               _selectedFilter = DateFilterOption.lastWeek;
@@ -164,7 +189,7 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                      color: textColor,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -180,8 +205,9 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                               vertical: 10,
                             ),
                             decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
                               border: Border.all(
-                                color: Colors.grey[300]!,
+                                color: borderColor,
                               ),
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -195,7 +221,7 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                                       'From',
                                       style: TextStyle(
                                         fontSize: 12,
-                                        color: Colors.grey[600],
+                                        color: subtextColor,
                                       ),
                                     ),
                                     const SizedBox(height: 4),
@@ -206,8 +232,8 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                                       style: TextStyle(
                                         fontSize: 14,
                                         color: _fromDate != null
-                                            ? Colors.black87
-                                            : Colors.grey[500],
+                                            ? textColor
+                                            : subtextColor,
                                       ),
                                     ),
                                   ],
@@ -215,7 +241,7 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                                 Icon(
                                   Icons.calendar_today,
                                   size: 16,
-                                  color: Colors.grey[600],
+                                  color: subtextColor,
                                 ),
                               ],
                             ),
@@ -233,8 +259,9 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                               vertical: 10,
                             ),
                             decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
                               border: Border.all(
-                                color: Colors.grey[300]!,
+                                color: borderColor,
                               ),
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -248,7 +275,7 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                                       'To',
                                       style: TextStyle(
                                         fontSize: 12,
-                                        color: Colors.grey[600],
+                                        color: subtextColor,
                                       ),
                                     ),
                                     const SizedBox(height: 4),
@@ -259,8 +286,8 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                                       style: TextStyle(
                                         fontSize: 14,
                                         color: _toDate != null
-                                            ? Colors.black87
-                                            : Colors.grey[500],
+                                            ? textColor
+                                            : subtextColor,
                                       ),
                                     ),
                                   ],
@@ -268,7 +295,7 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                                 Icon(
                                   Icons.calendar_today,
                                   size: 16,
-                                  color: Colors.grey[600],
+                                  color: subtextColor,
                                 ),
                               ],
                             ),
@@ -301,7 +328,7 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                     'Clear',
                     style: TextStyle(
                       fontSize: 15,
-                      color: theme.colorScheme.onSurface,
+                      color: textColor,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -341,26 +368,40 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
 class _QuickFilterButton extends StatelessWidget {
   final String label;
   final bool isSelected;
+  final bool isDark;
+  final Color textColor;
+  final Color subtextColor;
+  final Color borderColor;
   final VoidCallback onTap;
 
   const _QuickFilterButton({
     required this.label,
     required this.isSelected,
+    required this.isDark,
+    required this.textColor,
+    required this.subtextColor,
+    required this.borderColor,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final backgroundColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? _themeColorLight : Colors.transparent,
+          color: isSelected 
+              ? (isDark 
+                  ? _themeColorDark.withValues(alpha: 0.2) 
+                  : _themeColorLight)
+              : (isDark ? backgroundColor : Colors.transparent),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? _themeColorDark : Colors.grey[300]!,
+            color: isSelected ? _themeColorDark : borderColor,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -370,7 +411,7 @@ class _QuickFilterButton extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              color: isSelected ? _themeColorDark : Colors.black87,
+              color: isSelected ? _themeColorDark : textColor,
             ),
           ),
         ),

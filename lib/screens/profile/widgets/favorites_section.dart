@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/profile/widgets/property_tile.dart';
+import 'package:rentease_app/utils/snackbar_utils.dart';
 
 /// Favorites Section Widget
 /// 
@@ -29,11 +30,11 @@ class FavoritesSection extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
+              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
               spreadRadius: 0,
               blurRadius: 8,
               offset: const Offset(0, 2),
@@ -53,7 +54,7 @@ class FavoritesSection extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
                 if (favorites.isNotEmpty)
@@ -61,7 +62,7 @@ class FavoritesSection extends StatelessWidget {
                     '${favorites.length}',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey[600],
+                      color: isDark ? Colors.grey[300] : Colors.grey[600],
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -90,9 +91,7 @@ class FavoritesSection extends StatelessWidget {
                         onRemove: () {
                           // Note: Remove from favorites functionality will be implemented when backend is ready
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Removed ${favorite.title} from favorites'),
-                            ),
+                            SnackBarUtils.buildThemedSnackBar(context, 'Removed ${favorite.title} from favorites'),
                           );
                         },
                       );

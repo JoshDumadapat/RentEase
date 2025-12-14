@@ -1,13 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:rentease_app/services/user_service.dart';
 import 'package:rentease_app/services/auth_service.dart';
 import 'package:rentease_app/widgets/id_camera_capture_page.dart';
 import 'package:rentease_app/widgets/selfie_camera_capture_page.dart';
 import 'package:rentease_app/screens/verification/verification_loading_page.dart';
+import 'package:rentease_app/utils/snackbar_utils.dart';
 
 class StudentIDVerificationPage extends StatefulWidget {
   final String firstName;
@@ -38,8 +38,6 @@ class StudentIDVerificationPage extends StatefulWidget {
 
 class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
   final ImagePicker _imagePicker = ImagePicker();
-  final UserService _userService = UserService();
-  final AuthService _authService = AuthService();
   final TextEditingController _idNumberController = TextEditingController();
   final PageController _pageController = PageController(viewportFraction: 0.8);
 
@@ -108,12 +106,10 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Camera and storage permissions are required to capture ID photos.',
-              ),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
+            SnackBarUtils.buildThemedSnackBar(
+              context,
+              'Camera and storage permissions are required to capture ID photos.',
+              duration: const Duration(seconds: 3),
             ),
           );
         }
@@ -122,10 +118,7 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error requesting permissions: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBarUtils.buildThemedSnackBar(context, 'Error requesting permissions: $e'),
         );
       }
       return false;
@@ -305,6 +298,16 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
               setState(() {
                 if (imageType == 'front') {
                   _frontIdImage = image;
+                  // Auto-advance to back ID page
+                  Future.delayed(const Duration(milliseconds: 300), () {
+                    if (mounted && _pageController.hasClients) {
+                      _pageController.animateToPage(
+                        1,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  });
                 } else if (imageType == 'back') {
                   _backIdImage = image;
                 }
@@ -328,6 +331,16 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
                 setState(() {
                   if (imageType == 'front') {
                     _frontIdImage = image;
+                    // Auto-advance to back ID page
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      if (mounted && _pageController.hasClients) {
+                        _pageController.animateToPage(
+                          1,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                        );
+                      }
+                    });
                   } else if (imageType == 'back') {
                     _backIdImage = image;
                   }
@@ -354,10 +367,7 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error capturing image: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBarUtils.buildThemedSnackBar(context, 'Error capturing image: $e'),
         );
         if (mounted) {
         setState(() {
@@ -467,10 +477,10 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
   Future<void> _handleUpload() async {
     if (_frontIdImage == null || _backIdImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please capture all required photos: Front ID and Back ID'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 2),
+        SnackBarUtils.buildThemedSnackBar(
+          context,
+          'Please capture all required photos: Front ID and Back ID',
+          duration: const Duration(seconds: 2),
         ),
       );
       return;
@@ -481,138 +491,6 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
     });
 
     try {
-      User? user;
-
-      // If Google account data is present, create/sign in the Firebase user **now** using Google credential.
-      // This ensures the Firebase Auth user is ONLY created after the full registration (ID upload) is completed.
-      if (widget.googleData != null) {
-        try {
-          final credential = GoogleAuthProvider.credential(
-            idToken: widget.googleData!.idToken,
-            accessToken: widget.googleData!.accessToken,
-          );
-          final userCredential =
-              await FirebaseAuth.instance.signInWithCredential(credential);
-          user = userCredential.user;
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error creating Google account: ${e.toString()}'),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 4),
-              ),
-            );
-            setState(() {
-              _isUploading = false;
-            });
-          }
-          return;
-        }
-      } else {
-        // No Google data → email/password flow
-        try {
-          const password = 'Pass123'; // Default password
-          final email = widget.email.trim().toLowerCase();
-
-          // Check if email is already in use FIRST by trying to create the user
-          try {
-            // Try to create the user - if email exists, we'll get email-already-in-use error
-            final userCredential = await _authService.signUpWithEmailAndPassword(
-              email,
-              password,
-            );
-            user = userCredential.user;
-          } on Exception catch (signUpError) {
-            final errorMessage = signUpError.toString();
-            if (errorMessage.contains('already exists') || errorMessage.contains('email-already-in-use')) {
-              // Try to sign in with the default password
-              try {
-                final userCredential = await _authService.signInWithEmailAndPassword(
-                  email,
-                  password,
-                );
-                user = userCredential.user;
-              } catch (_) {
-                // Email exists but password is wrong - ask user to reset
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Account already exists. Please use "Forgot Password" or sign in.'),
-                      backgroundColor: Colors.red,
-                      duration: Duration(seconds: 4),
-                    ),
-                  );
-                  setState(() { _isUploading = false; });
-                  return;
-                }
-              }
-            } else {
-              // Create new account
-              final userCredential = await _authService.signUpWithEmailAndPassword(
-                email,
-                password,
-              );
-              user = userCredential.user;
-              
-              // Verify the account was actually created
-              await user?.reload();
-            }
-          } catch (_) {
-            // Proceed with account creation anyway
-            final userCredential = await _authService.signUpWithEmailAndPassword(
-              email,
-              password,
-            );
-            user = userCredential.user;
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error creating account: ${e.toString()}'),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 4),
-              ),
-            );
-            setState(() { _isUploading = false; });
-          }
-          return;
-        }
-      }
-
-      if (widget.googleData == null && user == null) {
-        throw Exception('Failed to authenticate user');
-      }
-
-      // At this point, user must be non-null (either from Google or email/password flow)
-      final uid = user!.uid;
-
-      // Get photo URL from Google data or Firebase Auth user
-      String? photoUrl;
-      if (widget.googleData != null && widget.googleData!.photoUrl != null) {
-        photoUrl = widget.googleData!.photoUrl;
-      } else if (user.photoURL != null) {
-        photoUrl = user.photoURL;
-      }
-
-      // Save user data to Firestore (without selfie for now)
-      await _userService.createOrUpdateUser(
-        uid: uid,
-        email: widget.email.trim().toLowerCase(),
-        fname: widget.firstName.trim(),
-        lname: widget.lastName.trim(),
-        birthday: widget.birthday,
-        phone: widget.phone.trim(),
-        countryCode: widget.countryCode,
-        idImageFrontUrl: 'PENDING', // Mark as pending until images uploaded
-        idImageBackUrl: 'PENDING',
-        faceWithIdUrl: null, // Will be updated after selfie capture
-        userType: widget.userType,
-        password: widget.googleData == null ? 'Pass123' : null,
-        profileImageUrl: photoUrl,
-      );
-
       if (mounted) {
         // Navigate to selfie camera
         final selfieImage = await Navigator.of(context).push<XFile>(
@@ -621,40 +499,35 @@ class _StudentIDVerificationPageState extends State<StudentIDVerificationPage> {
           ),
         );
 
-        if (selfieImage != null && mounted) {
-          // Update user with selfie URL (mark as pending)
-          await _userService.createOrUpdateUser(
-            uid: uid,
-            email: widget.email.trim().toLowerCase(),
-            fname: widget.firstName.trim(),
-            lname: widget.lastName.trim(),
-            birthday: widget.birthday,
-            phone: widget.phone.trim(),
-            countryCode: widget.countryCode,
-            idImageFrontUrl: 'PENDING',
-            idImageBackUrl: 'PENDING',
-            faceWithIdUrl: 'PENDING',
-            userType: widget.userType,
-            password: widget.googleData == null ? 'Pass123' : null,
-            profileImageUrl: photoUrl,
-          );
-
-          // Navigate to verification loading page (will auto-navigate to password creation after 3 seconds)
-          if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => const VerificationLoadingPage(),
+        if (selfieImage != null && mounted && _frontIdImage != null) {
+          // Navigate to verification loading page with all user data
+          // Account creation will happen AFTER validation and password setup
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => VerificationLoadingPage(
+                frontIdImage: _frontIdImage!,
+                backIdImage: _backIdImage,
+                selfieImage: selfieImage,
+                idNumber: _idNumberController.text.trim(),
+                firstName: widget.firstName.trim(),
+                lastName: widget.lastName.trim(),
+                email: widget.email.trim().toLowerCase(),
+                birthday: widget.birthday,
+                phone: widget.phone.trim(),
+                countryCode: widget.countryCode,
+                googleData: widget.googleData,
+                userType: widget.userType,
               ),
-            );
-          }
+            ),
+          );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Error: ${e.toString()}',
             duration: const Duration(seconds: 4),
           ),
         );
@@ -912,6 +785,20 @@ class _IDNumberInputWidget extends StatelessWidget {
         const SizedBox(height: 8),
         TextField(
           controller: controller,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
+          ],
+          onChanged: (value) {
+            // Remove any non-digit characters as a safety measure
+            final digitsOnly = value.replaceAll(RegExp(r'[^0-9]'), '');
+            if (value != digitsOnly) {
+              controller.value = TextEditingValue(
+                text: digitsOnly,
+                selection: TextSelection.collapsed(offset: digitsOnly.length),
+              );
+            }
+          },
           decoration: InputDecoration(
             hintText: 'Enter your ID number',
             hintStyle: TextStyle(
@@ -1000,54 +887,77 @@ class _HorizontalIDCaptureSectionState extends State<_HorizontalIDCaptureSection
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
-    final cardHeight = screenHeight * 0.45; // Portrait rectangle height
+    final cardHeight = screenHeight * 0.38; // Reduced portrait rectangle height
 
-    return SizedBox(
-      height: cardHeight + 40, // Add space for label
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (notification) {
-          if (notification is ScrollEndNotification) {
-            // Snap to nearest page when scrolling ends
-            final currentPage = widget.pageController.page ?? 0;
-            final targetPage = currentPage.round();
-            if ((currentPage - targetPage).abs() > 0.1) {
-              widget.pageController.animateToPage(
-                targetPage,
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-              );
-            }
-          }
-          return false;
-        },
-        child: PageView.builder(
-          controller: widget.pageController,
-          physics: const BouncingScrollPhysics(),
-          itemCount: 2,
-          itemBuilder: (context, index) {
-            final isCentered = index == _currentPage;
-            if (index == 0) {
-              return _PortraitIDCard(
-                title: 'Front ID',
-                image: widget.frontIdImage,
-                isLoading: widget.isLoading,
-                onCapture: widget.onCaptureFront,
-                onRetake: widget.onRetakeFront,
-                isCentered: isCentered,
-              );
-            } else {
-              return _PortraitIDCard(
-                title: 'Back ID',
-                image: widget.backIdImage,
-                isLoading: widget.isLoading,
-                onCapture: widget.onCaptureBack,
-                onRetake: widget.onRetakeBack,
-                isCentered: isCentered,
-              );
-            }
-          },
+    return Column(
+      children: [
+        SizedBox(
+          height: cardHeight + 40, // Add space for label
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is ScrollEndNotification) {
+                // Snap to nearest page when scrolling ends
+                final currentPage = widget.pageController.page ?? 0;
+                final targetPage = currentPage.round();
+                if ((currentPage - targetPage).abs() > 0.1) {
+                  widget.pageController.animateToPage(
+                    targetPage,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                  );
+                }
+              }
+              return false;
+            },
+            child: PageView.builder(
+              controller: widget.pageController,
+              physics: const BouncingScrollPhysics(),
+              itemCount: 2,
+              itemBuilder: (context, index) {
+                final isCentered = index == _currentPage;
+                if (index == 0) {
+                  return _PortraitIDCard(
+                    title: 'Front ID',
+                    image: widget.frontIdImage,
+                    isLoading: widget.isLoading,
+                    onCapture: widget.onCaptureFront,
+                    onRetake: widget.onRetakeFront,
+                    isCentered: isCentered,
+                  );
+                } else {
+                  return _PortraitIDCard(
+                    title: 'Back ID',
+                    image: widget.backIdImage,
+                    isLoading: widget.isLoading,
+                    onCapture: widget.onCaptureBack,
+                    onRetake: widget.onRetakeBack,
+                    isCentered: isCentered,
+                  );
+                }
+              },
+            ),
+          ),
         ),
-      ),
+        const SizedBox(height: 12),
+        // Pagination dots
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(
+            2,
+            (index) => Container(
+              width: 8,
+              height: 8,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: index == _currentPage
+                    ? Colors.grey[800]
+                    : Colors.grey[300],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1074,8 +984,8 @@ class _PortraitIDCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
-    final cardHeight = screenHeight * 0.45;
-    final cardWidth = screenWidth * 0.7; // Portrait aspect ratio
+    final cardHeight = screenHeight * 0.38; // Reduced size
+    final cardWidth = screenWidth * 0.65; // Slightly smaller width for portrait
     
     // Scale and opacity for non-centered cards
     final scale = isCentered ? 1.0 : 0.85;
@@ -1102,14 +1012,18 @@ class _PortraitIDCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: title.toLowerCase().contains('face')
                         ? Colors.orange[50]
-                        : Colors.blue[50],
+                        : title.toLowerCase().contains('back')
+                            ? Colors.purple[50]
+                            : Colors.blue[50],
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: image != null
                           ? Colors.green[400]!
                           : (title.toLowerCase().contains('face')
                               ? Colors.orange[200]!
-                              : Colors.blue[200]!),
+                              : title.toLowerCase().contains('back')
+                                  ? Colors.purple[200]!
+                                  : Colors.blue[200]!),
                       width: 2,
                     ),
                     boxShadow: [
@@ -1168,8 +1082,17 @@ class _EmptyPortraitCaptureArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isFaceWithId = title?.toLowerCase().contains('face') ?? false;
-    final iconColor = isFaceWithId ? Colors.orange[700] : Colors.blue[700];
-    final backgroundColor = isFaceWithId ? Colors.orange[100] : Colors.blue[100];
+    final isBackId = title?.toLowerCase().contains('back') ?? false;
+    final iconColor = isFaceWithId 
+        ? Colors.orange[700] 
+        : isBackId 
+            ? Colors.purple[700] 
+            : Colors.blue[700];
+    final backgroundColor = isFaceWithId 
+        ? Colors.orange[100] 
+        : isBackId 
+            ? Colors.purple[100] 
+            : Colors.blue[100];
     final icon = isFaceWithId ? Icons.face : Icons.camera_alt;
 
     return Center(
@@ -1354,8 +1277,17 @@ class _EmptyCaptureAreaWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isFaceWithId = title?.toLowerCase().contains('face') ?? false;
-    final iconColor = isFaceWithId ? Colors.orange[700] : Colors.blue[700];
-    final backgroundColor = isFaceWithId ? Colors.orange[100] : Colors.blue[100];
+    final isBackId = title?.toLowerCase().contains('back') ?? false;
+    final iconColor = isFaceWithId 
+        ? Colors.orange[700] 
+        : isBackId 
+            ? Colors.purple[700] 
+            : Colors.blue[700];
+    final backgroundColor = isFaceWithId 
+        ? Colors.orange[100] 
+        : isBackId 
+            ? Colors.purple[100] 
+            : Colors.blue[100];
     final icon = isFaceWithId ? Icons.face : Icons.camera_alt;
     
     return Center(

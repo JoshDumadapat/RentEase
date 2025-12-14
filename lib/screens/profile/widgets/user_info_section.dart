@@ -30,6 +30,7 @@ class UserInfoSection extends StatelessWidget {
   final UserModel user;
 
   final VoidCallback onEditProfile;
+  final VoidCallback? onShareProfile;
 
   const UserInfoSection({
 
@@ -38,6 +39,7 @@ class UserInfoSection extends StatelessWidget {
     required this.user,
 
     required this.onEditProfile,
+    this.onShareProfile,
 
   });
 
@@ -59,7 +61,7 @@ class UserInfoSection extends StatelessWidget {
 
         decoration: BoxDecoration(
 
-          color: Colors.white,
+          color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
 
           borderRadius: BorderRadius.circular(20),
 
@@ -67,7 +69,7 @@ class UserInfoSection extends StatelessWidget {
 
             BoxShadow(
 
-              color: Colors.black.withValues(alpha: 0.08),
+              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
 
               spreadRadius: 0,
 
@@ -107,11 +109,11 @@ class UserInfoSection extends StatelessWidget {
 
                   shape: BoxShape.circle,
 
-                  color: isDark ? Colors.grey[800] : Colors.grey[200],
+                  color: isDark ? const Color(0xFF2A2A2A) : Colors.grey[200],
 
                   border: Border.all(
 
-                    color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                    color: isDark ? Colors.white.withValues(alpha: 0.15) : Colors.grey[300]!,
 
                     width: 3,
 
@@ -175,7 +177,7 @@ class UserInfoSection extends StatelessWidget {
 
                                 style: TextStyle(
 
-                                  fontSize: _getFontSize(user.displayName),
+                                  fontSize: 18,
 
                                   fontWeight: FontWeight.bold,
 
@@ -189,35 +191,9 @@ class UserInfoSection extends StatelessWidget {
 
                                 maxLines: 2,
 
-                                overflow: TextOverflow.ellipsis,
+                                overflow: TextOverflow.visible,
 
                               ),
-
-                              if (user.username != null) ...[
-
-                                const SizedBox(height: 4),
-
-                                Text(
-
-                                  '@${user.username}',
-
-                                  style: TextStyle(
-
-                                    fontSize: 14,
-
-                                    color: isDark
-
-                                        ? Colors.grey[400]
-
-                                        : Colors.grey[600],
-
-                                    fontWeight: FontWeight.w500,
-
-                                  ),
-
-                                ),
-
-                              ],
 
                             ],
 
@@ -229,11 +205,39 @@ class UserInfoSection extends StatelessWidget {
 
                     ),
 
-                    // Verified text with icon (between name and edit button)
+                    // Username below name
+
+                    if (user.username != null && user.username!.isNotEmpty) ...[
+
+                      const SizedBox(height: 8),
+
+                      Text(
+
+                        '@${user.username}',
+
+                        style: TextStyle(
+
+                          fontSize: 14,
+
+                          color: isDark
+
+                              ? Colors.grey[400]
+
+                              : Colors.grey[600],
+
+                          fontWeight: FontWeight.w500,
+
+                        ),
+
+                      ),
+
+                    ],
+
+                    // Verified text with icon (below username or below name if no username)
 
                     if (user.isVerified) ...[
 
-                      const SizedBox(height: 8),
+                      SizedBox(height: user.username != null && user.username!.isNotEmpty ? 6 : 8),
 
                       Row(
 
@@ -245,7 +249,7 @@ class UserInfoSection extends StatelessWidget {
 
                             decoration: BoxDecoration(
 
-                              color: _themeColorLight,
+                              color: _themeColorDark.withOpacity(0.2), // Glowing blue background
 
                               shape: BoxShape.circle,
 
@@ -257,7 +261,7 @@ class UserInfoSection extends StatelessWidget {
 
                               size: 14,
 
-                              color: _themeColorDark,
+                              color: _themeColorDark, // Blue icon
 
                             ),
 
@@ -287,50 +291,6 @@ class UserInfoSection extends StatelessWidget {
 
                     ],
 
-                    const SizedBox(height: 12),
-
-                    SizedBox(
-
-                      width: double.infinity,
-
-                      child: OutlinedButton.icon(
-
-                        onPressed: onEditProfile,
-
-                        icon: const Icon(Icons.edit_outlined, size: 16),
-
-                        label: const Text('Edit Profile'),
-
-                        style: OutlinedButton.styleFrom(
-
-                          padding: const EdgeInsets.symmetric(
-
-                            horizontal: 20,
-
-                            vertical: 8,
-
-                          ),
-
-                          minimumSize: const Size(0, 32),
-
-                          shape: RoundedRectangleBorder(
-
-                            borderRadius: BorderRadius.circular(10),
-
-                          ),
-
-                          side: BorderSide(
-
-                            color: Colors.grey[300]!,
-
-                          ),
-
-                        ),
-
-                      ),
-
-                    ),
-
                   ],
 
                 ),
@@ -357,7 +317,7 @@ class UserInfoSection extends StatelessWidget {
 
                 fontSize: 15,
 
-                color: const Color(0xFF2D2D2D),
+                color: isDark ? Colors.grey[300] : const Color(0xFF2D2D2D),
 
                 height: 1.5,
                 fontWeight: FontWeight.w600,
@@ -368,6 +328,116 @@ class UserInfoSection extends StatelessWidget {
             ),
 
           ],
+
+          // Edit Profile and Share Profile Buttons
+
+          const SizedBox(height: 16),
+
+          Row(
+
+            children: [
+
+              Expanded(
+
+                child: TextButton(
+
+                  onPressed: onEditProfile,
+
+                  style: TextButton.styleFrom(
+
+                    padding: const EdgeInsets.symmetric(
+
+                      horizontal: 16,
+
+                      vertical: 6,
+
+                    ),
+
+                    minimumSize: const Size(0, 21),
+
+                    shape: RoundedRectangleBorder(
+
+                      borderRadius: BorderRadius.circular(10),
+
+                    ),
+
+                    backgroundColor: isDark ? Colors.grey[700] : _themeColorDark,
+
+                  ),
+
+                  child: Text(
+
+                    'Edit Profile',
+
+                    style: TextStyle(
+
+                      color: Colors.white,
+
+                      fontWeight: FontWeight.w500,
+
+                      fontSize: 14,
+
+                    ),
+
+                  ),
+
+                ),
+
+              ),
+
+              const SizedBox(width: 12),
+
+              Expanded(
+
+                child: TextButton(
+
+                  onPressed: onShareProfile ?? () {},
+
+                  style: TextButton.styleFrom(
+
+                    padding: const EdgeInsets.symmetric(
+
+                      horizontal: 16,
+
+                      vertical: 6,
+
+                    ),
+
+                    minimumSize: const Size(0, 21),
+
+                    shape: RoundedRectangleBorder(
+
+                      borderRadius: BorderRadius.circular(10),
+
+                    ),
+
+                    backgroundColor: isDark ? Colors.grey[700] : _themeColorDark,
+
+                  ),
+
+                  child: Text(
+
+                    'Share Profile',
+
+                    style: TextStyle(
+
+                      color: Colors.white,
+
+                      fontWeight: FontWeight.w500,
+
+                      fontSize: 14,
+
+                    ),
+
+                  ),
+
+                ),
+
+              ),
+
+            ],
+
+          ),
 
           
 
@@ -381,7 +451,7 @@ class UserInfoSection extends StatelessWidget {
 
             thickness: 1,
 
-            color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+            color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.grey[200]!,
 
           ),
 

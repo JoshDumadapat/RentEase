@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:rentease_app/sign_in/sign_in_page.dart';
 import 'package:rentease_app/sign_up/sign_up_form_page.dart';
 import 'package:rentease_app/services/auth_service.dart';
-import 'package:rentease_app/guest/guest_home_page.dart';
+import 'package:rentease_app/guest/guest_app.dart';
+import 'package:rentease_app/dialogs/confirmation_dialog.dart';
 
 /// Sign Up Page with user type selection
 class SignUpPage extends StatefulWidget {
@@ -16,11 +17,13 @@ class SignUpPage extends StatefulWidget {
 
 class _SignUpPageState extends State<SignUpPage> {
   GoogleSignInTempData? _googleData;
+  bool _hasStartedSignUp = false;
 
   @override
   void initState() {
     super.initState();
     _googleData = widget.googleData;
+    _hasStartedSignUp = widget.googleData != null;
   }
 
   @override
@@ -34,9 +37,16 @@ class _SignUpPageState extends State<SignUpPage> {
           _WhiteCardBackgroundWidget(
             child: _SignUpContentWidget(
               googleData: _googleData,
+              hasStartedSignUp: _hasStartedSignUp,
               onGoogleDataChanged: (value) {
                 setState(() {
                   _googleData = value;
+                  _hasStartedSignUp = value != null;
+                });
+              },
+              onUserTypeSelected: () {
+                setState(() {
+                  _hasStartedSignUp = true;
                 });
               },
             ),
@@ -51,6 +61,8 @@ class _SignUpPageState extends State<SignUpPage> {
 class _BackgroundImageWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final imageHeight = screenHeight * 0.30; // Top 30% of screen
     
@@ -65,7 +77,7 @@ class _BackgroundImageWidget extends StatelessWidget {
         width: double.infinity,
         errorBuilder: (context, error, stackTrace) {
           return Container(
-            color: Colors.blue[100],
+            color: isDark ? Colors.grey[800] : Colors.grey[100],
             child: const Center(
               child: Icon(Icons.image, size: 100, color: Colors.grey),
             ),
@@ -86,6 +98,8 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final imageHeight = screenHeight * 0.30;
     
@@ -95,9 +109,9 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
       top: imageHeight - 40,
       bottom: 0,
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[900] : Colors.white,
+          borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(30),
             topRight: Radius.circular(30),
           ),
@@ -111,11 +125,15 @@ class _WhiteCardBackgroundWidget extends StatelessWidget {
 /// Widget for the sign up content
 class _SignUpContentWidget extends StatelessWidget {
   final GoogleSignInTempData? googleData;
+  final bool hasStartedSignUp;
   final ValueChanged<GoogleSignInTempData?> onGoogleDataChanged;
+  final VoidCallback? onUserTypeSelected;
 
   const _SignUpContentWidget({
     this.googleData,
+    this.hasStartedSignUp = false,
     required this.onGoogleDataChanged,
+    this.onUserTypeSelected,
   });
 
   @override
@@ -131,13 +149,12 @@ class _SignUpContentWidget extends StatelessWidget {
         return Padding(
           padding: EdgeInsets.symmetric(
             horizontal: isNarrowScreen ? 20.0 : 24.0,
-            vertical: isVerySmallScreen ? 16.0 : 20.0,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Top spacing - responsive
+              // Top spacing - responsive (matching sign in page)
               SizedBox(height: isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
               // Logo Widget
               _LogoWidget(),
@@ -160,9 +177,14 @@ class _SignUpContentWidget extends StatelessWidget {
                         imagePath: 'assets/sign_in_up/student.png',
                         title: 'Student',
                         description: 'Register with Student ID if you don\'t have a valid ID.',
-                        backgroundColor: Colors.blue[50]!,
-                        arrowColor: Colors.blue,
+                        backgroundColor: Theme.of(context).brightness == Brightness.dark 
+                            ? Colors.blue[900]!.withValues(alpha: 0.3) 
+                            : Colors.blue[50]!,
+                        arrowColor: Theme.of(context).brightness == Brightness.dark 
+                            ? Colors.blue[300]! 
+                            : Colors.blue,
                         onTap: () async {
+                          onUserTypeSelected?.call();
                           final discarded = await Navigator.of(context).push<bool>(
                             MaterialPageRoute<bool>(
                               builder: (context) => StudentSignUpPage(
@@ -182,9 +204,14 @@ class _SignUpContentWidget extends StatelessWidget {
                         imagePath: 'assets/sign_in_up/pro.png',
                         title: 'Professional',
                         description: 'Sign up with a valid government ID.',
-                        backgroundColor: Colors.blue[50]!,
-                        arrowColor: Colors.blue,
+                        backgroundColor: Theme.of(context).brightness == Brightness.dark 
+                            ? Colors.blue[900]!.withValues(alpha: 0.3) 
+                            : Colors.blue[50]!,
+                        arrowColor: Theme.of(context).brightness == Brightness.dark 
+                            ? Colors.blue[300]! 
+                            : Colors.blue,
                         onTap: () async {
+                          onUserTypeSelected?.call();
                           final discarded = await Navigator.of(context).push<bool>(
                             MaterialPageRoute<bool>(
                               builder: (context) => StudentSignUpPage(
@@ -204,13 +231,17 @@ class _SignUpContentWidget extends StatelessWidget {
                         imagePath: 'assets/sign_in_up/guest.png',
                         title: 'Guest',
                         description: 'Continue as a guest and experience RentEase.',
-                        backgroundColor: Colors.orange[50]!,
-                        arrowColor: Colors.orange,
+                        backgroundColor: Theme.of(context).brightness == Brightness.dark 
+                            ? Colors.orange[900]!.withValues(alpha: 0.3) 
+                            : Colors.orange[50]!,
+                        arrowColor: Theme.of(context).brightness == Brightness.dark 
+                            ? Colors.orange[300]! 
+                            : Colors.orange,
                         onTap: () {
-                          // Navigate to guest home page
+                          // Navigate to completely isolated Guest App
                           Navigator.of(context).pushReplacement(
                             MaterialPageRoute(
-                              builder: (context) => const GuestHomePage(),
+                              builder: (context) => const GuestApp(),
                             ),
                           );
                         },
@@ -221,9 +252,11 @@ class _SignUpContentWidget extends StatelessWidget {
               ),
               SizedBox(height: isVerySmallScreen ? 12 : 15),
               // Sign In Link Widget
-              _SignInLinkWidget(),
+              _SignInLinkWidget(
+                hasStartedSignUp: hasStartedSignUp,
+              ),
               // Bottom spacing - proportional to top
-              SizedBox(height: isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
+              SizedBox(height: isVerySmallScreen ? 44 : isSmallScreen ? 46 : 52),
             ],
           ),
         );
@@ -260,13 +293,16 @@ class _LogoWidget extends StatelessWidget {
       logoHeight *= 0.9;
     }
     
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Center(
       child: Image.asset(
         'assets/sign_in_up/signlogo.png',
         height: logoHeight,
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
-          return Icon(Icons.home, size: logoHeight, color: Colors.blue);
+          return Icon(Icons.home, size: logoHeight, color: isDark ? Colors.white : Colors.black87);
         },
       ),
     );
@@ -277,6 +313,8 @@ class _LogoWidget extends StatelessWidget {
 class _TitleWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
     final isVerySmallScreen = screenHeight < 600;
@@ -286,7 +324,7 @@ class _TitleWidget extends StatelessWidget {
       style: TextStyle(
         fontSize: isVerySmallScreen ? 20 : isSmallScreen ? 22 : 24,
         fontWeight: FontWeight.bold,
-        color: Colors.black87,
+        color: isDark ? Colors.white : Colors.black87,
       ),
     );
   }
@@ -296,6 +334,8 @@ class _TitleWidget extends StatelessWidget {
 class _DescriptionWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
     final isVerySmallScreen = screenHeight < 600;
@@ -305,7 +345,7 @@ class _DescriptionWidget extends StatelessWidget {
       style: TextStyle(
         fontSize: isVerySmallScreen ? 12 : isSmallScreen ? 13 : 14,
         fontWeight: FontWeight.normal,
-        color: Colors.grey[700],
+        color: isDark ? Colors.grey[400] : Colors.grey[700],
         height: 1.4,
       ),
     );
@@ -316,6 +356,8 @@ class _DescriptionWidget extends StatelessWidget {
 class _SignUpAsHeaderWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
     final isVerySmallScreen = screenHeight < 600;
@@ -325,7 +367,7 @@ class _SignUpAsHeaderWidget extends StatelessWidget {
       style: TextStyle(
         fontSize: isVerySmallScreen ? 14 : isSmallScreen ? 15 : 16,
         fontWeight: FontWeight.w600,
-        color: Colors.grey[800],
+        color: isDark ? Colors.grey[300] : Colors.grey[800],
       ),
     );
   }
@@ -351,9 +393,15 @@ class _UserTypeCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
     final isVerySmallScreen = screenHeight < 600;
+    
+    final titleColor = isDark ? Colors.white : Colors.black87;
+    final descriptionColor = isDark ? Colors.grey[400] : Colors.grey[600];
+    final avatarBgColor = isDark ? Colors.grey[800]! : Colors.white;
     
     return Material(
       color: Colors.transparent,
@@ -374,7 +422,7 @@ class _UserTypeCardWidget extends StatelessWidget {
               height: isVerySmallScreen ? 50 : isSmallScreen ? 55 : 60,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white,
+                color: avatarBgColor,
               ),
               child: ClipOval(
                 child: Image.asset(
@@ -384,7 +432,7 @@ class _UserTypeCardWidget extends StatelessWidget {
                     return Icon(
                       Icons.person,
                       size: isVerySmallScreen ? 30 : 40,
-                      color: Colors.grey,
+                      color: isDark ? Colors.grey[400] : Colors.grey,
                     );
                   },
                 ),
@@ -401,7 +449,7 @@ class _UserTypeCardWidget extends StatelessWidget {
                     style: TextStyle(
                       fontSize: isVerySmallScreen ? 14 : 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: titleColor,
                     ),
                   ),
                   SizedBox(height: isVerySmallScreen ? 3 : 4),
@@ -410,7 +458,7 @@ class _UserTypeCardWidget extends StatelessWidget {
                     style: TextStyle(
                       fontSize: isVerySmallScreen ? 11 : 12,
                       fontWeight: FontWeight.normal,
-                      color: Colors.grey[600],
+                      color: descriptionColor,
                     ),
                   ),
                 ],
@@ -435,6 +483,12 @@ class _UserTypeCardWidget extends StatelessWidget {
 
 /// Widget for Sign In link
 class _SignInLinkWidget extends StatefulWidget {
+  final bool hasStartedSignUp;
+
+  const _SignInLinkWidget({
+    this.hasStartedSignUp = false,
+  });
+
   @override
   State<_SignInLinkWidget> createState() => _SignInLinkWidgetState();
 }
@@ -444,13 +498,17 @@ class _SignInLinkWidgetState extends State<_SignInLinkWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.grey[300] : Colors.grey[700];
+    
     return Center(
       child: RichText(
         textAlign: TextAlign.center,
         text: TextSpan(
           style: TextStyle(
             fontSize: 13,
-            color: Colors.grey[700],
+            color: textColor,
           ),
           children: [
             const TextSpan(text: 'Already have an account? '),
@@ -463,8 +521,21 @@ class _SignInLinkWidgetState extends State<_SignInLinkWidget> {
                   if (mounted) setState(() => _isHovered = false);
                 },
                 child: GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).pushReplacement(
+                  onTap: () async {
+                    final navigator = Navigator.of(context);
+                    if (widget.hasStartedSignUp) {
+                      final discard = await showDiscardChangesDialog(
+                        context,
+                        title: 'Discard sign up?',
+                        message:
+                            'If you go to sign in now, your sign up progress will be lost.',
+                        confirmText: 'Discard',
+                        cancelText: 'Stay',
+                      );
+                      if (!discard || !mounted) return;
+                    }
+                    if (!mounted) return;
+                    navigator.pushReplacement(
                       _SlideUpPageRoute(page: const SignInPage()),
                     );
                   },
