@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/profile/widgets/property_tile.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
+import 'package:rentease_app/backend/BFavoriteService.dart';
 
 /// Favorites Section Widget
 /// 
@@ -13,11 +15,13 @@ import 'package:rentease_app/utils/snackbar_utils.dart';
 class FavoritesSection extends StatelessWidget {
   final List<ListingModel> favorites;
   final Function(ListingModel) onPropertyTap;
+  final VoidCallback? onFavoriteRemoved;
 
   const FavoritesSection({
     super.key,
     required this.favorites,
     required this.onPropertyTap,
+    this.onFavoriteRemoved,
   });
 
   @override
@@ -88,12 +92,7 @@ class FavoritesSection extends StatelessWidget {
                         property: favorite,
                         onTap: () => onPropertyTap(favorite),
                         showRemoveButton: true,
-                        onRemove: () {
-                          // Note: Remove from favorites functionality will be implemented when backend is ready
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBarUtils.buildThemedSnackBar(context, 'Removed ${favorite.title} from favorites'),
-                          );
-                        },
+                        onRemove: () => _handleRemoveFavorite(context, favorite),
                       );
                     },
                   ),
@@ -102,6 +101,52 @@ class FavoritesSection extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Handle remove favorite action
+  Future<void> _handleRemoveFavorite(BuildContext context, ListingModel listing) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBarUtils.buildThemedSnackBar(
+          context,
+          'Please sign in to manage favorites',
+        ),
+      );
+      return;
+    }
+
+    try {
+      final favoriteService = BFavoriteService();
+      await favoriteService.removeFavorite(
+        userId: user.uid,
+        listingId: listing.id,
+      );
+
+      // Show success message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Removed ${listing.title} from favorites',
+          ),
+        );
+
+        // Notify parent to refresh data
+        if (onFavoriteRemoved != null) {
+          onFavoriteRemoved!();
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Error removing favorite',
+          ),
+        );
+      }
+    }
   }
 }
 

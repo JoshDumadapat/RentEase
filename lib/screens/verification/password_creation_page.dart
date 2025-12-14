@@ -274,6 +274,9 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
         }
         
         // Save all user data to Firestore
+        // SECURITY: Do NOT pass password to Firestore
+        // Firebase Auth automatically handles password hashing and storage
+        // Passwords are securely stored in Firebase Auth, not in Firestore
         await _userService.createOrUpdateUser(
           uid: user.uid,
           email: widget.email,
@@ -287,7 +290,7 @@ class _PasswordCreationPageState extends State<PasswordCreationPage>
           idImageBackUrl: 'PENDING',
           faceWithIdUrl: 'PENDING',
           userType: widget.userType ?? 'student',
-          password: widget.googleData == null ? _passwordController.text : null,
+          // password parameter removed - Firebase Auth handles password hashing automatically
           profileImageUrl: photoUrl,
         );
         

@@ -9,6 +9,9 @@ import 'package:flutter/material.dart';
 class PropertyBasicInfoSection extends StatelessWidget {
   final TextEditingController titleController;
   final TextEditingController descriptionController;
+  final TextEditingController bedroomsController;
+  final TextEditingController bathroomsController;
+  final TextEditingController areaController;
   final String? propertyType;
   final Function(String?) onPropertyTypeChanged;
 
@@ -16,6 +19,9 @@ class PropertyBasicInfoSection extends StatelessWidget {
     super.key,
     required this.titleController,
     required this.descriptionController,
+    required this.bedroomsController,
+    required this.bathroomsController,
+    required this.areaController,
     required this.propertyType,
     required this.onPropertyTypeChanged,
   });
@@ -119,6 +125,95 @@ class PropertyBasicInfoSection extends StatelessWidget {
               ),
             );
           }).toList(),
+        ),
+        const SizedBox(height: 24),
+        // Property Details Row
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildLabel('Bedrooms', colorScheme),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: bedroomsController,
+                    keyboardType: TextInputType.number,
+                    decoration: _buildInputDecoration(
+                      hintText: '0',
+                      colorScheme: colorScheme,
+                      theme: theme,
+                    ),
+                    validator: (value) {
+                      if (value != null && value.isNotEmpty) {
+                        final bedrooms = int.tryParse(value);
+                        if (bedrooms == null || bedrooms < 0) {
+                          return 'Invalid number';
+                        }
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildLabel('Bathrooms', colorScheme),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: bathroomsController,
+                    keyboardType: TextInputType.number,
+                    decoration: _buildInputDecoration(
+                      hintText: '0',
+                      colorScheme: colorScheme,
+                      theme: theme,
+                    ),
+                    validator: (value) {
+                      if (value != null && value.isNotEmpty) {
+                        final bathrooms = int.tryParse(value);
+                        if (bathrooms == null || bathrooms < 0) {
+                          return 'Invalid number';
+                        }
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildLabel('Area (m²)', colorScheme),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: areaController,
+                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                    decoration: _buildInputDecoration(
+                      hintText: '0',
+                      colorScheme: colorScheme,
+                      theme: theme,
+                    ),
+                    validator: (value) {
+                      if (value != null && value.isNotEmpty) {
+                        final area = double.tryParse(value);
+                        if (area == null || area < 0) {
+                          return 'Invalid number';
+                        }
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ],
     );

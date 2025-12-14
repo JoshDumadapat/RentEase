@@ -35,10 +35,15 @@ class NotificationService extends ChangeNotifier {
 
     try {
       // Fetch from Firestore
-      await _backendService.getNotificationsByUser(user.uid);
+      final firestoreData = await _backendService.getNotificationsByUser(user.uid);
       
-      // Convert to NotificationModel (for now using mock, but can be converted from Firestore data)
-      _notifications = NotificationModel.getMockNotifications();
+      // Convert Firestore data to NotificationModel
+      _notifications = firestoreData
+          .map((data) => NotificationModel.fromFirestore(data))
+          .where((notification) => notification != null)
+          .cast<NotificationModel>()
+          .toList();
+      
       _error = null;
     } catch (e) {
       _error = 'Failed to load notifications';

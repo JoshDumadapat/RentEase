@@ -16,11 +16,15 @@ const Color _themeColorDark = Color(0xFF00B8E6);
 class PropertyListSection extends StatelessWidget {
   final List<ListingModel> properties;
   final Function(ListingModel) onPropertyTap;
+  final Function(ListingModel)? onEdit;
+  final Function(ListingModel)? onDelete;
 
   const PropertyListSection({
     super.key,
     required this.properties,
     required this.onPropertyTap,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
@@ -92,10 +96,12 @@ class PropertyListSection extends StatelessWidget {
           Transform.translate(
             offset: const Offset(0, -12),
             child: properties.isEmpty
-                ? _EmptyState(
-                    message: 'No properties yet',
-                    subtitle: 'Add your first property to get started',
-                    isDark: isDark,
+                ? Center(
+                    child: _EmptyState(
+                      message: 'No properties yet',
+                      subtitle: 'Add your first property to get started',
+                      isDark: isDark,
+                    ),
                   )
                 : ListView.separated(
                     shrinkWrap: true,
@@ -108,18 +114,8 @@ class PropertyListSection extends StatelessWidget {
                         property: property,
                         onTap: () => onPropertyTap(property),
                         showMenuButton: true,
-                        onEdit: () {
-                          // Note: Navigation to edit property page will be implemented when backend is ready
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBarUtils.buildThemedSnackBar(context, 'Edit property: ${property.title}'),
-                          );
-                        },
-                        onDelete: () {
-                          // Note: Delete confirmation and property deletion will be implemented when backend is ready
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBarUtils.buildThemedSnackBar(context, 'Delete property: ${property.title}'),
-                          );
-                        },
+                        onEdit: onEdit != null ? () => onEdit!(property) : null,
+                        onDelete: onDelete != null ? () => onDelete!(property) : null,
                       );
                     },
                   ),

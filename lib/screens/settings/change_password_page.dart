@@ -5,6 +5,13 @@ import 'package:rentease_app/utils/snackbar_utils.dart';
 const Color _themeColorDark = Color(0xFF00B8E6);
 const Color _themeColor = Color(0xFF00D1FF);
 
+enum PasswordStrength {
+  none,
+  poor,
+  moderate,
+  strong,
+}
+
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
 
@@ -12,7 +19,8 @@ class ChangePasswordPage extends StatefulWidget {
   State<ChangePasswordPage> createState() => _ChangePasswordPageState();
 }
 
-class _ChangePasswordPageState extends State<ChangePasswordPage> {
+class _ChangePasswordPageState extends State<ChangePasswordPage>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _oldPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
@@ -23,14 +31,117 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
   
+  // Password strength tracking
+  PasswordStrength _passwordStrength = PasswordStrength.none;
+  bool _passwordsMatch = false;
+  bool _passwordsDoNotMatch = false;
+  
+  // Individual requirement states
+  bool _hasMinLength = false;
+  bool _hasUppercase = false;
+  bool _hasLowercase = false;
+  bool _hasNumber = false;
+  bool _hasSpecialChar = false;
+  
+  late AnimationController _progressController;
+  late Animation<double> _progressAnimation;
+  
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize progress animation
+    _progressController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _progressAnimation = CurvedAnimation(
+      parent: _progressController,
+      curve: Curves.easeInOut,
+    );
+    _progressController.value = 0.0;
+    
+    // Listen to password changes
+    _newPasswordController.addListener(_checkPasswordStrength);
+    _confirmPasswordController.addListener(_checkPasswordMatch);
+  }
 
   @override
   void dispose() {
     _oldPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
+    _progressController.dispose();
     super.dispose();
+  }
+
+  void _checkPasswordStrength() {
+    final password = _newPasswordController.text;
+    
+    // Check individual requirements
+    final hasMinLength = password.length >= 12;
+    final hasUppercase = password.contains(RegExp(r'[A-Z]'));
+    final hasLowercase = password.contains(RegExp(r'[a-z]'));
+    final hasNumber = password.contains(RegExp(r'[0-9]'));
+    final hasSpecialChar = password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>_\-+=/\\\[\]~`]'));
+    
+    setState(() {
+      _hasMinLength = hasMinLength;
+      _hasUppercase = hasUppercase;
+      _hasLowercase = hasLowercase;
+      _hasNumber = hasNumber;
+      _hasSpecialChar = hasSpecialChar;
+      
+      // Determine password strength
+      if (password.isEmpty) {
+        _passwordStrength = PasswordStrength.none;
+      } else if (hasMinLength && hasUppercase && hasLowercase && hasNumber) {
+        _passwordStrength = PasswordStrength.strong;
+      } else if (password.length >= 8 && (hasUppercase || hasLowercase || hasNumber)) {
+        _passwordStrength = PasswordStrength.moderate;
+      } else {
+        _passwordStrength = PasswordStrength.poor;
+      }
+      
+      // Animate progress bar
+      double targetProgress = 0.0;
+      switch (_passwordStrength) {
+        case PasswordStrength.poor:
+          targetProgress = 0.33;
+          break;
+        case PasswordStrength.moderate:
+          targetProgress = 0.66;
+          break;
+        case PasswordStrength.strong:
+          targetProgress = 1.0;
+          break;
+        default:
+          targetProgress = 0.0;
+      }
+      _progressController.animateTo(targetProgress);
+    });
+    
+    // Also check match when password changes
+    _checkPasswordMatch();
+  }
+
+  void _checkPasswordMatch() {
+    setState(() {
+      final confirmPassword = _confirmPasswordController.text;
+      final password = _newPasswordController.text;
+      
+      if (confirmPassword.isEmpty) {
+        _passwordsMatch = false;
+        _passwordsDoNotMatch = false;
+      } else if (password == confirmPassword) {
+        _passwordsMatch = true;
+        _passwordsDoNotMatch = false;
+      } else {
+        _passwordsMatch = false;
+        _passwordsDoNotMatch = true;
+      }
+    });
   }
 
   // Helper method to check if user has password provider
@@ -52,8 +163,28 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     return providers.contains('google.com') && !providers.contains('password');
   }
 
+  bool _isPasswordValid() {
+    final password = _newPasswordController.text;
+    final hasMinLength = password.length >= 12;
+    final hasUppercase = password.contains(RegExp(r'[A-Z]'));
+    final hasLowercase = password.contains(RegExp(r'[a-z]'));
+    final hasNumber = password.contains(RegExp(r'[0-9]'));
+    
+    return hasMinLength && hasUppercase && hasLowercase && hasNumber && _passwordsMatch;
+  }
+
   Future<void> _changePassword() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (!_isPasswordValid()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBarUtils.buildThemedSnackBar(
+          context,
+          'Please meet all password requirements',
+        ),
+      );
       return;
     }
 
@@ -235,7 +366,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   'Enter your current password and choose a new one',
                   style: TextStyle(
                     fontSize: 14,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    color: subtextColor,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -336,12 +467,41 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     if (value == null || value.isEmpty) {
                       return 'Please enter a new password';
                     }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
+                    if (value.length < 12) {
+                      return 'Password must be at least 12 characters';
+                    }
+                    if (!value.contains(RegExp(r'[A-Z]'))) {
+                      return 'Password must contain at least one uppercase letter';
+                    }
+                    if (!value.contains(RegExp(r'[a-z]'))) {
+                      return 'Password must contain at least one lowercase letter';
+                    }
+                    if (!value.contains(RegExp(r'[0-9]'))) {
+                      return 'Password must contain at least one number';
                     }
                     return null;
                   },
                 ),
+                const SizedBox(height: 12),
+                
+                // Password strength indicator
+                if (_newPasswordController.text.isNotEmpty) ...[
+                  _PasswordStrengthIndicator(
+                    strength: _passwordStrength,
+                    progressAnimation: _progressAnimation,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 8),
+                  _PasswordRequirements(
+                    strength: _passwordStrength,
+                    hasMinLength: _hasMinLength,
+                    hasUppercase: _hasUppercase,
+                    hasLowercase: _hasLowercase,
+                    hasNumber: _hasNumber,
+                    hasSpecialChar: _hasSpecialChar,
+                    isDark: isDark,
+                  ),
+                ],
                 const SizedBox(height: 24),
 
                 // Confirm New Password
@@ -395,6 +555,40 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     return null;
                   },
                 ),
+                const SizedBox(height: 12),
+                
+                // Password match indicator
+                if (_confirmPasswordController.text.isNotEmpty) ...[
+                  if (_passwordsMatch)
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.green[600], size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Passwords match',
+                          style: TextStyle(
+                            color: Colors.green[600],
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    )
+                  else if (_passwordsDoNotMatch)
+                    Row(
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red[600], size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Passwords do not match',
+                          style: TextStyle(
+                            color: Colors.red[600],
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
                 const SizedBox(height: 32),
 
                 // Change Password Button
@@ -428,6 +622,211 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PasswordStrengthIndicator extends StatelessWidget {
+  final PasswordStrength strength;
+  final Animation<double> progressAnimation;
+  final bool isDark;
+
+  const _PasswordStrengthIndicator({
+    required this.strength,
+    required this.progressAnimation,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    String label;
+
+    switch (strength) {
+      case PasswordStrength.poor:
+        color = Colors.red;
+        label = 'Poor';
+        break;
+      case PasswordStrength.moderate:
+        color = Colors.orange;
+        label = 'Moderate';
+        break;
+      case PasswordStrength.strong:
+        color = Colors.green;
+        label = 'Good';
+        break;
+      default:
+        color = Colors.grey;
+        label = '';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (strength != PasswordStrength.none)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        if (strength != PasswordStrength.none) const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: AnimatedBuilder(
+            animation: progressAnimation,
+            builder: (context, child) {
+              return LinearProgressIndicator(
+                value: progressAnimation.value,
+                backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  strength != PasswordStrength.none ? color : Colors.grey,
+                ),
+                minHeight: 6,
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PasswordRequirements extends StatelessWidget {
+  final PasswordStrength strength;
+  final bool hasMinLength;
+  final bool hasUppercase;
+  final bool hasLowercase;
+  final bool hasNumber;
+  final bool hasSpecialChar;
+  final bool isDark;
+
+  const _PasswordRequirements({
+    required this.strength,
+    required this.hasMinLength,
+    required this.hasUppercase,
+    required this.hasLowercase,
+    required this.hasNumber,
+    required this.hasSpecialChar,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDark ? Colors.grey[300] : Colors.grey[700];
+    final successColor = Colors.green[600]!;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (strength == PasswordStrength.strong) ...[
+          Text(
+            'Great job! This password is good and secure.',
+            style: TextStyle(
+              fontSize: 12,
+              color: successColor,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ] else if (strength == PasswordStrength.moderate) ...[
+          Text(
+            'Getting stronger! Add more requirements for better protection.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.orange[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        Text(
+          'Password requirements:',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: textColor,
+          ),
+        ),
+        const SizedBox(height: 4),
+        _RequirementItem(
+          text: 'At least 12 characters',
+          isChecked: hasMinLength,
+          isDark: isDark,
+        ),
+        _RequirementItem(
+          text: 'One uppercase letter',
+          isChecked: hasUppercase,
+          isDark: isDark,
+        ),
+        _RequirementItem(
+          text: 'One lowercase letter',
+          isChecked: hasLowercase,
+          isDark: isDark,
+        ),
+        _RequirementItem(
+          text: 'One number',
+          isChecked: hasNumber,
+          isDark: isDark,
+        ),
+        _RequirementItem(
+          text: 'One special character (optional)',
+          isChecked: hasSpecialChar,
+          isDark: isDark,
+        ),
+      ],
+    );
+  }
+}
+
+class _RequirementItem extends StatelessWidget {
+  final String text;
+  final bool isChecked;
+  final bool isDark;
+
+  const _RequirementItem({
+    required this.text,
+    this.isChecked = false,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDark ? Colors.grey[400] : Colors.grey[600];
+    final successColor = Colors.green[600]!;
+    
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, top: 2),
+      child: Row(
+        children: [
+          if (isChecked)
+            Icon(Icons.check_circle, size: 16, color: successColor)
+          else
+            Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isDark ? Colors.grey[700] : Colors.grey[300],
+              ),
+            ),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              color: isChecked ? successColor : textColor,
+              fontWeight: isChecked ? FontWeight.w500 : FontWeight.normal,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -8,6 +8,10 @@ import 'package:rentease_app/screens/settings/privacy_policy_page.dart';
 import 'package:rentease_app/screens/settings/terms_of_service_page.dart';
 import 'package:rentease_app/dialogs/confirmation_dialog.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
+import 'package:rentease_app/widgets/subscription_promotion_card.dart';
+import 'package:rentease_app/screens/subscription/subscription_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Settings Page
 /// 
@@ -21,30 +25,75 @@ import 'package:rentease_app/utils/snackbar_utils.dart';
 /// - Modern, clean design
 /// - Light/Dark mode support
 /// - Consistent with app design language
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
-  Future<void> _handleLogout(BuildContext context) async {
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  bool _isVerified = false;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkVerificationStatus();
+  }
+
+  Future<void> _checkVerificationStatus() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        
+        if (mounted) {
+          setState(() {
+            _isVerified = userDoc.data()?['isVerified'] ?? false;
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleLogout() async {
     final confirmed = await showLogoutDialog(context);
 
     if (!confirmed) return;
 
     try {
       await AuthService().signOut();
-      if (!context.mounted) return;
+      if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const SignInPage()),
         (route) => false,
       );
     } catch (e) {
-      if (!context.mounted) return;
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBarUtils.buildThemedSnackBar(context, 'Logout failed: $e'),
       );
     }
   }
 
-  void _showUserManual(BuildContext context) {
+  void _showUserManual() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final backgroundColor = isDark ? Colors.grey[900] : Colors.white;
@@ -370,6 +419,28 @@ class SettingsPage extends StatelessWidget {
               },
             ),
             
+            // Subscription Promotion Card (only show if not verified)
+            AnimatedSize(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              child: (!_isLoading && !_isVerified)
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: SubscriptionPromotionCard(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SubscriptionPage(),
+                            ),
+                          );
+                        },
+                        showDismissButton: false,
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            
             const SizedBox(height: 24),
             
             // App Settings
@@ -403,7 +474,7 @@ class SettingsPage extends StatelessWidget {
                 _SettingsItem(
                   icon: Icons.book_outlined,
                   title: 'User Manual',
-                  onTap: () => _showUserManual(context),
+                  onTap: () => _showUserManual(),
                   isDark: isDark,
                 ),
                 _SettingsItem(
@@ -453,7 +524,7 @@ class SettingsPage extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () => _handleLogout(context),
+                onPressed: () => _handleLogout(),
                 icon: Icon(
                   Icons.logout,
                   size: 20,

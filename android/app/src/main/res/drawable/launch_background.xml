@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Background color (fallback) -->
+    <item>
+        <color android:color="@android:color/white"/>
+    </item>
+    <!-- Background image -->
     <item>
         <bitmap android:gravity="fill" android:src="@drawable/background"/>
     </item>
+    <!-- Splash image (center) - will use density-specific version if base doesn't exist -->
     <item>
         <bitmap android:gravity="center" android:src="@drawable/splash"/>
     </item>

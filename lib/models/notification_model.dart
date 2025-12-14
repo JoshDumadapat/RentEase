@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 /// Notification Model
 /// 
 /// Represents a notification for social media interactions.
-/// Supports multiple types: Reaction, Friend Request, Comment, and Mention.
+/// Supports multiple types: Reaction, Friend Request, Comment, Mention, and Review.
 class NotificationModel {
   final String id;
   final NotificationType type;
@@ -64,6 +67,73 @@ class NotificationModel {
       read: read ?? this.read,
       requestRemoved: requestRemoved ?? this.requestRemoved,
     );
+  }
+
+  /// Create NotificationModel from Firestore data
+  static NotificationModel? fromFirestore(Map<String, dynamic> data) {
+    try {
+      final id = data['id'] as String? ?? '';
+      if (id.isEmpty) return null;
+
+      // Parse notification type
+      final typeString = data['type'] as String? ?? '';
+      NotificationType type;
+      switch (typeString) {
+        case 'reaction':
+          type = NotificationType.reaction;
+          break;
+        case 'friendRequest':
+          type = NotificationType.friendRequest;
+          break;
+        case 'comment':
+          type = NotificationType.comment;
+          break;
+        case 'mention':
+          type = NotificationType.mention;
+          break;
+        case 'review':
+          type = NotificationType.review;
+          break;
+        default:
+          type = NotificationType.comment; // Default fallback
+      }
+
+      // Parse timestamp
+      DateTime timestamp;
+      if (data['createdAt'] != null) {
+        if (data['createdAt'] is Timestamp) {
+          timestamp = (data['createdAt'] as Timestamp).toDate();
+        } else if (data['createdAt'] is DateTime) {
+          timestamp = data['createdAt'] as DateTime;
+        } else {
+          // Fallback to current time if parsing fails
+          timestamp = DateTime.now();
+        }
+      } else {
+        timestamp = DateTime.now();
+      }
+
+      return NotificationModel(
+        id: id,
+        type: type,
+        actorName: data['actorName'] as String? ?? 'Unknown',
+        actorAvatarUrl: data['actorAvatarUrl'] as String?,
+        reactionEmoji: data['reactionEmoji'] as String?,
+        commentText: data['commentText'] as String?,
+        postTitle: data['postTitle'] as String?,
+        postId: data['postId'] as String?,
+        otherActors: data['otherActors'] != null
+            ? List<String>.from(data['otherActors'] as List)
+            : null,
+        reactionCount: data['reactionCount'] as int?,
+        timestamp: timestamp,
+        read: data['read'] as bool? ?? false,
+        requestRemoved: data['requestRemoved'] as bool? ?? false,
+      );
+    } catch (e) {
+      debugPrint('❌ [NotificationModel] Error parsing from Firestore: $e');
+      return null;
+    }
   }
 
   /// Get mock notifications using property-renting app data
@@ -154,5 +224,6 @@ enum NotificationType {
   friendRequest, // Sent a friend request
   comment, // Commented on a post
   mention, // Mentioned you in a comment
+  review, // Reviewed a listing
 }
 

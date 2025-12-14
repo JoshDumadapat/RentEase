@@ -5,6 +5,9 @@ import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
 import 'package:rentease_app/widgets/filter_sheet.dart';
 import 'package:rentease_app/screens/home/widgets/threedots.dart';
 import 'package:rentease_app/screens/search/widgets/search_skeleton.dart';
+import 'package:rentease_app/backend/BListingService.dart';
+import 'package:rentease_app/widgets/subscription_promotion_card.dart';
+import 'package:rentease_app/screens/subscription/subscription_page.dart';
 
 // Theme color constants
 const Color _themeColor = Color(0xFF00D1FF);
@@ -22,6 +25,7 @@ class _SearchPageState extends State<SearchPage> {
   final TextEditingController _searchController = TextEditingController();
   List<ListingModel> _allListings = [];
   final FilterModel _filterModel = FilterModel();
+  final BListingService _listingService = BListingService();
   String? _selectedCategory;
   bool _isLoading = true;
   
@@ -41,39 +45,151 @@ class _SearchPageState extends State<SearchPage> {
     _loadSearchData();
   }
 
-  /// Load search data (simulate network delay for skeleton loading)
+  /// Load search data from Firestore
   Future<void> _loadSearchData() async {
-    // Simulate network delay
-    await Future.delayed(const Duration(milliseconds: 600));
     if (mounted) {
       setState(() {
-        _allListings = ListingModel.getMockListings();
-        _cachedFilteredListings = _allListings;
-        _isLoading = false;
+        _isLoading = true;
       });
+    }
+    
+    try {
+      final listingsData = await _listingService.getAllListings();
+      final listings = listingsData.map((data) => ListingModel.fromMap(data)).toList();
+      
+      if (mounted) {
+        setState(() {
+          _allListings = listings;
+          _cachedFilteredListings = listings;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [SearchPage] Error loading listings: $e');
+      if (mounted) {
+        setState(() {
+          _allListings = [];
+          _cachedFilteredListings = [];
+          _isLoading = false;
+        });
+      }
+    }
+  }
+  
+  /// Perform search with filters
+  Future<void> _performSearch() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+    
+    try {
+      // Parse filter values
+      int? bedroomsFilter;
+      if (_filterModel.selectedBedrooms != null) {
+        if (_filterModel.selectedBedrooms == 'Studio') {
+          bedroomsFilter = 0;
+        } else if (_filterModel.selectedBedrooms == '4+') {
+          bedroomsFilter = 4; // Will filter >= 4 in memory
+        } else {
+          bedroomsFilter = int.tryParse(_filterModel.selectedBedrooms!);
+        }
+      }
+      
+      int? bathroomsFilter;
+      if (_filterModel.selectedBathrooms != null) {
+        if (_filterModel.selectedBathrooms == '4+') {
+          bathroomsFilter = 4; // Will filter >= 4 in memory
+        } else {
+          bathroomsFilter = int.tryParse(_filterModel.selectedBathrooms!);
+        }
+      }
+      
+      // Map category filter to propertyType for fuzzy matching
+      // Since Firestore categories are like "House Rentals", "Apartments", etc.
+      // and UI shows "House", "Office", "Apartment", we use propertyType for matching
+      String? propertyTypeFilter = _filterModel.selectedPropertyType;
+      if (_selectedCategory != null && propertyTypeFilter == null) {
+        // Use category button selection as propertyType filter
+        final categoryLower = _selectedCategory!.toLowerCase();
+        if (categoryLower.contains('house')) {
+          propertyTypeFilter = 'house';
+        } else if (categoryLower.contains('apartment')) {
+          propertyTypeFilter = 'apartment';
+        } else if (categoryLower.contains('condo')) {
+          propertyTypeFilter = 'condo';
+        }
+      }
+      
+      debugPrint('🔍 [SearchPage] Performing search with filters:');
+      debugPrint('   - Search query: "${_searchController.text.trim()}"');
+      debugPrint('   - Category: $_selectedCategory');
+      debugPrint('   - Property Type: $propertyTypeFilter');
+      debugPrint('   - Min Price: ${_filterModel.currentMinPrice}');
+      debugPrint('   - Max Price: ${_filterModel.currentMaxPrice}');
+      debugPrint('   - Bedrooms: $bedroomsFilter');
+      debugPrint('   - Bathrooms: $bathroomsFilter');
+      
+      final listingsData = await _listingService.searchListingsWithFilters(
+        searchQuery: _searchController.text.trim().isEmpty ? null : _searchController.text.trim(),
+        category: null, // Don't use category for exact match, use propertyType instead
+        minPrice: _filterModel.currentMinPrice > 0 ? _filterModel.currentMinPrice : null,
+        maxPrice: _filterModel.currentMaxPrice < 50000 ? _filterModel.currentMaxPrice : null,
+        bedrooms: bedroomsFilter,
+        bathrooms: bathroomsFilter,
+        propertyType: propertyTypeFilter ?? _filterModel.selectedPropertyType,
+      );
+      
+      debugPrint('📊 [SearchPage] Received ${listingsData.length} listings from service');
+      
+      var listings = listingsData.map((data) => ListingModel.fromMap(data)).toList();
+      
+      // Apply additional filters that can't be done in Firestore
+      if (bedroomsFilter == 4) {
+        listings = listings.where((l) => l.bedrooms >= 4).toList();
+      }
+      
+      if (bathroomsFilter == 4) {
+        listings = listings.where((l) => l.bathrooms >= 4).toList();
+      }
+      
+      debugPrint('✅ [SearchPage] Final filtered results: ${listings.length} listings');
+      
+      if (mounted) {
+        setState(() {
+          _allListings = listings;
+          _cachedFilteredListings = listings;
+          _isLoading = false;
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ [SearchPage] Error searching listings: $e');
+      debugPrint('📚 Stack trace: $stackTrace');
+      if (mounted) {
+        setState(() {
+          _allListings = [];
+          _cachedFilteredListings = [];
+          _isLoading = false;
+        });
+      }
     }
   }
 
   /// Refresh search data
   Future<void> _refreshSearchData() async {
-    setState(() {
-      _isLoading = true;
-    });
-    await _loadSearchData();
+    debugPrint('🔄 [SearchPage] Refreshing search data...');
+    // Always perform search when refreshing to respect current filters
+    await _performSearch();
   }
 
   void _onFilterChanged() {
     // Invalidate cache when filters change
     _cachedFilteredListings = null;
-    // CRITICAL FIX: Defer setState() until after the current build frame completes.
-    // This prevents "setState() called during build" errors when FilterSheet's
-    // initState() calls resetTemporaryFilters() which triggers notifyListeners()
-    // synchronously during the modal bottom sheet's build phase.
-    // Using addPostFrameCallback ensures the state update happens after the
-    // widget tree is fully built, making it safe to call setState().
+    // Perform search when filters change
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        setState(() {});
+        _performSearch();
       }
     });
   }
@@ -87,107 +203,8 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   List<ListingModel> get _filteredListings {
-    // Check if cache is still valid
-    final currentMinPrice = _filterModel.minPrice;
-    final currentMaxPrice = _filterModel.maxPrice;
-    final currentBedrooms = _filterModel.selectedBedrooms;
-    final currentBathrooms = _filterModel.selectedBathrooms;
-    final currentPropertyType = _filterModel.selectedPropertyType;
-    
-    if (_cachedFilteredListings != null &&
-        _lastSelectedCategory == _selectedCategory &&
-        _lastMinPrice == currentMinPrice &&
-        _lastMaxPrice == currentMaxPrice &&
-        _lastBedrooms == currentBedrooms &&
-        _lastBathrooms == currentBathrooms &&
-        _lastPropertyType == currentPropertyType) {
-      return _cachedFilteredListings!;
-    }
-
-    // Cache current filter values
-    _lastSelectedCategory = _selectedCategory;
-    _lastMinPrice = currentMinPrice;
-    _lastMaxPrice = currentMaxPrice;
-    _lastBedrooms = currentBedrooms;
-    _lastBathrooms = currentBathrooms;
-    _lastPropertyType = currentPropertyType;
-
-    // Optimized: Single pass filtering instead of multiple where().toList() calls
-    final filtered = <ListingModel>[];
-    
-    for (final listing in _allListings) {
-      // Category filter
-      if (_selectedCategory != null) {
-        final selected = _selectedCategory!.toLowerCase();
-        final listingCategory = listing.category.toLowerCase();
-        bool matches = false;
-        if (selected == 'house') {
-          matches = listingCategory.contains('house');
-        } else if (selected == 'apartment') {
-          matches = listingCategory.contains('apartment');
-        } else if (selected == 'office') {
-          matches = true; // Office might not exist in listings
-        } else {
-          matches = listingCategory.contains(selected);
-        }
-        if (!matches) continue;
-      }
-
-      // Price filter
-      if (listing.price < currentMinPrice || listing.price > currentMaxPrice) {
-        continue;
-      }
-
-      // Bedrooms filter
-      if (currentBedrooms != null) {
-        bool matches = false;
-        if (currentBedrooms == 'Studio') {
-          matches = listing.bedrooms == 0 || listing.bedrooms == 1;
-        } else if (currentBedrooms == '4+') {
-          matches = listing.bedrooms >= 4;
-        } else {
-          final count = int.tryParse(currentBedrooms);
-          matches = count != null && listing.bedrooms == count;
-        }
-        if (!matches) continue;
-      }
-
-      // Bathrooms filter
-      if (currentBathrooms != null) {
-        bool matches = false;
-        if (currentBathrooms == '4+') {
-          matches = listing.bathrooms >= 4;
-        } else {
-          final count = int.tryParse(currentBathrooms);
-          matches = count != null && listing.bathrooms == count;
-        }
-        if (!matches) continue;
-      }
-
-      // Property type filter
-      if (currentPropertyType != null) {
-        final typeFilter = currentPropertyType.toLowerCase();
-        final category = listing.category.toLowerCase();
-        bool matches = false;
-        if (typeFilter == 'apartment') {
-          matches = category.contains('apartment');
-        } else if (typeFilter == 'house') {
-          matches = category.contains('house');
-        } else if (typeFilter == 'condo') {
-          matches = category.contains('condo');
-        } else if (typeFilter == 'room') {
-          matches = category.contains('room');
-        } else if (typeFilter == 'villa') {
-          matches = category.contains('villa');
-        }
-        if (!matches) continue;
-      }
-
-      filtered.add(listing);
-    }
-
-    _cachedFilteredListings = filtered;
-    return filtered;
+    // Return cached filtered listings (filtering is done via Firestore queries)
+    return _cachedFilteredListings ?? _allListings;
   }
 
   @override
@@ -214,6 +231,26 @@ class _SearchPageState extends State<SearchPage> {
               _buildSearchBar(),
               const SizedBox(height: 12),
               _buildCategoryFilters(),
+              const SizedBox(height: 16),
+              // Subscription Promotion Card with smooth animation
+              AnimatedSize(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: SubscriptionPromotionCard(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SubscriptionPage(),
+                        ),
+                      );
+                    },
+                    showDismissButton: true,
+                  ),
+                ),
+              ),
               const SizedBox(height: 24),
               _buildFeaturedListings(),
               const SizedBox(height: 24),
@@ -348,6 +385,20 @@ class _SearchPageState extends State<SearchPage> {
               ),
               onChanged: (value) {
                 setState(() {});
+                // Perform search as user types (debounced in production)
+                if (value.isEmpty) {
+                  _loadSearchData();
+                } else {
+                  // Debounce search - wait 500ms after user stops typing
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    if (mounted && _searchController.text == value) {
+                      _performSearch();
+                    }
+                  });
+                }
+              },
+              onSubmitted: (value) {
+                _performSearch();
               },
             ),
           ),
@@ -389,7 +440,7 @@ class _SearchPageState extends State<SearchPage> {
 
   Widget _buildCategoryFilters() {
     // Simplified category list matching the reference design
-    final categoryFilters = ['House', 'Office', 'Apartment'];
+    final categoryFilters = ['House', 'Condo', 'Apartment'];
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -402,11 +453,14 @@ class _SearchPageState extends State<SearchPage> {
             padding: EdgeInsets.only(
               right: category != categoryFilters.last ? 12 : 0,
             ),
-            child: GestureDetector(
+              child: GestureDetector(
               onTap: () {
                 setState(() {
                   _selectedCategory = isSelected ? null : category;
-                  _cachedFilteredListings = null; // Invalidate cache
+                  _cachedFilteredListings = null;
+                });
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _performSearch();
                 });
               },
               child: Container(
@@ -448,10 +502,65 @@ class _SearchPageState extends State<SearchPage> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[400] : Colors.grey[600];
     final filteredListings = _filteredListings;
 
+    if (_isLoading) {
+      return Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Center(
+          child: CircularProgressIndicator(
+            color: _themeColorDark,
+          ),
+        ),
+      );
+    }
+
     if (filteredListings.isEmpty) {
-      return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(Icons.search_off, size: 64, color: subtextColor),
+              const SizedBox(height: 16),
+              Text(
+                'No listings found',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Try adjusting your filters or search terms',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: subtextColor,
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () {
+                  _searchController.clear();
+                  _selectedCategory = null;
+                  _filterModel.clearFilters();
+                  _performSearch();
+                },
+                icon: const Icon(Icons.clear_all),
+                label: const Text('Clear all filters'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _themeColorDark,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return Column(
@@ -545,6 +654,11 @@ class _SearchPageState extends State<SearchPage> {
           child: Builder(
             builder: (context) {
               final filteredListings = _filteredListings;
+              
+              if (filteredListings.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              
               final nearbyListings = filteredListings.length > 3
                   ? filteredListings.sublist(0, 3)
                   : filteredListings;
@@ -580,6 +694,65 @@ class _SearchPageState extends State<SearchPage> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// Helper function to build listing images (supports both network and asset images)
+Widget _buildListingImage(String imagePath, Color placeholderColor, Color iconColor, {double? width, double? height}) {
+  final isNetworkImage = imagePath.startsWith('http://') || imagePath.startsWith('https://');
+  
+  if (isNetworkImage) {
+    return Image.network(
+      imagePath,
+      fit: BoxFit.cover,
+      width: width,
+      height: height,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Container(
+          color: placeholderColor,
+          child: Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                  : null,
+              strokeWidth: 2,
+            ),
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: placeholderColor,
+          child: Center(
+            child: Icon(
+              Icons.image_outlined,
+              size: width != null ? 32 : 48,
+              color: iconColor,
+            ),
+          ),
+        );
+      },
+    );
+  } else {
+    return Image.asset(
+      imagePath,
+      fit: BoxFit.cover,
+      width: width,
+      height: height,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: placeholderColor,
+          child: Center(
+            child: Icon(
+              Icons.image_outlined,
+              size: width != null ? 32 : 48,
+              color: iconColor,
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -645,24 +818,7 @@ class _FeaturedListingCard extends StatelessWidget {
                   AspectRatio(
                     aspectRatio: 16 / 9,
                     child: listing.imagePaths.isNotEmpty
-                        ? Image.asset(
-                            listing.imagePaths[0],
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: placeholderColor,
-                                child: Center(
-                                  child: Icon(
-                                    Icons.image_outlined,
-                                    size: 48,
-                                    color: iconColor,
-                                  ),
-                                ),
-                              );
-                            },
-                          )
+                        ? _buildListingImage(listing.imagePaths[0], placeholderColor, iconColor)
                         : Container(
                             color: placeholderColor,
                             child: Center(
@@ -837,24 +993,7 @@ class _NearbyListingCard extends StatelessWidget {
                     child: Container(
                       color: placeholderColor,
                       child: listing.imagePaths.isNotEmpty
-                          ? Image.asset(
-                              listing.imagePaths[0],
-                              fit: BoxFit.cover,
-                              width: 100,
-                              height: 130,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: placeholderColor,
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.image_outlined,
-                                      size: 32,
-                                      color: iconColor,
-                                    ),
-                                  ),
-                                );
-                              },
-                            )
+                          ? _buildListingImage(listing.imagePaths[0], placeholderColor, iconColor, width: 100, height: 130)
                           : Container(
                               color: placeholderColor,
                               child: Center(

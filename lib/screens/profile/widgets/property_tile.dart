@@ -72,26 +72,19 @@ class PropertyTile extends StatelessWidget {
               // Column 1: Thumbnail
               Align(
                 alignment: Alignment.topLeft,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: SizedBox(
-                    width: 100,
-                    height: 120,
-                    child: Container(
-                      color: isDark ? Colors.grey[700] : Colors.grey[200],
-                      child: property.imagePaths.isNotEmpty
-                          ? Image.asset(
-                              property.imagePaths[0],
-                              fit: BoxFit.cover,
-                              width: 100,
-                              height: 120,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  _buildPlaceholder(isDark),
-                            )
-                          : _buildPlaceholder(isDark),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      width: 100,
+                      height: 120,
+                      child: Container(
+                        color: isDark ? Colors.grey[700] : Colors.grey[200],
+                        child: property.imagePaths.isNotEmpty
+                            ? _buildPropertyImage(property.imagePaths[0], isDark)
+                            : _buildPlaceholder(isDark),
+                      ),
                     ),
                   ),
-                ),
               ),
               
               const SizedBox(width: 12),
@@ -265,11 +258,49 @@ class PropertyTile extends StatelessWidget {
     );
   }
 
+  Widget _buildPropertyImage(String imagePath, bool isDark) {
+    final isNetworkImage = imagePath.startsWith('http://') || 
+                           imagePath.startsWith('https://');
+    
+    if (isNetworkImage) {
+      return Image.network(
+        imagePath,
+        fit: BoxFit.cover,
+        width: 100,
+        height: 120,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                  : null,
+              strokeWidth: 2,
+              color: _themeColorDark,
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) => _buildPlaceholder(isDark),
+      );
+    } else {
+      return Image.asset(
+        imagePath,
+        fit: BoxFit.cover,
+        width: 100,
+        height: 120,
+        errorBuilder: (context, error, stackTrace) => _buildPlaceholder(isDark),
+      );
+    }
+  }
+
   Widget _buildPlaceholder(bool isDark) {
-    return Icon(
-      Icons.image_outlined,
-      size: 32,
-      color: isDark ? Colors.grey[600] : Colors.grey[400],
+    return Center(
+      child: Icon(
+        Icons.image_outlined,
+        size: 32,
+        color: isDark ? Colors.grey[600] : Colors.grey[400],
+      ),
     );
   }
 }

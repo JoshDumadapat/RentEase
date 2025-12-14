@@ -1,20 +1,103 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+/// Text input formatter for Philippine phone numbers
+/// Format: 09XX XXX XXXX (11 digits total)
+/// Example: 0977 838 8347
+class PhilippinePhoneFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Remove all non-digit characters
+    String digitsOnly = newValue.text.replaceAll(RegExp(r'[^\d]'), '');
+    
+    // Limit to 11 digits
+    if (digitsOnly.length > 11) {
+      digitsOnly = digitsOnly.substring(0, 11);
+    }
+    
+    // Format as 09XX XXX XXXX (11 digits: 09XX + XXX + XXXX)
+    String formatted = '';
+    if (digitsOnly.isEmpty) {
+      formatted = '';
+    } else if (digitsOnly.length <= 4) {
+      // 09XX (no space after 09)
+      formatted = digitsOnly;
+    } else if (digitsOnly.length <= 7) {
+      // 09XX XXX
+      formatted = '${digitsOnly.substring(0, 4)} ${digitsOnly.substring(4)}';
+    } else {
+      // 09XX XXX XXXX
+      formatted = '${digitsOnly.substring(0, 4)} ${digitsOnly.substring(4, 7)} ${digitsOnly.substring(7)}';
+    }
+    
+    // Calculate new cursor position
+    int cursorPosition = formatted.length;
+    if (oldValue.text.length < newValue.text.length) {
+      // User is typing forward
+      if (formatted.length > oldValue.text.length) {
+        // Check if we added a space
+        if (formatted.length == oldValue.text.length + 1 && 
+            formatted[formatted.length - 1] == ' ') {
+          cursorPosition = formatted.length;
+        } else {
+          cursorPosition = newValue.selection.baseOffset + (formatted.length - oldValue.text.length);
+        }
+      }
+    }
+    
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: cursorPosition.clamp(0, formatted.length)),
+    );
+  }
+  
+  /// Get digits only from formatted phone number
+  static String getDigitsOnly(String formattedPhone) {
+    return formattedPhone.replaceAll(RegExp(r'[^\d]'), '');
+  }
+  
+  /// Format a phone number string to 09XX XXX XXXX format
+  /// Example: 0977 838 8347
+  static String formatPhone(String phone) {
+    String digitsOnly = phone.replaceAll(RegExp(r'[^\d]'), '');
+    if (digitsOnly.length > 11) {
+      digitsOnly = digitsOnly.substring(0, 11);
+    }
+    
+    if (digitsOnly.isEmpty) {
+      return '';
+    } else if (digitsOnly.length <= 4) {
+      // 09XX (no space after 09)
+      return digitsOnly;
+    } else if (digitsOnly.length <= 7) {
+      // 09XX XXX
+      return '${digitsOnly.substring(0, 4)} ${digitsOnly.substring(4)}';
+    } else {
+      // 09XX XXX XXXX
+      return '${digitsOnly.substring(0, 4)} ${digitsOnly.substring(4, 7)} ${digitsOnly.substring(7)}';
+    }
+  }
+}
+
 /// Section for contact information
 /// 
 /// Includes:
-/// - Owner name (read-only, auto-filled)
-/// - Phone number (editable)
+/// - Owner name (read-only, auto-filled from Firestore)
+/// - Phone number (editable, pre-filled from Firestore)
 /// - Messenger/WhatsApp (optional)
 class ContactSection extends StatelessWidget {
   final TextEditingController phoneController;
   final TextEditingController messengerController;
+  final String? ownerName; // Fetched from Firestore user data
 
   const ContactSection({
     super.key,
     required this.phoneController,
     required this.messengerController,
+    this.ownerName,
   });
 
   @override
@@ -23,8 +106,8 @@ class ContactSection extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
 
-    // Note: Owner name should be retrieved from user profile/auth when backend is ready
-    const ownerName = 'John Doe'; // This should come from user profile
+    // Owner name from Firestore user data
+    final displayOwnerName = ownerName ?? 'Loading...';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,7 +127,7 @@ class ContactSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
-        // Owner Name (Read-only)
+        // Owner Name (Read-only, from Firestore)
         _buildLabel('Owner Name', colorScheme),
         const SizedBox(height: 8),
         Container(
@@ -63,7 +146,7 @@ class ContactSection extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  ownerName,
+                  displayOwnerName,
                   style: TextStyle(
                     fontSize: 16,
                     color: colorScheme.onSurfaceVariant,
@@ -86,10 +169,11 @@ class ContactSection extends StatelessWidget {
           controller: phoneController,
           keyboardType: TextInputType.phone,
           inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
+            PhilippinePhoneFormatter(),
+            LengthLimitingTextInputFormatter(14), // 09XX XXX XXXX = 14 characters with spaces (e.g., "0977 838 8347")
           ],
           decoration: _buildInputDecoration(
-            hintText: '09XX XXX XXXX',
+            hintText: '0977 838 8347',
             prefixIcon: Icons.phone_outlined,
             colorScheme: colorScheme,
             theme: theme,
@@ -98,9 +182,20 @@ class ContactSection extends StatelessWidget {
             if (value == null || value.trim().isEmpty) {
               return 'Phone number is required';
             }
-            if (value.length < 10) {
-              return 'Please enter a valid phone number';
+            
+            // Get digits only for validation
+            final digitsOnly = PhilippinePhoneFormatter.getDigitsOnly(value);
+            
+            // Must be exactly 11 digits
+            if (digitsOnly.length != 11) {
+              return 'Phone number must be 11 digits';
             }
+            
+            // Must start with 09
+            if (!digitsOnly.startsWith('09')) {
+              return 'Phone number must start with 09';
+            }
+            
             return null;
           },
         ),

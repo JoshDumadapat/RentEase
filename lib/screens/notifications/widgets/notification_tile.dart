@@ -180,6 +180,12 @@ class NotificationTile extends StatelessWidget {
             BlendMode.srcIn,
           ),
         );
+      case NotificationType.review:
+        return Icon(
+          Icons.star,
+          size: 14,
+          color: isDark ? Colors.amber[300] : Colors.amber[600],
+        );
     }
   }
 
@@ -230,6 +236,15 @@ class NotificationTile extends StatelessWidget {
         break;
       case NotificationType.mention:
         text = '${notification.actorName} mentioned you in a post';
+        if (notification.commentText != null &&
+            notification.commentText!.isNotEmpty) {
+          text += ': "${notification.commentText}"';
+        } else if (notification.postTitle != null) {
+          text += ': "${notification.postTitle}"';
+        }
+        break;
+      case NotificationType.review:
+        text = '${notification.actorName} reviewed your listing';
         if (notification.commentText != null &&
             notification.commentText!.isNotEmpty) {
           text += ': "${notification.commentText}"';

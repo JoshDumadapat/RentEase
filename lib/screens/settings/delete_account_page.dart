@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rentease_app/backend/BUserService.dart';
@@ -105,29 +106,50 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
 
       // Re-authenticate user (only if they have password provider)
       if (_hasPasswordProvider()) {
-      final credential = EmailAuthProvider.credential(
-        email: user.email!,
-        password: _passwordController.text,
-      );
-      
-      await user.reauthenticateWithCredential(credential);
+        try {
+          final credential = EmailAuthProvider.credential(
+            email: user.email!,
+            password: _passwordController.text,
+          );
+          
+          await user.reauthenticateWithCredential(credential);
+          debugPrint('✅ [DeleteAccount] User re-authenticated successfully');
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBarUtils.buildThemedSnackBar(
+              context,
+              'Re-authentication failed. Please verify your password.',
+            ),
+          );
+          setState(() => _isLoading = false);
+          return;
+        }
       }
       // For Google-only users, skip password re-auth (they're already authenticated)
 
-      // Save deletion reason to Firestore (before deleting user data)
-      await _firestore.collection('deleted_accounts').add({
-        'userId': user.uid,
-        'email': user.email,
-        'reason': _selectedReason ?? 'Other',
-        'customReason': _reasonController.text.trim().isNotEmpty ? _reasonController.text.trim() : null,
-        'deletedAt': FieldValue.serverTimestamp(),
-      });
+      // Save deletion reason to Firestore (before deleting user data) - non-blocking
+      // If this fails, deletion still proceeds
+      try {
+        await _firestore.collection('deleted_accounts').add({
+          'userId': user.uid,
+          'email': user.email,
+          'reason': _selectedReason ?? 'Other',
+          'customReason': _reasonController.text.trim().isNotEmpty ? _reasonController.text.trim() : null,
+          'deletedAt': FieldValue.serverTimestamp(),
+        });
+        debugPrint('✅ [DeleteAccount] Deletion reason saved to analytics');
+      } catch (e) {
+        debugPrint('⚠️ [DeleteAccount] Failed to save deletion reason to analytics (non-critical): $e');
+        // Continue with deletion even if analytics save fails
+      }
 
-      // Delete user data from Firestore using BUserService
-      await _userService.deleteUser(user.uid);
+      // Delete all user data from Firestore (comprehensive cascade delete)
+      await _userService.deleteAllUserData(user.uid);
       
-      // Delete user authentication
+      // Delete user authentication (must be last, after all data is deleted)
       await user.delete();
+      debugPrint('✅ [DeleteAccount] Firebase Auth account deleted');
 
       if (!mounted) return;
 
@@ -149,17 +171,31 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
       if (e.code == 'wrong-password') {
         message = 'Password is incorrect';
       } else if (e.code == 'requires-recent-login') {
-        message = 'Please log out and log back in before deleting account';
+        message = 'Security verification expired. Please verify your credentials again.';
+        // Reset confirmation so user can try again
+        setState(() {
+          _confirmDelete = false;
+          _passwordController.clear();
+        });
+      } else if (e.code == 'user-not-found') {
+        message = 'User account not found';
+      } else {
+        message = 'Error: ${e.message ?? e.code}';
       }
       
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBarUtils.buildThemedSnackBar(context, message),
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ [DeleteAccount] Error: $e');
+      debugPrint('❌ [DeleteAccount] Stack trace: $stackTrace');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBarUtils.buildThemedSnackBar(context, 'Error: ${e.toString()}'),
+        SnackBarUtils.buildThemedSnackBar(
+          context,
+          'Error deleting account: ${e.toString()}',
+        ),
       );
     } finally {
       if (mounted) {

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/screens/add_property/add_property_page.dart';
@@ -73,14 +74,20 @@ void showPostTypeSelectionModal(BuildContext context) {
                     Color(0xFF00D1FF),
                     Color(0xFF00B8E6),
                   ],
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(context);
-                    Navigator.push(
+                    final result = await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => const AddPropertyPage(),
                       ),
                     );
+                    
+                    // If a listing was published, the home page should refresh
+                    // The home page will refresh on next visibility or pull-to-refresh
+                    if (result != null) {
+                      debugPrint('🔄 [PostTypeModal] Listing published (ID: $result), home page should refresh');
+                    }
                   },
                   isDark: isDark,
                   textColor: textColor,

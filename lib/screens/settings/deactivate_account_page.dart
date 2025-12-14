@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:rentease_app/backend/BUserService.dart';
 import 'package:rentease_app/landing/landing_page.dart';
@@ -76,12 +77,25 @@ class _DeactivateAccountPageState extends State<DeactivateAccountPage> {
 
       // Re-authenticate user (only if they have password provider)
       if (_hasPasswordProvider()) {
-      final credential = EmailAuthProvider.credential(
-        email: user.email!,
-        password: _passwordController.text,
-      );
-      
-      await user.reauthenticateWithCredential(credential);
+        try {
+          final credential = EmailAuthProvider.credential(
+            email: user.email!,
+            password: _passwordController.text,
+          );
+          
+          await user.reauthenticateWithCredential(credential);
+          debugPrint('✅ [DeactivateAccount] User re-authenticated successfully');
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBarUtils.buildThemedSnackBar(
+              context,
+              'Re-authentication failed. Please verify your password.',
+            ),
+          );
+          setState(() => _isLoading = false);
+          return;
+        }
       }
       // For Google-only users, skip password re-auth (they're already authenticated)
 
@@ -91,6 +105,7 @@ class _DeactivateAccountPageState extends State<DeactivateAccountPage> {
         reason: _selectedReason ?? 'Other',
         customReason: _reasonController.text.trim().isNotEmpty ? _reasonController.text.trim() : null,
       );
+      debugPrint('✅ [DeactivateAccount] Account deactivated successfully');
 
       // Sign out the user
       await _auth.signOut();
@@ -115,17 +130,31 @@ class _DeactivateAccountPageState extends State<DeactivateAccountPage> {
       if (e.code == 'wrong-password') {
         message = 'Password is incorrect';
       } else if (e.code == 'requires-recent-login') {
-        message = 'Please log out and log back in before deactivating account';
+        message = 'Security verification expired. Please verify your credentials again.';
+        // Reset confirmation so user can try again
+        setState(() {
+          _confirmDeactivate = false;
+          _passwordController.clear();
+        });
+      } else if (e.code == 'user-not-found') {
+        message = 'User account not found';
+      } else {
+        message = 'Error: ${e.message ?? e.code}';
       }
       
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBarUtils.buildThemedSnackBar(context, message),
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ [DeactivateAccount] Error: $e');
+      debugPrint('❌ [DeactivateAccount] Stack trace: $stackTrace');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBarUtils.buildThemedSnackBar(context, 'Error: ${e.toString()}'),
+        SnackBarUtils.buildThemedSnackBar(
+          context,
+          'Error deactivating account: ${e.toString()}',
+        ),
       );
     } finally {
       if (mounted) {

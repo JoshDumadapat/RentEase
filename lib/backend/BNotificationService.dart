@@ -1,4 +1,5 @@
 // ignore_for_file: file_names
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Backend service for notification operations in Firestore
@@ -46,17 +47,30 @@ class BNotificationService {
   }
 
   /// Get notifications by user ID
+  /// NOTE: Query without orderBy to avoid Firestore composite index requirement
+  /// Sorting is done in memory instead
   Future<List<Map<String, dynamic>>> getNotificationsByUser(String userId) async {
     try {
+      // Query WITHOUT orderBy to avoid composite index requirement
       final snapshot = await _firestore
           .collection(_collectionName)
           .where('userId', isEqualTo: userId)
-          .orderBy('createdAt', descending: true)
           .get();
-      return snapshot.docs.map((doc) => {
+      
+      // Sort by createdAt descending in memory (newest first)
+      final notifications = snapshot.docs.map((doc) => {
         'id': doc.id,
         ...doc.data(),
       }).toList();
+      
+      notifications.sort((a, b) {
+        final aDate = a['createdAt'] as Timestamp?;
+        final bDate = b['createdAt'] as Timestamp?;
+        if (aDate == null || bDate == null) return 0;
+        return bDate.compareTo(aDate); // Descending order
+      });
+      
+      return notifications;
     } catch (e) {
       // Error:'Error getting notifications by user: $e');
       return [];
@@ -159,6 +173,167 @@ class BNotificationService {
   /// Get notification document reference
   DocumentReference getNotificationDocument(String notificationId) {
     return _firestore.collection(_collectionName).doc(notificationId);
+  }
+
+  /// Get notifications by user ID as a real-time stream
+  /// Returns a stream that emits updated lists of notifications whenever notifications change
+  /// NOTE: This query does NOT use orderBy to avoid Firestore composite index requirement
+  Stream<List<Map<String, dynamic>>> getNotificationsByUserStream(String userId) {
+    // Query WITHOUT orderBy to avoid composite index requirement
+    return _firestore
+        .collection(_collectionName)
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .map((snapshot) {
+      // Get all notifications and sort in memory (to avoid composite index requirement)
+      final notifications = snapshot.docs.map((doc) => {
+        'id': doc.id,
+        ...doc.data(),
+      }).toList();
+      
+      // Sort by createdAt descending (newest first) - in memory, not in query
+      notifications.sort((a, b) {
+        final aDate = a['createdAt'] as Timestamp?;
+        final bDate = b['createdAt'] as Timestamp?;
+        if (aDate == null || bDate == null) return 0;
+        return bDate.compareTo(aDate); // Descending order
+      });
+      
+      return notifications;
+    });
+  }
+
+  /// Create a notification for a comment on a listing
+  /// Notifies the listing owner when someone comments on their listing
+  Future<void> notifyCommentOnListing({
+    required String listingOwnerId,
+    required String commenterId,
+    required String commenterName,
+    String? commenterAvatarUrl,
+    required String commentText,
+    required String listingId,
+    String? listingTitle,
+  }) async {
+    try {
+      // Don't notify if user is commenting on their own listing
+      if (listingOwnerId == commenterId) {
+        return;
+      }
+
+      await createNotification(
+        userId: listingOwnerId,
+        type: 'comment',
+        actorName: commenterName,
+        actorAvatarUrl: commenterAvatarUrl,
+        commentText: commentText,
+        postTitle: listingTitle,
+        postId: listingId,
+      );
+    } catch (e) {
+      // Log error but don't throw - notification failure shouldn't break comment creation
+      debugPrint('❌ [BNotificationService] Error creating comment notification: $e');
+    }
+  }
+
+  /// Create a notification for a comment on a looking-for post
+  /// Notifies the post owner when someone comments on their post
+  Future<void> notifyCommentOnLookingForPost({
+    required String postOwnerId,
+    required String commenterId,
+    required String commenterName,
+    String? commenterAvatarUrl,
+    required String commentText,
+    required String postId,
+    String? postDescription,
+  }) async {
+    try {
+      // Don't notify if user is commenting on their own post
+      if (postOwnerId == commenterId) {
+        return;
+      }
+
+      // Use first 50 characters of description as title
+      final postTitle = postDescription != null && postDescription.length > 50
+          ? '${postDescription.substring(0, 50)}...'
+          : postDescription;
+
+      await createNotification(
+        userId: postOwnerId,
+        type: 'comment',
+        actorName: commenterName,
+        actorAvatarUrl: commenterAvatarUrl,
+        commentText: commentText,
+        postTitle: postTitle,
+        postId: postId,
+      );
+    } catch (e) {
+      // Log error but don't throw - notification failure shouldn't break comment creation
+      debugPrint('❌ [BNotificationService] Error creating comment notification: $e');
+    }
+  }
+
+  /// Create a notification for a review on a listing
+  /// Notifies the listing owner when someone reviews their listing
+  Future<void> notifyReviewOnListing({
+    required String listingOwnerId,
+    required String reviewerId,
+    required String reviewerName,
+    String? reviewerAvatarUrl,
+    required String reviewComment,
+    required int rating,
+    required String listingId,
+    String? listingTitle,
+  }) async {
+    try {
+      // Don't notify if user is reviewing their own listing
+      if (listingOwnerId == reviewerId) {
+        return;
+      }
+
+      await createNotification(
+        userId: listingOwnerId,
+        type: 'review',
+        actorName: reviewerName,
+        actorAvatarUrl: reviewerAvatarUrl,
+        commentText: reviewComment,
+        postTitle: listingTitle,
+        postId: listingId,
+      );
+    } catch (e) {
+      // Log error but don't throw - notification failure shouldn't break review creation
+      debugPrint('❌ [BNotificationService] Error creating review notification: $e');
+    }
+  }
+
+  /// Create a notification for a favorite on a listing
+  /// Notifies the listing owner when someone favorites their listing
+  Future<void> notifyFavoriteOnListing({
+    required String listingOwnerId,
+    required String favoriterId,
+    required String favoriterName,
+    String? favoriterAvatarUrl,
+    required String listingId,
+    String? listingTitle,
+  }) async {
+    try {
+      // Don't notify if user is favoriting their own listing
+      if (listingOwnerId == favoriterId) {
+        return;
+      }
+
+      await createNotification(
+        userId: listingOwnerId,
+        type: 'reaction',
+        actorName: favoriterName,
+        actorAvatarUrl: favoriterAvatarUrl,
+        reactionEmoji: '❤️',
+        postTitle: listingTitle,
+        postId: listingId,
+      );
+    } catch (e) {
+      // Log error but don't throw - notification failure shouldn't break favorite creation
+      debugPrint('❌ [BNotificationService] Error creating favorite notification: $e');
+    }
   }
 }
 

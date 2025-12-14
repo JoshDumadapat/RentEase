@@ -1,67 +1,201 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/models/user_model.dart';
+import 'package:rentease_app/backend/BReviewService.dart';
 
 /// User Stats Section Widget
 /// 
 /// Displays user activity statistics:
+/// - User rating
 /// - Number of properties listed
 /// - Number of favorites/saved properties
-/// - Number of likes/comments received (optional)
-class UserStatsSection extends StatelessWidget {
+/// - Number of looking for posts
+class UserStatsSection extends StatefulWidget {
   final UserModel user;
   final Function(String)? onStatTap;
+  final List<String> listingIds;
 
   const UserStatsSection({
     super.key,
     required this.user,
     this.onStatTap,
+    required this.listingIds,
   });
+
+  @override
+  State<UserStatsSection> createState() => _UserStatsSectionState();
+}
+
+class _UserStatsSectionState extends State<UserStatsSection> {
+  final BReviewService _reviewService = BReviewService();
+  final ScrollController _scrollController = ScrollController();
+  double _averageRating = 0.0;
+  int _totalReviewCount = 0;
+  bool _isLoadingRating = true;
+  double _scrollPosition = 0.0;
+  double _maxScrollExtent = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserRating();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.hasClients) {
+      setState(() {
+        _scrollPosition = _scrollController.position.pixels;
+        _maxScrollExtent = _scrollController.position.maxScrollExtent;
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(UserStatsSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.listingIds.length != widget.listingIds.length ||
+        oldWidget.listingIds != widget.listingIds) {
+      _loadUserRating();
+    }
+  }
+
+  Future<void> _loadUserRating() async {
+    if (widget.listingIds.isEmpty) {
+      setState(() {
+        _averageRating = 0.0;
+        _totalReviewCount = 0;
+        _isLoadingRating = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoadingRating = true;
+    });
+
+    try {
+      double totalRating = 0.0;
+      int totalReviews = 0;
+
+      for (final listingId in widget.listingIds) {
+        try {
+          final count = await _reviewService.getReviewCount(listingId);
+          if (count > 0) {
+            final avgRating = await _reviewService.getAverageRating(listingId);
+            totalRating += avgRating * count;
+            totalReviews += count;
+          }
+        } catch (e) {
+          debugPrint('⚠️ [UserStatsSection] Error loading rating for listing $listingId: $e');
+        }
+      }
+
+      final overallAverage = totalReviews > 0 ? totalRating / totalReviews : 0.0;
+
+      if (mounted) {
+        setState(() {
+          _averageRating = overallAverage;
+          _totalReviewCount = totalReviews;
+          _isLoadingRating = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [UserStatsSection] Error loading user rating: $e');
+      if (mounted) {
+        setState(() {
+          _averageRating = 0.0;
+          _totalReviewCount = 0;
+          _isLoadingRating = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    
+    // Calculate width based on original 3-card layout
+    // (screen width - padding*2 - spacing*2) / 3
+    final screenWidth = MediaQuery.of(context).size.width;
+    final padding = 24.0 * 2; // left and right padding
+    final spacing = 12.0 * 2; // spacing between 3 cards
+    final cardWidth = (screenWidth - padding - spacing) / 3;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Stats Grid
-          Row(
-            children: [
-              Expanded(
-                child: _StatTile(
+          // Stats Carousel (horizontal scrollable)
+          SizedBox(
+            height: 120, // Height to accommodate the card content
+            child: ListView(
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              children: [
+                _StatTile(
                   label: 'Properties',
-                  value: user.propertiesCount.toString(),
+                  value: widget.user.propertiesCount.toString(),
                   iconPath: 'assets/icons/navbar/home_outlined.svg',
                   isDark: isDark,
-                  onTap: onStatTap != null ? () => onStatTap!('properties') : null,
+                  width: cardWidth,
+                  onTap: widget.onStatTap != null ? () => widget.onStatTap!('properties') : null,
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatTile(
+                const SizedBox(width: 12),
+                _StatTile(
+                  label: 'Posts',
+                  value: widget.user.lookingForPostsCount.toString(),
+                  icon: Icons.post_add_outlined,
+                  isDark: isDark,
+                  width: cardWidth,
+                  onTap: widget.onStatTap != null ? () => widget.onStatTap!('lookingFor') : null,
+                ),
+                const SizedBox(width: 12),
+                _StatTile(
+                  label: 'Rating',
+                  value: _isLoadingRating
+                      ? '...'
+                      : (_averageRating > 0
+                          ? _averageRating.toStringAsFixed(1)
+                          : 'N/A'),
+                  icon: Icons.star_rounded,
+                  isDark: isDark,
+                  width: cardWidth,
+                  showSubtext: !_isLoadingRating && _averageRating > 0 && _totalReviewCount > 0,
+                  subtext: _totalReviewCount == 1 ? '1 review' : '$_totalReviewCount reviews',
+                ),
+                const SizedBox(width: 12),
+                _StatTile(
                   label: 'Favorites',
-                  value: user.favoritesCount.toString(),
+                  value: widget.user.favoritesCount.toString(),
                   iconPath: 'assets/icons/navbar/heart_outlined.svg',
                   isDark: isDark,
-                  onTap: onStatTap != null ? () => onStatTap!('favorites') : null,
+                  width: cardWidth,
+                  onTap: widget.onStatTap != null ? () => widget.onStatTap!('favorites') : null,
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatTile(
-                  label: 'Rating',
-                  value: user.likesReceived.toString(),
-                  icon: Icons.star_outline,
-                  isDark: isDark,
-                  onTap: null, // Rating card is not clickable
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
+          // Scroll indicator bar
+          if (_maxScrollExtent > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: _ScrollIndicator(
+                scrollPosition: _scrollPosition,
+                maxScrollExtent: _maxScrollExtent,
+                isDark: isDark,
+              ),
+            ),
         ],
       ),
     );
@@ -75,6 +209,9 @@ class _StatTile extends StatelessWidget {
   final IconData? icon;
   final bool isDark;
   final VoidCallback? onTap;
+  final bool showSubtext;
+  final String? subtext;
+  final double width;
 
   const _StatTile({
     required this.label,
@@ -83,11 +220,15 @@ class _StatTile extends StatelessWidget {
     this.icon,
     required this.isDark,
     this.onTap,
+    this.showSubtext = false,
+    this.subtext,
+    required this.width,
   });
 
   @override
   Widget build(BuildContext context) {
-    final widget = Container(
+    final statTileWidget = Container(
+      width: width, // Width calculated to fit 3 cards originally
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
@@ -127,6 +268,20 @@ class _StatTile extends StatelessWidget {
               color: isDark ? Colors.white : Colors.black87,
             ),
           ),
+          if (showSubtext && subtext != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              subtext!,
+              style: TextStyle(
+                fontSize: 10,
+                color: isDark ? Colors.grey[400] : Colors.grey[500],
+                fontWeight: FontWeight.w400,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
           const SizedBox(height: 4),
           Text(
             label,
@@ -145,11 +300,65 @@ class _StatTile extends StatelessWidget {
       return InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
-        child: widget,
+        child: statTileWidget,
       );
     }
 
-    return widget;
+    return statTileWidget;
+  }
+}
+
+class _ScrollIndicator extends StatelessWidget {
+  final double scrollPosition;
+  final double maxScrollExtent;
+  final bool isDark;
+
+  const _ScrollIndicator({
+    required this.scrollPosition,
+    required this.maxScrollExtent,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = maxScrollExtent > 0
+        ? (scrollPosition / maxScrollExtent).clamp(0.0, 1.0)
+        : 0.0;
+    final indicatorWidth = 40.0;
+    final totalWidth = MediaQuery.of(context).size.width - 48.0; // Account for padding
+    final leftPosition = progress * (totalWidth - indicatorWidth);
+
+    return SizedBox(
+      height: 3,
+      child: Stack(
+        children: [
+          // Background track
+          Container(
+            width: totalWidth,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.grey[800]!.withValues(alpha: 0.3)
+                  : Colors.grey[300]!.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(1.5),
+            ),
+          ),
+          // Progress indicator
+          Positioned(
+            left: leftPosition,
+            child: Container(
+              width: indicatorWidth,
+              height: 3,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.grey[400]!.withValues(alpha: 0.6)
+                    : Colors.grey[600]!.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(1.5),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

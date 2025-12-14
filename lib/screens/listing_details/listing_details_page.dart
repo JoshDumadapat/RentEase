@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:rentease_app/models/listing_model.dart';
+import 'package:rentease_app/models/review_model.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+// ignore: depend_on_referenced_packages
+import 'package:gallery_saver_plus/gallery_saver.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
-import 'dart:typed_data';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+import 'package:rentease_app/backend/BFavoriteService.dart';
+import 'package:rentease_app/backend/BUserService.dart';
+import 'package:rentease_app/backend/BReviewService.dart';
+import 'package:rentease_app/backend/BListingService.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
+import 'package:rentease_app/screens/listing_details/osm_location_view_page.dart';
 
 // Theme colors to match HomePage
 const Color _themeColorLight = Color(0xFFE5F9FF);
@@ -17,8 +25,13 @@ const Color _themeColorDark = Color(0xFF00B8E6);
 
 class ListingDetailsPage extends StatefulWidget {
   final ListingModel listing;
+  final int initialTab; // 0 for About, 1 for Review
 
-  const ListingDetailsPage({super.key, required this.listing});
+  const ListingDetailsPage({
+    super.key,
+    required this.listing,
+    this.initialTab = 0,
+  });
 
   @override
   State<ListingDetailsPage> createState() => _ListingDetailsPageState();
@@ -27,64 +40,162 @@ class ListingDetailsPage extends StatefulWidget {
 class _ListingDetailsPageState extends State<ListingDetailsPage> {
   int _currentImageIndex = 0;
   bool _isFavorite = false;
-  bool _isCheckingFavorite = true;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  
-  final List<_Review> _reviews = [
-    _Review(
-      reviewerName: 'Anna Lopez',
-      rating: 5,
-      comment:
-          'Beautiful and very clean apartment. The owner was responsive and helpful throughout our stay.',
-      createdAt: DateTime(2024, 7, 12),
-    ),
-    _Review(
-      reviewerName: 'Mark Reyes',
-      rating: 4,
-      comment:
-          'Great location and amenities. A bit noisy at night, but overall a good experience.',
-      createdAt: DateTime(2024, 6, 28),
-    ),
-  ];
+  final BReviewService _reviewService = BReviewService();
+  final BUserService _userService = BUserService();
+
+  // Realtime reviews from Firestore
+  List<ReviewModel> _reviews = [];
+  StreamSubscription<QuerySnapshot>? _reviewsSubscription;
+
+  // Realtime listing data (for favorite count, review count, average rating)
+  ListingModel? _currentListing;
+  StreamSubscription<DocumentSnapshot>? _listingSubscription;
 
   double get _averageRating {
-    if (_reviews.isEmpty) return 0;
-    final total = _reviews.fold<int>(0, (sum, review) => sum + review.rating);
+    // Calculate average rating from Firestore reviews
+    if (_reviews.isEmpty) return 0.0;
+    final total = _reviews.fold<double>(
+      0.0,
+      (accumulator, review) => accumulator + review.rating,
+    );
     return total / _reviews.length;
   }
 
   @override
   void initState() {
     super.initState();
+    _currentListing = widget.listing;
     _checkIfFavorite();
+    _setupRealtimeListeners();
+  }
+
+
+
+  @override
+  void dispose() {
+    _reviewsSubscription?.cancel();
+    _listingSubscription?.cancel();
+    super.dispose();
+  }
+
+  /// Setup realtime Firestore listeners for reviews and listing data
+  void _setupRealtimeListeners() {
+    // Listen to reviews for this listing
+    // Note: We query without orderBy to avoid composite index requirement,
+    // then sort in memory
+    _reviewsSubscription = _firestore
+        .collection('reviews')
+        .where('listingId', isEqualTo: widget.listing.id)
+        .snapshots()
+        .listen(
+          (snapshot) {
+            if (mounted) {
+              try {
+                debugPrint('📥 [ListingDetailsPage] Received reviews snapshot: ${snapshot.docs.length} reviews');
+                
+                // Convert to ReviewModel and sort by createdAt in memory (newest first)
+                final reviews = snapshot.docs
+                    .map((doc) {
+                      try {
+                        final data = doc.data();
+                        debugPrint('📝 [ListingDetailsPage] Processing review: ${doc.id}, createdAt: ${data['createdAt']}');
+                        return ReviewModel.fromMap({'id': doc.id, ...data});
+                      } catch (e) {
+                        debugPrint('❌ [ListingDetailsPage] Error parsing review doc ${doc.id}: $e');
+                        return null;
+                      }
+                    })
+                    .where((review) => review != null)
+                    .cast<ReviewModel>()
+                    .toList();
+
+                // Sort by createdAt in memory (newest first)
+                reviews.sort((a, b) {
+                  final aDate = a.createdAt;
+                  final bDate = b.createdAt;
+                  return bDate.compareTo(aDate);
+                });
+
+                debugPrint('✅ [ListingDetailsPage] Updating reviews list: ${reviews.length} reviews');
+                setState(() {
+                  _reviews = reviews;
+                });
+              } catch (e, stackTrace) {
+                debugPrint(
+                  '❌ [ListingDetailsPage] Error processing reviews snapshot: $e',
+                );
+                debugPrint('Stack trace: $stackTrace');
+              }
+            }
+          },
+          onError: (error) {
+            debugPrint(
+              '❌ [ListingDetailsPage] Error listening to reviews: $error',
+            );
+            // Show error to user if needed
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBarUtils.buildThemedSnackBar(
+                  context,
+                  'Error loading reviews. Please refresh.',
+                ),
+              );
+            }
+          },
+        );
+
+    // Listen to listing document for realtime updates (favorite count, review count, average rating)
+    _listingSubscription = _firestore
+        .collection('listings')
+        .doc(widget.listing.id)
+        .snapshots()
+        .listen(
+          (snapshot) {
+            if (mounted && snapshot.exists) {
+              final data = snapshot.data()!;
+              try {
+                final updatedListing = ListingModel.fromMap({
+                  'id': snapshot.id,
+                  ...data,
+                });
+                setState(() {
+                  _currentListing = updatedListing;
+                });
+              } catch (e) {
+                debugPrint(
+                  '❌ [ListingDetailsPage] Error parsing listing update: $e',
+                );
+              }
+            }
+          },
+          onError: (error) {
+            debugPrint(
+              '❌ [ListingDetailsPage] Error listening to listing: $error',
+            );
+          },
+        );
   }
 
   Future<void> _checkIfFavorite() async {
     final user = _auth.currentUser;
     if (user == null) {
-      setState(() {
-        _isCheckingFavorite = false;
-      });
       return;
     }
 
     try {
-      final favoriteDoc = await _firestore
-          .collection('favorites')
-          .where('userId', isEqualTo: user.uid)
-          .where('listingId', isEqualTo: widget.listing.id)
-          .limit(1)
-          .get();
+      final favoriteService = BFavoriteService();
+      final isFav = await favoriteService.isFavorite(
+        user.uid,
+        widget.listing.id,
+      );
 
       setState(() {
-        _isFavorite = favoriteDoc.docs.isNotEmpty;
-        _isCheckingFavorite = false;
+        _isFavorite = isFav;
       });
     } catch (e) {
-      setState(() {
-        _isCheckingFavorite = false;
-      });
+      // Silently fail
     }
   }
 
@@ -93,52 +204,33 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
     if (user == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBarUtils.buildThemedSnackBar(context, 'Please sign in to save favorites'),
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Please sign in to save favorites',
+          ),
         );
       }
       return;
     }
 
     try {
-      if (_isFavorite) {
-        // Remove from favorites
-        final favoriteDoc = await _firestore
-            .collection('favorites')
-            .where('userId', isEqualTo: user.uid)
-            .where('listingId', isEqualTo: widget.listing.id)
-            .limit(1)
-            .get();
+      final favoriteService = BFavoriteService();
+      final newFavoriteState = await favoriteService.toggleFavorite(
+        userId: user.uid,
+        listingId: widget.listing.id,
+      );
 
-        for (var doc in favoriteDoc.docs) {
-          await doc.reference.delete();
-        }
+      setState(() {
+        _isFavorite = newFavoriteState;
+      });
 
-        setState(() {
-          _isFavorite = false;
-        });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBarUtils.buildThemedSnackBar(context, 'Removed from favorites'),
-          );
-        }
-      } else {
-        // Add to favorites
-        await _firestore.collection('favorites').add({
-          'userId': user.uid,
-          'listingId': widget.listing.id,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-
-        setState(() {
-          _isFavorite = true;
-        });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Saved to favorites')),
-          );
-        }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            newFavoriteState ? 'Saved to favorites' : 'Removed from favorites',
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -149,13 +241,64 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
     }
   }
 
+  Future<void> _copyListingLink() async {
+    try {
+      final listingLink = 'https://rentease.app/listing/${widget.listing.id}';
+      await Clipboard.setData(ClipboardData(text: listingLink));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Link copied to clipboard',
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(context, 'Error copying link: $e'),
+        );
+      }
+    }
+  }
+
+  void _openMapWithConfirmation(String address) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('View Location'),
+        content: Text('Do you want to view "$address" on the map?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => OSMLocationViewPage(address: address),
+                ),
+              );
+            },
+            child: const Text('View'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _shareListing() async {
     try {
-      final shareText = 'Check out this property: ${widget.listing.title}\n'
+      final shareText =
+          'Check out this property: ${widget.listing.title}\n'
           'Location: ${widget.listing.location}\n'
           'Price: \$${widget.listing.price.toStringAsFixed(0)}/month\n'
           'View listing: https://rentease.app/listing/${widget.listing.id}';
-      
+
       await Share.share(shareText);
     } catch (e) {
       if (mounted) {
@@ -190,10 +333,94 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
             onPressed: () {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBarUtils.buildThemedSnackBar(context, 'Listing reported. Thank you for your feedback.'),
+                SnackBarUtils.buildThemedSnackBar(
+                  context,
+                  'Listing reported. Thank you for your feedback.',
+                ),
               );
             },
             child: const Text('Report', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Show notification dialog when user tries to review a listing they've already reviewed
+  void _showAlreadyReviewedDialog(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? Colors.grey[900] : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final iconColor = Colors.orange[700];
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        backgroundColor: backgroundColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: iconColor?.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.info_outline,
+                size: 32,
+                color: iconColor,
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Title
+            Text(
+              'Already Reviewed',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: textColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            // Message
+            Text(
+              'You have already submitted a review for this listing. Each user can only submit one review per property.',
+              style: TextStyle(
+                fontSize: 14,
+                color: textColor.withOpacity(0.8),
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'Got it',
+              style: TextStyle(
+                color: iconColor,
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+              ),
+            ),
           ),
         ],
       ),
@@ -243,6 +470,14 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                 },
               ),
               ListTile(
+                leading: Icon(Icons.link, color: iconColor),
+                title: Text('Copy link', style: TextStyle(color: textColor)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _copyListingLink();
+                },
+              ),
+              ListTile(
                 leading: Icon(Icons.share, color: iconColor),
                 title: Text('Share', style: TextStyle(color: textColor)),
                 onTap: () {
@@ -266,18 +501,89 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
     );
   }
 
-  void _addReview(int rating, String comment) {
+  Future<void> _addReview(int rating, String comment) async {
     if (rating == 0 || comment.trim().isEmpty) return;
-    setState(() {
-      _reviews.add(
-        _Review(
-          reviewerName: 'You',
-          rating: rating,
-          comment: comment.trim(),
-          createdAt: DateTime.now(),
-        ),
+
+    final user = _auth.currentUser;
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Please sign in to add a review',
+          ),
+        );
+      }
+      return;
+    }
+
+    // Check if user has already reviewed this listing
+    try {
+      final hasReviewed = await _reviewService.hasUserReviewed(
+        user.uid,
+        widget.listing.id,
       );
-    });
+      if (hasReviewed) {
+        // Throw exception so modal can catch it and show error without closing
+        throw Exception('ALREADY_REVIEWED');
+      }
+
+      // Get user's name for the review
+      final userData = await _userService.getUserData(user.uid);
+      final reviewerName =
+          userData?['displayName'] as String? ??
+          (userData?['fname'] != null && userData?['lname'] != null
+              ? '${userData!['fname']} ${userData['lname']}'.trim()
+              : userData?['fname'] as String? ??
+                    userData?['lname'] as String?) ??
+          user.displayName ??
+          'Anonymous';
+
+      // Create review in Firestore
+      await _reviewService.createReview(
+        userId: user.uid,
+        listingId: widget.listing.id,
+        reviewerName: reviewerName,
+        rating: rating,
+        comment: comment.trim(),
+      );
+
+      // The realtime listener will automatically update the UI
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Review added successfully!',
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ [ListingDetailsPage] Error adding review: $e');
+      debugPrint('Stack trace: $stackTrace');
+      
+      // If it's the "already reviewed" exception, don't show snackbar here
+      // Let the modal handle it
+      if (e.toString().contains('ALREADY_REVIEWED')) {
+        rethrow; // Re-throw so modal can handle it
+      }
+      
+      if (mounted) {
+        String errorMessage = 'Error adding review. Please try again.';
+        final errorString = e.toString().toLowerCase();
+        if (errorString.contains('permission') || errorString.contains('denied')) {
+          errorMessage = 'Permission denied. Please check your authentication.';
+        } else if (errorString.contains('network') || errorString.contains('connection')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            errorMessage,
+          ),
+        );
+      }
+      rethrow; // Re-throw so modal can handle it
+    }
   }
 
   @override
@@ -287,9 +593,10 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
     final backgroundColor = isDark ? Colors.grey[900] : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
     final iconColor = isDark ? Colors.white : Colors.black87;
-    
+
     return DefaultTabController(
       length: 2,
+      initialIndex: widget.initialTab,
       child: Scaffold(
         backgroundColor: backgroundColor,
         appBar: AppBar(
@@ -344,14 +651,16 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: isDark 
-                                          ? _themeColorDark.withOpacity(0.25)
+                                      color: isDark
+                                          ? _themeColorDark.withValues(alpha: 0.25)
                                           : _themeColorLight,
                                       borderRadius: BorderRadius.circular(20),
                                     ),
                                     child: Text(
                                       widget.listing.category,
-                                      style: Theme.of(context).textTheme.labelMedium
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelMedium
                                           ?.copyWith(color: _themeColorDark),
                                     ),
                                   ),
@@ -359,39 +668,50 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                                   Text(
                                     widget.listing.timeAgo,
                                     style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[600]),
+                                        ?.copyWith(
+                                          color: isDark
+                                              ? Colors.grey[300]
+                                              : Colors.grey[600],
+                                        ),
                                   ),
                                 ],
                               ),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.chat_bubble_outline_outlined,
-                                    size: 16,
-                                    color: isDark ? Colors.white : Colors.grey[600],
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${_reviews.length} reviews',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[600]),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  const Icon(
-                                    Icons.star_rounded,
-                                    size: 16,
-                                    color: Colors.amber,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _reviews.isEmpty
-                                        ? '-'
-                                        : _averageRating.toStringAsFixed(1),
-                                    style: Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                ],
-                              ),
+                              // Review count and star rating at the right end (only show if there are reviews)
+                              if (_reviews.isNotEmpty)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Review count with icon
+                                    Icon(
+                                      Icons.chat_bubble_outline_outlined,
+                                      size: 16,
+                                      color: isDark ? Colors.grey[300] : Colors.grey[600],
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${_reviews.length}',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: isDark ? Colors.grey[300] : Colors.grey[600],
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    // Star rating
+                                    const Icon(
+                                      Icons.star_rounded,
+                                      size: 16,
+                                      color: Colors.amber,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _averageRating.toStringAsFixed(1),
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: isDark ? Colors.grey[300] : Colors.grey[600],
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                             ],
                           ),
                           const SizedBox(height: 16),
@@ -413,10 +733,17 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text(
-                                  widget.listing.location,
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[700]),
+                                child: GestureDetector(
+                                  onTap: () => _openMapWithConfirmation(widget.listing.location),
+                                  child: Text(
+                                    widget.listing.location,
+                                    style: Theme.of(context).textTheme.bodyMedium
+                                        ?.copyWith(
+                                          color: isDark
+                                              ? Colors.grey[300]
+                                              : Colors.grey[700],
+                                        ),
+                                  ),
                                 ),
                               ),
                             ],
@@ -437,14 +764,20 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                               Text(
                                 '/month',
                                 style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[600]),
+                                    ?.copyWith(
+                                      color: isDark
+                                          ? Colors.grey[300]
+                                          : Colors.grey[600],
+                                    ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 24),
                           TabBar(
                             labelColor: _themeColorDark,
-                            unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
+                            unselectedLabelColor: isDark
+                                ? Colors.grey[400]
+                                : Colors.grey[600],
                             indicatorColor: _themeColorDark,
                             indicatorSize: TabBarIndicatorSize.label,
                             tabs: const [
@@ -477,7 +810,8 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                       ),
                       const SizedBox(height: 24),
                       _OwnerSection(
-                        ownerName: widget.listing.ownerName,
+                        userId: widget.listing.userId,
+                        ownerName: widget.listing.ownerName, // Fallback
                         isVerified: widget.listing.isOwnerVerified,
                       ),
                       const SizedBox(height: 8),
@@ -489,6 +823,8 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
                   child: _ReviewsSection(
                     reviews: _reviews,
                     onAddReview: _addReview,
+                    parentContext: context,
+                    onShowAlreadyReviewedDialog: _showAlreadyReviewedDialog,
                   ),
                 ),
               ],
@@ -513,7 +849,12 @@ class _ImageCarousel extends StatelessWidget {
     required this.listing,
   });
 
-  void _showFullScreenImage(BuildContext context, List<String> images, int initialIndex, ListingModel listing) {
+  void _showFullScreenImage(
+    BuildContext context,
+    List<String> images,
+    int initialIndex,
+    ListingModel listing,
+  ) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => _FullScreenImageViewer(
@@ -545,24 +886,68 @@ class _ImageCarousel extends StatelessWidget {
             itemCount: images.length,
             onPageChanged: onPageChanged,
             itemBuilder: (context, index) {
+              final imagePath = images[index];
+              final isNetworkImage =
+                  imagePath.startsWith('http://') ||
+                  imagePath.startsWith('https://');
+
               return GestureDetector(
                 onTap: () {
                   _showFullScreenImage(context, images, index, listing);
                 },
-                child: Image(
-                  image: AssetImage(images[index]),
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: double.infinity,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.grey[300],
-                      child: const Center(
-                        child: Icon(Icons.image, size: 80, color: Colors.grey),
+                child: isNetworkImage
+                    ? Image.network(
+                        imagePath,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            color: Colors.grey[300],
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                value:
+                                    loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                    : null,
+                                color: _themeColorDark,
+                              ),
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Colors.grey[300],
+                            child: const Center(
+                              child: Icon(
+                                Icons.image,
+                                size: 80,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          );
+                        },
+                      )
+                    : Image(
+                        image: AssetImage(imagePath),
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Colors.grey[300],
+                            child: const Center(
+                              child: Icon(
+                                Icons.image,
+                                size: 80,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               );
             },
           ),
@@ -600,25 +985,352 @@ class _PropertyDetailsSection extends StatelessWidget {
 
   const _PropertyDetailsSection({required this.listing});
 
+  void _showAdditionalInfoModal(BuildContext context, ListingModel listing) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+    final backgroundColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 80),
+        child: Container(
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Simple Header
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Text(
+                      'Additional Information',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: Icon(Icons.close, color: subtextColor, size: 20),
+                      onPressed: () => Navigator.pop(context),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+              // Content
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: Column(
+                    children: [
+                      if (listing.deposit != null)
+                        _buildSimpleInfoRow(
+                          Icons.account_balance_wallet_outlined,
+                          'Deposit',
+                          '₱${listing.deposit!.toStringAsFixed(0)}',
+                          isDark,
+                          textColor,
+                          subtextColor,
+                        ),
+                      if (listing.advance != null)
+                        _buildSimpleInfoRow(
+                          Icons.payment_outlined,
+                          'Advance Payment',
+                          '₱${listing.advance!.toStringAsFixed(0)}',
+                          isDark,
+                          textColor,
+                          subtextColor,
+                        ),
+                      if (listing.maxOccupants != null)
+                        _buildSimpleInfoRow(
+                          Icons.people_outline,
+                          'Max Occupants',
+                          '${listing.maxOccupants} person${listing.maxOccupants! > 1 ? 's' : ''}',
+                          isDark,
+                          textColor,
+                          subtextColor,
+                        ),
+                      if (listing.curfew != null)
+                        _buildSimpleInfoRow(
+                          Icons.access_time_outlined,
+                          'Curfew',
+                          listing.curfew!,
+                          isDark,
+                          textColor,
+                          subtextColor,
+                        ),
+                      if (listing.availableFrom != null)
+                        _buildSimpleInfoRow(
+                          Icons.calendar_today_outlined,
+                          'Available From',
+                          '${listing.availableFrom!.day}/${listing.availableFrom!.month}/${listing.availableFrom!.year}',
+                          isDark,
+                          textColor,
+                          subtextColor,
+                        ),
+                      if (listing.landmark != null)
+                        _buildSimpleInfoRow(
+                          Icons.location_on_outlined,
+                          'Landmark',
+                          listing.landmark!,
+                          isDark,
+                          textColor,
+                          subtextColor,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAmenitiesModal(
+    BuildContext context,
+    List<Map<String, dynamic>> amenities,
+  ) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+    final backgroundColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 80),
+        child: Container(
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Simple Header
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Text(
+                      'Amenities & Features',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: Icon(Icons.close, color: subtextColor, size: 20),
+                      onPressed: () => Navigator.pop(context),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+              // Content
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: amenities.map((amenity) {
+                      return _buildSimpleAmenityChip(
+                        amenity['icon'] as IconData,
+                        amenity['label'] as String,
+                        isDark,
+                        textColor,
+                        subtextColor,
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSimpleInfoRow(
+    IconData icon,
+    String label,
+    String value,
+    bool isDark,
+    Color textColor,
+    Color subtextColor,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: _themeColorDark,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: subtextColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSimpleAmenityChip(
+    IconData icon,
+    String label,
+    bool isDark,
+    Color textColor,
+    Color subtextColor,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[800] : Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? Colors.grey[700]! : Colors.grey[200]!,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 18,
+            color: _themeColorDark,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: textColor,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
-    
+    final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
+
+    // Collect all amenities that are true
+    final amenities = <Map<String, dynamic>>[];
+    if (listing.wifi) {
+      amenities.add({'icon': Icons.wifi, 'label': 'Free WiFi'});
+    }
+    if (listing.waterIncluded) {
+      amenities.add({'icon': Icons.water_drop, 'label': 'Water Included'});
+    }
+    if (listing.electricityIncluded) {
+      amenities.add({'icon': Icons.flash_on, 'label': 'Electricity Included'});
+    }
+    if (listing.internetIncluded) {
+      amenities.add({'icon': Icons.language, 'label': 'Internet Included'});
+    }
+    if (listing.aircon) {
+      amenities.add({'icon': Icons.ac_unit, 'label': 'Air Conditioning'});
+    }
+    if (listing.parking) {
+      amenities.add({'icon': Icons.local_parking, 'label': 'Parking'});
+    }
+    if (listing.laundry) {
+      amenities.add({'icon': Icons.local_laundry_service, 'label': 'Laundry'});
+    }
+    if (listing.security) {
+      amenities.add({'icon': Icons.security, 'label': 'Security'});
+    }
+    if (listing.kitchenAccess) {
+      amenities.add({'icon': Icons.kitchen, 'label': 'Kitchen Access'});
+    }
+    if (listing.privateCR) {
+      amenities.add({'icon': Icons.bathroom, 'label': 'Private CR'});
+    }
+    if (listing.sharedCR) {
+      amenities.add({'icon': Icons.wc, 'label': 'Shared CR'});
+    }
+    if (listing.petFriendly) {
+      amenities.add({'icon': Icons.pets, 'label': 'Pet Friendly'});
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Property Details',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             color: textColor,
           ),
         ),
         const SizedBox(height: 16),
+        // Basic Details Row
         Row(
           children: [
             Expanded(
@@ -646,22 +1358,121 @@ class _PropertyDetailsSection extends StatelessWidget {
             ),
           ],
         ),
+        // Additional Details - Clickable Card
+        if (listing.deposit != null ||
+            listing.advance != null ||
+            listing.maxOccupants != null ||
+            listing.curfew != null ||
+            listing.availableFrom != null) ...[
+          const SizedBox(height: 24),
+          InkWell(
+            onTap: () => _showAdditionalInfoModal(context, listing),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[800] : Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: _themeColorDark, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Additional Information',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tap to view details',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: subtextColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: subtextColor),
+                ],
+              ),
+            ),
+          ),
+        ],
+        // Amenities - Clickable Card
+        if (amenities.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          InkWell(
+            onTap: () => _showAmenitiesModal(context, amenities),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[800] : Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.room_service, color: _themeColorDark, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Amenities',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${amenities.length} amenities available',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: subtextColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: subtextColor),
+                ],
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
 }
 
+
 class _DetailItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  final String? dateText;
 
   const _DetailItem({
     required this.icon,
     required this.label,
     required this.value,
-    this.dateText,
   });
 
   @override
@@ -670,8 +1481,7 @@ class _DetailItem extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
-    final iconColor = isDark ? Colors.grey[400] : Colors.grey[600];
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -682,19 +1492,13 @@ class _DetailItem extends StatelessWidget {
             color: _themeColorDark.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            icon,
-            size: 20,
-            color: _themeColorDark,
-          ),
+          child: Icon(icon, size: 20, color: _themeColorDark),
         ),
         const SizedBox(height: 8),
         // Value
         Text(
           value,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             color: textColor,
           ),
@@ -724,15 +1528,13 @@ class _DescriptionSection extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtextColor = isDark ? Colors.grey[300] : Colors.grey[700];
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Description',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             color: textColor,
           ),
@@ -740,44 +1542,94 @@ class _DescriptionSection extends StatelessWidget {
         const SizedBox(height: 12),
         Text(
           description,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: subtextColor,
-            height: 1.5,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: subtextColor, height: 1.5),
         ),
       ],
     );
   }
 }
 
-class _OwnerSection extends StatelessWidget {
-  final String ownerName;
+class _OwnerSection extends StatefulWidget {
+  final String? userId;
+  final String ownerName; // Fallback name
   final bool isVerified;
 
-  const _OwnerSection({required this.ownerName, required this.isVerified});
+  const _OwnerSection({
+    required this.userId,
+    required this.ownerName,
+    required this.isVerified,
+  });
+
+  @override
+  State<_OwnerSection> createState() => _OwnerSectionState();
+}
+
+class _OwnerSectionState extends State<_OwnerSection> {
+  String? _username;
+  String? _profileImageUrl;
+  bool _isLoading = true;
+  final BUserService _userService = BUserService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    if (widget.userId == null || widget.userId!.isEmpty) {
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final userData = await _userService.getUserData(widget.userId!);
+      if (userData != null && mounted) {
+        setState(() {
+          _username = userData['username'] as String?;
+          _profileImageUrl = userData['profileImageUrl'] as String?;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [OwnerSection] Error loading user data: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final cardColor = isDark ? Colors.grey[800] : _themeColorLight2.withValues(alpha: 0.25);
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isDark
               ? [
-                  _themeColorDark.withOpacity(0.15),
-                  _themeColorDark.withOpacity(0.08),
+                  _themeColorDark.withValues(alpha: 0.15),
+                  _themeColorDark.withValues(alpha: 0.08),
                   const Color(0xFF4A4A4A),
                 ]
               : [
-                  _themeColorLight2.withOpacity(0.4),
-                  _themeColorLight.withOpacity(0.3),
-                  Colors.white.withOpacity(0.5),
+                  _themeColorLight2.withValues(alpha: 0.4),
+                  _themeColorLight.withValues(alpha: 0.3),
+                  Colors.white.withValues(alpha: 0.5),
                 ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -785,15 +1637,15 @@ class _OwnerSection extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isDark
-              ? _themeColorDark.withOpacity(0.3)
-              : _themeColorDark.withOpacity(0.2),
+              ? _themeColorDark.withValues(alpha: 0.3)
+              : _themeColorDark.withValues(alpha: 0.2),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? Colors.black.withOpacity(0.3)
-                : _themeColorDark.withOpacity(0.1),
+                ? Colors.black.withValues(alpha: 0.3)
+                : _themeColorDark.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -806,35 +1658,39 @@ class _OwnerSection extends StatelessWidget {
               gradient: LinearGradient(
                 colors: isDark
                     ? [
-                        _themeColorDark.withOpacity(0.3),
-                        _themeColorDark.withOpacity(0.15),
+                        _themeColorDark.withValues(alpha: 0.3),
+                        _themeColorDark.withValues(alpha: 0.15),
                       ]
-                    : [
-                        _themeColorLight,
-                        _themeColorLight2,
-                      ],
+                    : [_themeColorLight, _themeColorLight2],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               shape: BoxShape.circle,
               border: Border.all(
                 color: isDark
-                    ? _themeColorDark.withOpacity(0.4)
-                    : _themeColorDark.withOpacity(0.3),
+                    ? _themeColorDark.withValues(alpha: 0.4)
+                    : _themeColorDark.withValues(alpha: 0.3),
                 width: 2,
               ),
             ),
             child: CircleAvatar(
               radius: 30,
               backgroundColor: Colors.transparent,
-              child: Text(
-                ownerName[0].toUpperCase(),
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : _themeColorDark,
-                ),
-              ),
+              backgroundImage:
+                  _profileImageUrl != null && _profileImageUrl!.isNotEmpty
+                  ? NetworkImage(_profileImageUrl!)
+                  : null,
+              child: _profileImageUrl == null || _profileImageUrl!.isEmpty
+                  ? Text(
+                      (_username ?? widget.ownerName.split(' ').first)[0]
+                          .toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : _themeColorDark,
+                      ),
+                    )
+                  : null,
             ),
           ),
           const SizedBox(width: 16),
@@ -842,39 +1698,53 @@ class _OwnerSection extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Listed by',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: subtextColor),
-                ),
-                const SizedBox(height: 4),
                 Row(
                   children: [
                     Text(
-                      ownerName,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
+                      'Listed by',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: subtextColor),
                     ),
-                    if (isVerified) ...[
-                      const SizedBox(width: 8),
+                    if (widget.isVerified) ...[
+                      const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
-                          color: _themeColorDark.withOpacity(0.2), // Glowing blue background
+                          color: _themeColorDark.withValues(
+                            alpha: 0.2,
+                          ), // Glowing blue background
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           Icons.verified,
-                          size: 18,
+                          size: 16,
                           color: _themeColorDark, // Blue icon
                         ),
                       ),
                     ],
                   ],
                 ),
+                const SizedBox(height: 4),
+                _isLoading
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _themeColorDark,
+                        ),
+                      )
+                    : Text(
+                        _username ?? widget.ownerName.split(' ').first,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                            ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
               ],
             ),
           ),
@@ -882,21 +1752,15 @@ class _OwnerSection extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: isDark
-                    ? [
-                        _themeColorDark,
-                        _themeColorDark.withOpacity(0.8),
-                      ]
-                    : [
-                        _themeColorDark,
-                        _themeColorDark.withOpacity(0.9),
-                      ],
+                    ? [_themeColorDark, _themeColorDark.withValues(alpha: 0.8)]
+                    : [_themeColorDark, _themeColorDark.withValues(alpha: 0.9)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: _themeColorDark.withOpacity(0.3),
+                  color: _themeColorDark.withValues(alpha: 0.3),
                   blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
@@ -905,23 +1769,27 @@ class _OwnerSection extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBarUtils.buildThemedSnackBar(context, 'Contact feature coming soon!'),
+                  SnackBarUtils.buildThemedSnackBar(
+                    context,
+                    'Contact feature coming soon!',
+                  ),
                 );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,
                 shadowColor: Colors.transparent,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
               child: const Text(
                 'Contact',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -931,25 +1799,18 @@ class _OwnerSection extends StatelessWidget {
   }
 }
 
-class _Review {
-  final String reviewerName;
-  final int rating;
-  final String comment;
-  final DateTime createdAt;
-
-  _Review({
-    required this.reviewerName,
-    required this.rating,
-    required this.comment,
-    required this.createdAt,
-  });
-}
-
 class _ReviewsSection extends StatefulWidget {
-  final List<_Review> reviews;
-  final void Function(int rating, String comment) onAddReview;
+  final List<ReviewModel> reviews;
+  final Future<void> Function(int rating, String comment) onAddReview;
+  final BuildContext parentContext;
+  final void Function(BuildContext) onShowAlreadyReviewedDialog;
 
-  const _ReviewsSection({required this.reviews, required this.onAddReview});
+  const _ReviewsSection({
+    required this.reviews,
+    required this.onAddReview,
+    required this.parentContext,
+    required this.onShowAlreadyReviewedDialog,
+  });
 
   @override
   State<_ReviewsSection> createState() => _ReviewsSectionState();
@@ -965,169 +1826,278 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
     super.dispose();
   }
 
-  void _showAddReviewModal(BuildContext context) {
-    final theme = Theme.of(context);
+  void _showAddReviewModal() {
+    final modalContext = widget.parentContext;
+    final theme = Theme.of(modalContext);
     final isDark = theme.brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
     final cardColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
 
+    // Local state for the modal
+    int modalRating = _selectedRating;
+    final TextEditingController modalController = TextEditingController();
+    bool isSubmitting = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 20,
-          right: 20,
-          top: 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Add a review',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(Icons.close, color: textColor),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
+      builder: (context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setModalState) {
+          return Container(
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Rating',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: textColor,
-              ),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+              left: 20,
+              right: 20,
+              top: 20,
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: List.generate(
-                5,
-                (index) => IconButton(
-                  padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () {
-                    setState(() {
-                      _selectedRating = index + 1;
-                    });
-                  },
-                  icon: Icon(
-                    index < _selectedRating
-                        ? Icons.star_rounded
-                        : Icons.star_border_rounded,
-                    color: Colors.amber,
-                    size: 32,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Comment',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: textColor,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _controller,
-              maxLines: 5,
-              style: TextStyle(color: textColor),
-              decoration: InputDecoration(
-                hintText: 'Share your experience about this property',
-                hintStyle: TextStyle(color: subtextColor),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: _themeColorDark,
-                    width: 1.5,
-                  ),
-                ),
-                filled: true,
-                fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: _themeColorDark,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                onPressed: () {
-                  if (_selectedRating == 0 || _controller.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Please provide a rating and comment'),
-                        backgroundColor: isDark ? Colors.grey[800] : Colors.grey[300],
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Add a review',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
                       ),
-                    );
-                    return;
-                  }
-                  widget.onAddReview(_selectedRating, _controller.text);
-                  _controller.clear();
-                  setState(() {
-                    _selectedRating = 0;
-                  });
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Review added successfully!'),
-                      backgroundColor: _themeColorDark,
-                    ),
-                  );
-                },
-                child: const Text(
-                  'Submit Review',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                      IconButton(
+                        icon: Icon(Icons.close, color: textColor),
+                        onPressed: isSubmitting
+                            ? null
+                            : () {
+                                Navigator.pop(context);
+                                // Dispose controller after modal animation completes
+                                Future.delayed(const Duration(milliseconds: 300), () {
+                                  try {
+                                    modalController.dispose();
+                                  } catch (e) {
+                                    // Controller already disposed or not attached
+                                  }
+                                });
+                              },
+                      ),
+                    ],
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Rating',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: List.generate(
+                      5,
+                      (index) => GestureDetector(
+                        onTap: isSubmitting
+                            ? null
+                            : () {
+                                setModalState(() {
+                                  modalRating = index + 1;
+                                });
+                              },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Icon(
+                            index < modalRating
+                                ? Icons.star_rounded
+                                : Icons.star_border_rounded,
+                            color: Colors.amber,
+                            size: 32,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Comment',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: modalController,
+                    maxLines: 5,
+                    enabled: !isSubmitting,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      hintText: 'Share your experience about this property',
+                      hintStyle: TextStyle(color: subtextColor),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: _themeColorDark, width: 1.5),
+                      ),
+                      filled: true,
+                      fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _themeColorDark,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: isSubmitting
+                          ? null
+                          : () async {
+                              final modalContext = context; // Modal's context
+                              final parentContext = widget.parentContext; // Main page context
+                              
+                              if (modalRating == 0 || modalController.text.trim().isEmpty) {
+                                ScaffoldMessenger.of(modalContext).showSnackBar(
+                                  SnackBar(
+                                    content: const Text(
+                                      'Please provide a rating and comment',
+                                    ),
+                                    backgroundColor: isDark
+                                        ? Colors.grey[800]
+                                        : Colors.grey[300],
+                                  ),
+                                );
+                                return;
+                              }
+                              
+                              final reviewText = modalController.text.trim();
+                              final reviewRating = modalRating;
+                              
+                              // Set submitting state to disable interactions
+                              setModalState(() {
+                                isSubmitting = true;
+                              });
+                              
+                              try {
+                                // Call the review function which will check for duplicates
+                                await widget.onAddReview(reviewRating, reviewText);
+                                
+                                // If successful, close modal and update state
+                                if (modalContext.mounted) {
+                                  Navigator.pop(modalContext);
+                                  // Dispose controller after modal animation completes
+                                  Future.delayed(const Duration(milliseconds: 300), () {
+                                    try {
+                                      modalController.dispose();
+                                    } catch (e) {
+                                      // Controller already disposed or not attached
+                                    }
+                                  });
+                                }
+                                
+                                // Update local state if widget is still mounted
+                                if (mounted) {
+                                  setState(() {
+                                    _selectedRating = 0;
+                                    _controller.clear();
+                                  });
+                                }
+                              } catch (e) {
+                                debugPrint('❌ [AddReviewModal] Error adding review: $e');
+                                
+                                // Re-enable interactions on error
+                                if (modalContext.mounted) {
+                                  setModalState(() {
+                                    isSubmitting = false;
+                                  });
+                                  
+                                  // Show error notification
+                                  if (e.toString().contains('ALREADY_REVIEWED')) {
+                                    // Close the review modal first
+                                    Navigator.pop(modalContext);
+                                    // Then show notification dialog for already reviewed error
+                                    Future.delayed(const Duration(milliseconds: 300), () {
+                                      if (parentContext.mounted) {
+                                        widget.onShowAlreadyReviewedDialog(parentContext);
+                                      }
+                                    });
+                                  } else {
+                                    // Show snackbar for other errors
+                                    String errorMessage = 'Error adding review. Please try again.';
+                                    final errorString = e.toString().toLowerCase();
+                                    if (errorString.contains('permission') || errorString.contains('denied')) {
+                                      errorMessage = 'Permission denied. Please check your authentication.';
+                                    } else if (errorString.contains('network') || errorString.contains('connection')) {
+                                      errorMessage = 'Network error. Please check your connection and try again.';
+                                    }
+                                    
+                                    ScaffoldMessenger.of(modalContext).showSnackBar(
+                                      SnackBarUtils.buildThemedSnackBar(
+                                        modalContext,
+                                        errorMessage,
+                                        duration: const Duration(seconds: 3),
+                                      ),
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                      child: isSubmitting
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Text(
+                              'Submit Review',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-          ],
-        ),
+          );
+        },
       ),
-    );
+    ).whenComplete(() {
+      // Dispose controller after modal is fully closed
+      Future.delayed(const Duration(milliseconds: 300), () {
+        try {
+          modalController.dispose();
+        } catch (e) {
+          // Controller already disposed or not attached
+        }
+      });
+    });
   }
 
   @override
@@ -1137,22 +2107,22 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
     final cardColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
-    final borderColor = isDark ? Colors.grey[700]! : _themeColorLight2.withValues(alpha: 0.6);
-    
+    final borderColor = isDark
+        ? Colors.grey[700]!
+        : _themeColorLight2.withValues(alpha: 0.6);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          'Reviews',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: textColor,
-          ),
+          children: [
+            Text(
+              'Reviews',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: textColor,
+              ),
             ),
             IconButton(
               icon: Icon(
@@ -1160,7 +2130,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                 color: _themeColorDark,
                 size: 24,
               ),
-              onPressed: () => _showAddReviewModal(context),
+              onPressed: _showAddReviewModal,
               tooltip: 'Add Review',
             ),
           ],
@@ -1183,16 +2153,17 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                   itemBuilder: (context, index) {
                     final review = widget.reviews[index];
                     return Container(
+                      key: ValueKey('review_${review.id}_$index'),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: cardColor,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: borderColor,
-                        ),
+                        border: Border.all(color: borderColor),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.3 : 0.03,
+                            ),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -1287,9 +2258,9 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                           const SizedBox(height: 6),
                           Text(
                             review.comment,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: textColor,
-                            ),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyMedium?.copyWith(color: textColor),
                           ),
                         ],
                       ),
@@ -1317,7 +2288,8 @@ class _FullScreenImageViewer extends StatefulWidget {
   State<_FullScreenImageViewer> createState() => _FullScreenImageViewerState();
 }
 
-class _FullScreenImageViewerState extends State<_FullScreenImageViewer> with SingleTickerProviderStateMixin {
+class _FullScreenImageViewerState extends State<_FullScreenImageViewer>
+    with SingleTickerProviderStateMixin {
   late PageController _pageController;
   late int _currentIndex;
   final Map<int, TransformationController> _transformationControllers = {};
@@ -1348,24 +2320,30 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> with Sin
     super.dispose();
   }
 
-  void _handleDoubleTap(TransformationController controller, TapDownDetails details) {
+  void _handleDoubleTap(
+    TransformationController controller,
+    TapDownDetails details,
+  ) {
     final position = details.localPosition;
     final scale = controller.value.getMaxScaleOnAxis();
-    
+
     if (scale > 1.0) {
       // Zoom out with smooth animation
-      final animation = Matrix4Tween(
-        begin: controller.value,
-        end: Matrix4.identity(),
-      ).animate(CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOut,
-      ));
-      
+      final animation =
+          Matrix4Tween(
+            begin: controller.value,
+            end: Matrix4.identity(),
+          ).animate(
+            CurvedAnimation(
+              parent: _animationController,
+              curve: Curves.easeOut,
+            ),
+          );
+
       animation.addListener(() {
         controller.value = animation.value;
       });
-      
+
       _animationController.reset();
       _animationController.forward();
     } else {
@@ -1376,24 +2354,24 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> with Sin
       final endMatrix = Matrix4.identity()
         ..translate(x, y)
         ..scale(newScale);
-      
-      final animation = Matrix4Tween(
-        begin: controller.value,
-        end: endMatrix,
-      ).animate(CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOut,
-      ));
-      
+
+      final animation = Matrix4Tween(begin: controller.value, end: endMatrix)
+          .animate(
+            CurvedAnimation(
+              parent: _animationController,
+              curve: Curves.easeOut,
+            ),
+          );
+
       animation.addListener(() {
         controller.value = animation.value;
       });
-      
+
       _animationController.reset();
       _animationController.forward();
     }
   }
-  
+
   void _resetZoomForIndex(int index) {
     final controller = _transformationControllers[index];
     if (controller != null) {
@@ -1438,11 +2416,19 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> with Sin
                 },
               ),
               ListTile(
+                leading: Icon(Icons.link, color: iconColor),
+                title: Text('Copy link', style: TextStyle(color: textColor)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _copyListingLink();
+                },
+              ),
+              ListTile(
                 leading: Icon(Icons.share, color: iconColor),
                 title: Text('Share', style: TextStyle(color: textColor)),
                 onTap: () {
                   Navigator.pop(context);
-                  _shareListing(context);
+                  _shareListing();
                 },
               ),
               ListTile(
@@ -1476,43 +2462,40 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> with Sin
         // For iOS, use photos permission
         status = await Permission.photos.request();
       }
-      
+
       if (!status.isGranted) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBarUtils.buildThemedSnackBar(context, 'Permission is required to save photos'),
+            SnackBarUtils.buildThemedSnackBar(
+              context,
+              'Permission is required to save photos',
+            ),
           );
         }
         return;
       }
 
       final imagePath = widget.images[_currentIndex];
-      final isNetworkImage = imagePath.startsWith('http://') || 
-                             imagePath.startsWith('https://');
+      final isNetworkImage =
+          imagePath.startsWith('http://') || imagePath.startsWith('https://');
 
       if (isNetworkImage) {
-        // Download network image
-        final response = await http.get(Uri.parse(imagePath));
-        if (response.statusCode == 200) {
-          final result = await ImageGallerySaver.saveImage(
-            response.bodyBytes,
-            quality: 100,
-          );
-          if (mounted && result['isSuccess'] == true) {
+        // Save network image directly using gallery_saver_plus
+        final success = await GallerySaver.saveImage(imagePath);
+        if (mounted) {
+          if (success == true) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBarUtils.buildThemedSnackBar(context, 'Photo saved to gallery'),
+              SnackBarUtils.buildThemedSnackBar(
+                context,
+                'Photo saved to gallery',
+              ),
             );
           } else {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBarUtils.buildThemedSnackBar(context, 'Failed to save photo'),
-              );
-            }
-          }
-        } else {
-          if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBarUtils.buildThemedSnackBar(context, 'Failed to download photo'),
+              SnackBarUtils.buildThemedSnackBar(
+                context,
+                'Failed to save photo',
+              ),
             );
           }
         }
@@ -1521,7 +2504,10 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> with Sin
         // This is a limitation - asset images can't be easily saved
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBarUtils.buildThemedSnackBar(context, 'Saving asset images is not supported'),
+            SnackBarUtils.buildThemedSnackBar(
+              context,
+              'Saving asset images is not supported',
+            ),
           );
         }
       }
@@ -1534,14 +2520,37 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> with Sin
     }
   }
 
-  Future<void> _shareListing(BuildContext context) async {
+  Future<void> _copyListingLink() async {
+    try {
+      final listingLink = 'https://rentease.app/listing/${widget.listing.id}';
+      await Clipboard.setData(ClipboardData(text: listingLink));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Link copied to clipboard',
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(context, 'Error copying link: $e'),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareListing() async {
     try {
       // Create shareable link (you can customize this URL format)
-      final shareText = 'Check out this property: ${widget.listing.title}\n'
+      final shareText =
+          'Check out this property: ${widget.listing.title}\n'
           'Location: ${widget.listing.location}\n'
           'Price: \$${widget.listing.price.toStringAsFixed(0)}/month\n'
           'View listing: https://rentease.app/listing/${widget.listing.id}';
-      
+
       await Share.share(shareText);
     } catch (e) {
       if (mounted) {
@@ -1576,7 +2585,10 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> with Sin
             onPressed: () {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBarUtils.buildThemedSnackBar(context, 'Photo reported. Thank you for your feedback.'),
+                SnackBarUtils.buildThemedSnackBar(
+                  context,
+                  'Photo reported. Thank you for your feedback.',
+                ),
               );
             },
             child: const Text('Report', style: TextStyle(color: Colors.red)),
@@ -1588,9 +2600,6 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> with Sin
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -1610,12 +2619,14 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> with Sin
             },
             itemBuilder: (context, index) {
               final imagePath = widget.images[index];
-              final isNetworkImage = imagePath.startsWith('http://') || 
-                                     imagePath.startsWith('https://');
+              final isNetworkImage =
+                  imagePath.startsWith('http://') ||
+                  imagePath.startsWith('https://');
               final controller = _transformationControllers[index]!;
-              
+
               return GestureDetector(
-                onDoubleTapDown: (details) => _handleDoubleTap(controller, details),
+                onDoubleTapDown: (details) =>
+                    _handleDoubleTap(controller, details),
                 child: InteractiveViewer(
                   transformationController: controller,
                   minScale: 0.5,
@@ -1623,51 +2634,52 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> with Sin
                   panEnabled: true,
                   scaleEnabled: true,
                   child: Center(
-                  child: isNetworkImage
-                      ? Image.network(
-                          imagePath,
-                          fit: BoxFit.contain,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Center(
-                              child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                    : null,
-                                color: Colors.white,
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey[900],
-                              child: const Center(
-                                child: Icon(
-                                  Icons.image,
-                                  size: 80,
-                                  color: Colors.grey,
+                    child: isNetworkImage
+                        ? Image.network(
+                            imagePath,
+                            fit: BoxFit.contain,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  value:
+                                      loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                      : null,
+                                  color: Colors.white,
                                 ),
-                              ),
-                            );
-                          },
-                        )
-                      : Image(
-                          image: AssetImage(imagePath),
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey[900],
-                              child: const Center(
-                                child: Icon(
-                                  Icons.image,
-                                  size: 80,
-                                  color: Colors.grey,
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey[900],
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.image,
+                                    size: 80,
+                                    color: Colors.grey,
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
-                        ),
+                              );
+                            },
+                          )
+                        : Image(
+                            image: AssetImage(imagePath),
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey[900],
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.image,
+                                    size: 80,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                   ),
                 ),
               );
@@ -1715,7 +2727,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> with Sin
                       vertical: 10,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: Text(
@@ -1735,4 +2747,3 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> with Sin
     );
   }
 }
-

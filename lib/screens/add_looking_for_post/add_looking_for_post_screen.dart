@@ -1,5 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rentease_app/models/looking_for_post_model.dart';
+import 'package:rentease_app/backend/BLookingForPostService.dart';
+import 'package:rentease_app/backend/BUserService.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
 
 // Light blue theme constants aligned with HomePage / Add Property
@@ -8,7 +13,9 @@ const Color _themeColorLight2 = Color(0xFFB3F0FF);
 const Color _themeColorDark = Color(0xFF00B8E6);
 
 class AddLookingForPostScreen extends StatefulWidget {
-  const AddLookingForPostScreen({super.key});
+  final LookingForPostModel? post; // For edit mode
+  
+  const AddLookingForPostScreen({super.key, this.post});
 
   @override
   State<AddLookingForPostScreen> createState() => _AddLookingForPostScreenState();
@@ -27,6 +34,14 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
   // State variables
   String? _propertyType;
   DateTime? _moveInDate;
+  bool _isSubmitting = false;
+  bool _isEditMode = false;
+  String? _postId;
+  
+  // Backend services
+  final BLookingForPostService _lookingForPostService = BLookingForPostService();
+  final BUserService _userService = BUserService();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // Property types
   final List<String> _propertyTypes = [
@@ -37,6 +52,26 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
     'Boarding House',
     'Student Dorms',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.post != null) {
+      _isEditMode = true;
+      _postId = widget.post!.id;
+      _locationController.text = widget.post!.location;
+      _descriptionController.text = widget.post!.description;
+      _propertyType = widget.post!.propertyType;
+      _moveInDate = widget.post!.moveInDate;
+      
+      // Parse budget range (format: ₱10,000-₱12,000)
+      final budgetParts = widget.post!.budget.replaceAll('₱', '').split('-');
+      if (budgetParts.length == 2) {
+        _minBudgetController.text = budgetParts[0].replaceAll(',', '').trim();
+        _maxBudgetController.text = budgetParts[1].replaceAll(',', '').trim();
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -62,7 +97,7 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
     }
   }
 
-  void _submitForm() {
+  Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) {
       _scrollController.animateTo(
         0,
@@ -72,33 +107,118 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
       return;
     }
 
+    final user = _auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBarUtils.buildThemedSnackBar(context, 'Please sign in to create a post'),
+      );
+      return;
+    }
 
-    final now = DateTime.now();
-    final budget =
-        '₱${_minBudgetController.text}-${_maxBudgetController.text}';
+    setState(() => _isSubmitting = true);
 
-    final newPost = LookingForPostModel(
-      id: now.millisecondsSinceEpoch.toString(),
-      username: 'You',
-      description: _descriptionController.text,
-      location: _locationController.text,
-      budget: budget,
-      date: '${now.month}/${now.day}',
-      propertyType: _propertyType ?? 'Apartment',
-      moveInDate: _moveInDate,
-      postedDate: now,
-      isVerified: true,
-      likeCount: 0,
-      commentCount: 0,
-    );
+    try {
+      // Get user data for username
+      final userData = await _userService.getUserData(user.uid);
+      final username = userData?['username'] as String? ?? 
+                      userData?['displayName'] as String? ??
+                      (userData?['fname'] != null && userData?['lname'] != null
+                          ? '${userData!['fname']} ${userData['lname']}'.trim()
+                          : null) ??
+                      user.displayName ?? 
+                      user.email?.split('@')[0] ?? 
+                      'User';
 
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBarUtils.buildThemedSnackBar(context, 'Post created! Showing on your feed.'),
-    );
+      final budget = '₱${_minBudgetController.text}-${_maxBudgetController.text}';
 
-    // Navigate back with the new post so Home can insert it at the top
-    Navigator.of(context).pop<LookingForPostModel>(newPost);
+      if (_isEditMode && _postId != null) {
+        // UPDATE EXISTING POST
+        final updateData = <String, dynamic>{
+          'description': _descriptionController.text.trim(),
+          'location': _locationController.text.trim(),
+          'budget': budget,
+          'propertyType': _propertyType ?? 'Apartment',
+          if (_moveInDate != null) 'moveInDate': Timestamp.fromDate(_moveInDate!),
+        };
+
+        await _lookingForPostService.updateLookingForPost(_postId!, updateData);
+
+        // Fetch the updated post to return it
+        final postData = await _lookingForPostService.getLookingForPost(_postId!);
+        if (postData != null) {
+          final updatedPost = LookingForPostModel.fromMap({
+            'id': _postId!,
+            ...postData,
+          });
+
+          if (!mounted) return;
+
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBarUtils.buildThemedSnackBar(
+              context,
+              'Post updated successfully!',
+              duration: const Duration(seconds: 2),
+            ),
+          );
+
+          // Navigate back with the updated post
+          Navigator.of(context).pop<LookingForPostModel>(updatedPost);
+        } else {
+          throw Exception('Failed to retrieve updated post');
+        }
+      } else {
+        // CREATE NEW POST
+        final postId = await _lookingForPostService.createLookingForPost(
+          userId: user.uid,
+          username: username,
+          description: _descriptionController.text.trim(),
+          location: _locationController.text.trim(),
+          budget: budget,
+          propertyType: _propertyType ?? 'Apartment',
+          moveInDate: _moveInDate,
+        );
+
+        // Fetch the created post to return it
+        final postData = await _lookingForPostService.getLookingForPost(postId);
+        if (postData != null) {
+          final newPost = LookingForPostModel.fromMap({
+            'id': postId,
+            ...postData,
+          });
+
+          if (!mounted) return;
+
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBarUtils.buildThemedSnackBar(
+              context,
+              'Post created successfully!',
+              duration: const Duration(seconds: 2),
+            ),
+          );
+
+          // Navigate back with the new post so Home can insert it at the top
+          Navigator.of(context).pop<LookingForPostModel>(newPost);
+        } else {
+          throw Exception('Failed to retrieve created post');
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ [AddLookingForPost] Error creating post: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Error creating post: ${e.toString()}',
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   @override
@@ -124,7 +244,7 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'Looking For a Place',
+          _isEditMode ? 'Edit Post' : 'Looking For a Place',
           style: textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
             color: textColor,
@@ -433,7 +553,7 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: _submitForm,
+                    onPressed: _isSubmitting ? null : _submitForm,
                     style: FilledButton.styleFrom(
                       backgroundColor: _themeColorDark,
                       foregroundColor: Colors.white,
@@ -442,13 +562,22 @@ class _AddLookingForPostScreenState extends State<AddLookingForPostScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      'Post Looking-For Request',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : Text(
+                            _isEditMode ? 'Update Post' : 'Post Looking-For Request',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
               ),

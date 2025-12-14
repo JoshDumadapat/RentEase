@@ -13,3 +13,6 @@ build/
 models/
 *.onnx
 
+# Firebase credentials (sensitive - never commit!)
+firebase-credentials.json
+

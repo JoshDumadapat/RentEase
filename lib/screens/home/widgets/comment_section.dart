@@ -40,6 +40,7 @@ class _CommentSectionState extends State<CommentSection> {
 
     final newComment = CommentModel(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
+      userId: 'current_user', // In real app, get from auth
       username: 'You', // In real app, get from auth
       text: _commentController.text.trim(),
       postedDate: DateTime.now(),

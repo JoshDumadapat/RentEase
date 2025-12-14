@@ -14,6 +14,37 @@ class ListingModel {
   final int bathrooms;
   final double area;
   final DateTime postedDate;
+  final String? userId; // User ID of the listing owner
+  
+  // Additional details
+  final double? deposit;
+  final double? advance;
+  final String? landmark;
+  final String? phone;
+  final String? messenger;
+  final DateTime? availableFrom;
+  final String? curfew;
+  final int? maxOccupants;
+  
+  // Amenities
+  final bool electricityIncluded;
+  final bool waterIncluded;
+  final bool internetIncluded;
+  final bool privateCR;
+  final bool sharedCR;
+  final bool kitchenAccess;
+  final bool wifi;
+  final bool laundry;
+  final bool parking;
+  final bool security;
+  final bool aircon;
+  final bool petFriendly;
+  
+  // Counts and ratings
+  final int favoriteCount;
+  final int reviewCount;
+  final double averageRating;
+  final int viewCount;
 
   ListingModel({
     required this.id,
@@ -29,6 +60,31 @@ class ListingModel {
     required this.bathrooms,
     required this.area,
     required this.postedDate,
+    this.userId,
+    this.deposit,
+    this.advance,
+    this.landmark,
+    this.phone,
+    this.messenger,
+    this.availableFrom,
+    this.curfew,
+    this.maxOccupants,
+    this.electricityIncluded = false,
+    this.waterIncluded = false,
+    this.internetIncluded = false,
+    this.privateCR = false,
+    this.sharedCR = false,
+    this.kitchenAccess = false,
+    this.wifi = false,
+    this.laundry = false,
+    this.parking = false,
+    this.security = false,
+    this.aircon = false,
+    this.petFriendly = false,
+    this.favoriteCount = 0,
+    this.reviewCount = 0,
+    this.averageRating = 0.0,
+    this.viewCount = 0,
   });
 
   /// Get formatted time ago string (e.g., "2d ago", "5h ago", "30m ago")
@@ -84,6 +140,16 @@ class ListingModel {
                        data['owner'] as String? ?? 
                        'Unknown Owner';
 
+    // Parse availableFrom
+    DateTime? availableFrom;
+    if (data['availableFrom'] != null) {
+      if (data['availableFrom'] is Timestamp) {
+        availableFrom = (data['availableFrom'] as Timestamp).toDate();
+      } else if (data['availableFrom'] is DateTime) {
+        availableFrom = data['availableFrom'] as DateTime;
+      }
+    }
+
     return ListingModel(
       id: data['id'] as String? ?? '',
       title: data['title'] as String? ?? '',
@@ -98,6 +164,31 @@ class ListingModel {
       bathrooms: (data['bathrooms'] as num?)?.toInt() ?? 0,
       area: (data['area'] as num?)?.toDouble() ?? 0.0,
       postedDate: postedDate,
+      userId: data['userId'] as String?,
+      deposit: (data['deposit'] as num?)?.toDouble(),
+      advance: (data['advance'] as num?)?.toDouble(),
+      landmark: data['landmark'] as String?,
+      phone: data['phone'] as String?,
+      messenger: data['messenger'] as String?,
+      availableFrom: availableFrom,
+      curfew: data['curfew'] as String?,
+      maxOccupants: (data['maxOccupants'] as num?)?.toInt(),
+      electricityIncluded: data['electricityIncluded'] as bool? ?? false,
+      waterIncluded: data['waterIncluded'] as bool? ?? false,
+      internetIncluded: data['internetIncluded'] as bool? ?? false,
+      privateCR: data['privateCR'] as bool? ?? false,
+      sharedCR: data['sharedCR'] as bool? ?? false,
+      kitchenAccess: data['kitchenAccess'] as bool? ?? false,
+      wifi: data['wifi'] as bool? ?? false,
+      laundry: data['laundry'] as bool? ?? false,
+      parking: data['parking'] as bool? ?? false,
+      security: data['security'] as bool? ?? false,
+      aircon: data['aircon'] as bool? ?? false,
+      petFriendly: data['petFriendly'] as bool? ?? false,
+      favoriteCount: (data['favoriteCount'] as num?)?.toInt() ?? 0,
+      reviewCount: (data['reviewCount'] as num?)?.toInt() ?? 0,
+      averageRating: (data['averageRating'] as num?)?.toDouble() ?? 0.0,
+      viewCount: (data['viewCount'] as num?)?.toInt() ?? 0,
     );
   }
 

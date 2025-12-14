@@ -1,5 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class CommentModel {
   final String id;
+  final String userId;
   final String username;
   final String text;
   final DateTime postedDate;
@@ -8,6 +11,7 @@ class CommentModel {
 
   CommentModel({
     required this.id,
+    required this.userId,
     required this.username,
     required this.text,
     required this.postedDate,
@@ -30,11 +34,47 @@ class CommentModel {
     }
   }
 
+  /// Create CommentModel from Firestore data
+  factory CommentModel.fromMap(Map<String, dynamic> data) {
+    // Parse postedDate/createdAt
+    DateTime postedDate;
+    if (data['postedDate'] != null) {
+      if (data['postedDate'] is Timestamp) {
+        postedDate = (data['postedDate'] as Timestamp).toDate();
+      } else if (data['postedDate'] is DateTime) {
+        postedDate = data['postedDate'] as DateTime;
+      } else {
+        postedDate = DateTime.now();
+      }
+    } else if (data['createdAt'] != null) {
+      if (data['createdAt'] is Timestamp) {
+        postedDate = (data['createdAt'] as Timestamp).toDate();
+      } else if (data['createdAt'] is DateTime) {
+        postedDate = data['createdAt'] as DateTime;
+      } else {
+        postedDate = DateTime.now();
+      }
+    } else {
+      postedDate = DateTime.now();
+    }
+
+    return CommentModel(
+      id: data['id'] as String? ?? '',
+      userId: data['userId'] as String? ?? '',
+      username: data['username'] as String? ?? 'Unknown',
+      text: data['text'] as String? ?? '',
+      postedDate: postedDate,
+      isVerified: data['isVerified'] as bool? ?? false,
+      propertyListingId: data['propertyListingId'] as String?,
+    );
+  }
+
   static List<CommentModel> getMockComments() {
     final now = DateTime.now();
     return [
       CommentModel(
         id: '1',
+        userId: 'user1',
         username: 'Alex',
         text: 'I have a 2-bedroom apartment available near SM Seaside! Check it out:',
         postedDate: now.subtract(const Duration(minutes: 15)),
@@ -43,6 +83,7 @@ class CommentModel {
       ),
       CommentModel(
         id: '2',
+        userId: 'user2',
         username: 'Maria',
         text: 'Check out my listing in IT Park, it might be what you\'re looking for!',
         postedDate: now.subtract(const Duration(hours: 1)),
@@ -51,6 +92,7 @@ class CommentModel {
       ),
       CommentModel(
         id: '3',
+        userId: 'user3',
         username: 'John',
         text: 'I know a great place that matches your budget. Here\'s my property:',
         postedDate: now.subtract(const Duration(hours: 2)),

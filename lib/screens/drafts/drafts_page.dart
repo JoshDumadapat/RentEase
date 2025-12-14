@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:rentease_app/backend/BListingService.dart';
 import 'package:rentease_app/screens/add_property/add_property_page.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
@@ -34,14 +35,19 @@ class _DraftsPageState extends State<DraftsPage> {
     }
 
     try {
+      debugPrint('📖 [DraftsPage] Loading drafts for user: ${user.uid}');
       final drafts = await _listingService.getDraftsByUser(user.uid);
+      debugPrint('📖 [DraftsPage] Received ${drafts.length} drafts');
+      
       if (mounted) {
         setState(() {
           _drafts = drafts;
           _isLoading = false;
         });
+        debugPrint('✅ [DraftsPage] Drafts loaded successfully');
       }
     } catch (e) {
+      debugPrint('❌ [DraftsPage] Error loading drafts: $e');
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -93,12 +99,23 @@ class _DraftsPageState extends State<DraftsPage> {
   }
 
   void _resumeDraft(Map<String, dynamic> draft) {
+    final draftId = draft['id'] as String?;
+    if (draftId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBarUtils.buildThemedSnackBar(
+          context,
+          'Error: Draft ID is missing',
+        ),
+      );
+      return;
+    }
+    
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => AddPropertyPage(
-          draftId: draft['id'],
-          draftData: draft,
+          draftId: draftId,
+          draftData: draft, // Pass draft data, but it will also load from Firestore if needed
         ),
       ),
     ).then((_) => _loadDrafts()); // Reload drafts when returning

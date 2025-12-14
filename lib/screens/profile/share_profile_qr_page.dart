@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:gallery_saver_plus/gallery_saver.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
@@ -534,13 +534,16 @@ class _ShareProfileQRPageState extends State<ShareProfileQRPage>
 
       // Save to gallery with user name
       final userName = widget.user.displayName.replaceAll(' ', '_').replaceAll(RegExp(r'[^\w\s-]'), '');
-      final result = await ImageGallerySaver.saveImage(
-        pngBytes,
-        quality: 100,
-        name: 'RentEase_Profile_QR_${userName}_${widget.user.id}',
-      );
+      
+      // Create a temporary file
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/RentEase_Profile_QR_${userName}_${widget.user.id}.png');
+      await file.writeAsBytes(pngBytes);
+      
+      // Save to gallery using gallery_saver_plus
+      final result = await GallerySaver.saveImage(file.path);
 
-      if (mounted && result['isSuccess'] == true) {
+      if (mounted && result == true) {
         ScaffoldMessenger.of(context).showSnackBar(
           _buildThemedSnackBar('Image saved to gallery'),
         );

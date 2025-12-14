@@ -15,11 +15,13 @@ class ChangeEmailPage extends StatefulWidget {
 
 class _ChangeEmailPageState extends State<ChangeEmailPage> {
   final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _newEmailController = TextEditingController();
   
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _isVerified = false; // Track if email/password verification is complete
   
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final BUserService _userService = BUserService();
@@ -27,11 +29,12 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
   @override
   void initState() {
     super.initState();
-    _newEmailController.text = _auth.currentUser?.email ?? '';
+    // Don't pre-fill any fields
   }
 
   @override
   void dispose() {
+    _emailController.dispose();
     _passwordController.dispose();
     _newEmailController.dispose();
     super.dispose();
@@ -56,6 +59,87 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
     return providers.contains('google.com') && !providers.contains('password');
   }
 
+  // Step 1: Verify email and password
+  Future<void> _verifyCredentials() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('No user logged in');
+      }
+
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+
+      // Verify email matches current user's email
+      if (email != user.email) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Email does not match your current email address',
+          ),
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Re-authenticate user to verify password
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: password,
+      );
+      
+      await user.reauthenticateWithCredential(credential);
+
+      if (!mounted) return;
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBarUtils.buildThemedSnackBar(
+          context,
+          'Verification successful. You can now change your email.',
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      // Move to step 2: show new email field
+      setState(() {
+        _isVerified = true;
+        _isLoading = false;
+      });
+    } on FirebaseAuthException catch (e) {
+      String message = 'Verification failed';
+      if (e.code == 'wrong-password') {
+        message = 'Password is incorrect';
+      } else if (e.code == 'user-not-found') {
+        message = 'Email not found';
+      } else if (e.code == 'invalid-email') {
+        message = 'Invalid email address';
+      } else if (e.code == 'requires-recent-login') {
+        message = 'Please log out and log back in before changing email';
+      }
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBarUtils.buildThemedSnackBar(context, message),
+      );
+      setState(() => _isLoading = false);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBarUtils.buildThemedSnackBar(context, 'Error: ${e.toString()}'),
+      );
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // Step 2: Change email after verification
   Future<void> _changeEmail() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -69,15 +153,29 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
         throw Exception('No user logged in');
       }
 
-      // Re-authenticate user
-      final credential = EmailAuthProvider.credential(
-        email: user.email!,
-        password: _passwordController.text,
-      );
-      
-      await user.reauthenticateWithCredential(credential);
-
       final newEmail = _newEmailController.text.trim();
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+
+      // Re-authenticate right before changing email (required by Firebase)
+      // This ensures we have recent authentication
+      try {
+        final credential = EmailAuthProvider.credential(
+          email: email,
+          password: password,
+        );
+        await user.reauthenticateWithCredential(credential);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Re-authentication failed. Please verify your credentials again.',
+          ),
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
 
       // Update email in Firebase Auth
       await user.updateEmail(newEmail);
@@ -85,7 +183,7 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
       // Update email in Firestore using BUserService
       await _userService.updateUserEmail(user.uid, newEmail);
 
-      // Send verification email
+      // Send verification email to the new address
       await user.sendEmailVerification();
 
       if (!mounted) return;
@@ -101,14 +199,23 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
       Navigator.of(context).pop();
     } on FirebaseAuthException catch (e) {
       String message = 'Failed to change email';
-      if (e.code == 'wrong-password') {
-        message = 'Password is incorrect';
-      } else if (e.code == 'email-already-in-use') {
-        message = 'This email is already in use';
+      if (e.code == 'email-already-in-use') {
+        message = 'This email is already in use by another account';
       } else if (e.code == 'invalid-email') {
-        message = 'Invalid email address';
+        message = 'Invalid email address format';
       } else if (e.code == 'requires-recent-login') {
-        message = 'Please log out and log back in before changing email';
+        message = 'Security verification expired. Please verify your credentials again.';
+        // Reset verification state so user can verify again
+        setState(() {
+          _isVerified = false;
+          _passwordController.clear();
+        });
+      } else if (e.code == 'weak-password') {
+        message = 'Password is too weak';
+      } else if (e.code == 'wrong-password') {
+        message = 'Password is incorrect';
+      } else {
+        message = 'Error: ${e.message ?? e.code}';
       }
       
       if (!mounted) return;
@@ -118,7 +225,10 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBarUtils.buildThemedSnackBar(context, 'Error: ${e.toString()}'),
+        SnackBarUtils.buildThemedSnackBar(
+          context,
+          'Error: ${e.toString()}',
+        ),
       );
     } finally {
       if (mounted) {
@@ -231,190 +341,283 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
               : Form(
                   key: _formKey,
                   child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Header
-                Icon(
-                  Icons.email_outlined,
-                  size: 64,
-                  color: _themeColorDark,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Update your email address',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Enter your password and new email address',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-
-                // Current Email (Read-only)
-                Text(
-                  'Current Email',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF2A2A2A) : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: borderColor),
-                  ),
-                  child: Text(
-                    currentEmail,
-                    style: TextStyle(
-                      color: textColor.withOpacity(0.7),
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Password
-                Text(
-                  'Password',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  style: TextStyle(color: textColor),
-                  decoration: InputDecoration(
-                    hintText: 'Enter your password',
-                    hintStyle: TextStyle(color: textColor.withOpacity(0.5)),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                        color: textColor.withOpacity(0.6),
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Header
+                      Icon(
+                        _isVerified ? Icons.email_outlined : Icons.verified_user_outlined,
+                        size: 64,
+                        color: _themeColorDark,
                       ),
-                      onPressed: () {
-                        setState(() => _obscurePassword = !_obscurePassword);
-                      },
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: _themeColorDark, width: 2),
-                    ),
-                    filled: true,
-                    fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.grey[50],
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your password';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
+                      const SizedBox(height: 16),
+                      Text(
+                        _isVerified ? 'Set New Email Address' : 'Verify Your Identity',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _isVerified
+                            ? 'Enter your new email address'
+                            : 'Enter your email and password to continue',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: subtextColor,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
 
-                // New Email
-                Text(
-                  'New Email',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _newEmailController,
-                  keyboardType: TextInputType.emailAddress,
-                  style: TextStyle(color: textColor),
-                  decoration: InputDecoration(
-                    hintText: 'Enter your new email address',
-                    hintStyle: TextStyle(color: textColor.withOpacity(0.5)),
-                    prefixIcon: Icon(Icons.email_outlined, color: textColor.withOpacity(0.6)),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: _themeColorDark, width: 2),
-                    ),
-                    filled: true,
-                    fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.grey[50],
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a new email address';
-                    }
-                    if (!value.contains('@') || !value.contains('.')) {
-                      return 'Please enter a valid email address';
-                    }
-                    if (value.trim() == currentEmail) {
-                      return 'New email must be different from current email';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 32),
-
-                // Change Email Button
-                FilledButton(
-                  onPressed: _isLoading ? null : _changeEmail,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _themeColorDark,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : const Text(
-                          'Change Email',
+                      // Step 1: Email and Password (shown when not verified)
+                      if (!_isVerified) ...[
+                        // Email Field
+                        Text(
+                          'Email',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.w600,
+                            color: textColor,
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          style: TextStyle(color: textColor),
+                          decoration: InputDecoration(
+                            hintText: 'Enter your email address',
+                            hintStyle: TextStyle(color: textColor.withOpacity(0.5)),
+                            prefixIcon: Icon(Icons.email_outlined, color: textColor.withOpacity(0.6)),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: borderColor),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: borderColor),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: _themeColorDark, width: 2),
+                            ),
+                            filled: true,
+                            fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.grey[50],
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter your email address';
+                            }
+                            if (!value.contains('@') || !value.contains('.')) {
+                              return 'Please enter a valid email address';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Password Field
+                        Text(
+                          'Password',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          style: TextStyle(color: textColor),
+                          decoration: InputDecoration(
+                            hintText: 'Enter your password',
+                            hintStyle: TextStyle(color: textColor.withOpacity(0.5)),
+                            prefixIcon: Icon(Icons.lock_outlined, color: textColor.withOpacity(0.6)),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                color: textColor.withOpacity(0.6),
+                              ),
+                              onPressed: () {
+                                setState(() => _obscurePassword = !_obscurePassword);
+                              },
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: borderColor),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: borderColor),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: _themeColorDark, width: 2),
+                            ),
+                            filled: true,
+                            fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.grey[50],
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter your password';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 32),
+
+                        // Verify Button
+                        FilledButton(
+                          onPressed: _isLoading ? null : _verifyCredentials,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _themeColorDark,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : const Text(
+                                  'Verify',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                        ),
+                      ],
+
+                      // Step 2: New Email Field (shown after verification)
+                      if (_isVerified) ...[
+                        // Current Email Display (read-only, shown after verification)
+                        Text(
+                          'Current Email',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF2A2A2A) : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  currentEmail,
+                                  style: TextStyle(
+                                    color: textColor.withOpacity(0.7),
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                              Icon(
+                                Icons.check_circle_outline,
+                                color: Colors.green,
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // New Email Field
+                        Text(
+                          'New Email',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _newEmailController,
+                          keyboardType: TextInputType.emailAddress,
+                          style: TextStyle(color: textColor),
+                          decoration: InputDecoration(
+                            hintText: 'Enter your new email address',
+                            hintStyle: TextStyle(color: textColor.withOpacity(0.5)),
+                            prefixIcon: Icon(Icons.email_outlined, color: textColor.withOpacity(0.6)),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: borderColor),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: borderColor),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: _themeColorDark, width: 2),
+                            ),
+                            filled: true,
+                            fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.grey[50],
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter a new email address';
+                            }
+                            if (!value.contains('@') || !value.contains('.')) {
+                              return 'Please enter a valid email address';
+                            }
+                            if (value.trim() == currentEmail) {
+                              return 'New email must be different from current email';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 32),
+
+                        // Change Email Button
+                        FilledButton(
+                          onPressed: _isLoading ? null : _changeEmail,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _themeColorDark,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : const Text(
+                                  'Change Email',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ],
-            ),
-          ),
         ),
       ),
     );

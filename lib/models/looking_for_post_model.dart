@@ -1,5 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class LookingForPostModel {
   final String id;
+  final String? userId; // User ID who created the post
   final String username;
   final String description;
   final String location;
@@ -14,6 +17,7 @@ class LookingForPostModel {
 
   LookingForPostModel({
     required this.id,
+    this.userId,
     required this.username,
     required this.description,
     required this.location,
@@ -40,6 +44,60 @@ class LookingForPostModel {
     } else {
       return 'Just now';
     }
+  }
+
+  /// Create LookingForPostModel from Firestore data
+  factory LookingForPostModel.fromMap(Map<String, dynamic> data) {
+    // Parse postedDate/createdAt
+    DateTime postedDate;
+    if (data['postedDate'] != null) {
+      if (data['postedDate'] is Timestamp) {
+        postedDate = (data['postedDate'] as Timestamp).toDate();
+      } else if (data['postedDate'] is DateTime) {
+        postedDate = data['postedDate'] as DateTime;
+      } else {
+        postedDate = DateTime.now();
+      }
+    } else if (data['createdAt'] != null) {
+      if (data['createdAt'] is Timestamp) {
+        postedDate = (data['createdAt'] as Timestamp).toDate();
+      } else if (data['createdAt'] is DateTime) {
+        postedDate = data['createdAt'] as DateTime;
+      } else {
+        postedDate = DateTime.now();
+      }
+    } else {
+      postedDate = DateTime.now();
+    }
+
+    // Parse moveInDate
+    DateTime? moveInDate;
+    if (data['moveInDate'] != null) {
+      if (data['moveInDate'] is Timestamp) {
+        moveInDate = (data['moveInDate'] as Timestamp).toDate();
+      } else if (data['moveInDate'] is DateTime) {
+        moveInDate = data['moveInDate'] as DateTime;
+      }
+    }
+
+    // Format date string from postedDate
+    final dateStr = '${postedDate.month}/${postedDate.day}';
+
+    return LookingForPostModel(
+      id: data['id'] as String? ?? '',
+      userId: data['userId'] as String?,
+      username: data['username'] as String? ?? 'Unknown',
+      description: data['description'] as String? ?? '',
+      location: data['location'] as String? ?? '',
+      budget: data['budget'] as String? ?? '',
+      date: dateStr,
+      propertyType: data['propertyType'] as String? ?? 'Apartment',
+      moveInDate: moveInDate,
+      postedDate: postedDate,
+      isVerified: data['isVerified'] as bool? ?? false,
+      likeCount: (data['likeCount'] as num?)?.toInt() ?? 0,
+      commentCount: (data['commentCount'] as num?)?.toInt() ?? 0,
+    );
   }
 
   static List<LookingForPostModel> getMockLookingForPosts() {

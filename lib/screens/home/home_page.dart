@@ -2,11 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 import 'package:rentease_app/models/category_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/models/looking_for_post_model.dart';
 import 'package:rentease_app/models/comment_model.dart';
+import 'package:rentease_app/backend/BListingService.dart';
+import 'package:rentease_app/backend/BLookingForPostService.dart';
+import 'package:rentease_app/backend/BFavoriteService.dart';
+import 'package:rentease_app/backend/BReviewService.dart';
+import 'package:rentease_app/backend/BHiddenPostService.dart';
+import 'package:rentease_app/backend/BCommentService.dart';
 import 'package:rentease_app/screens/posts/posts_page.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
 import 'package:rentease_app/screens/looking_for_post_detail/looking_for_post_detail_page.dart';
@@ -39,17 +49,342 @@ class _HomePageState extends State<HomePage>
   static bool _hasAnimatedOnce = false; // Track if animations have been shown
 
   final List<CategoryModel> _categories = CategoryModel.getMockCategories();
-  final List<ListingModel> _listings = [...ListingModel.getMockListings()];
-  final List<LookingForPostModel> _lookingForPosts = [
-    ...LookingForPostModel.getMockLookingForPosts()
-  ];
+  List<ListingModel> _listings = [];
+  List<LookingForPostModel> _lookingForPosts = [];
+  
+  // Pagination state for listings
+  DocumentSnapshot? _lastListingDocument;
+  bool _hasMoreListings = true;
+  bool _isLoadingMoreListings = false;
+  int _listingsPageOffset = 0; // Track how many listings we've already shown
+  
+  // Pagination state for looking for posts
+  DocumentSnapshot? _lastPostDocument;
+  bool _hasMorePosts = true;
+  bool _isLoadingMorePosts = false;
+  
+  // Backend services
+  final BListingService _listingService = BListingService();
+  final BLookingForPostService _lookingForPostService = BLookingForPostService();
+  final BReviewService _reviewService = BReviewService();
+  final BHiddenPostService _hiddenPostService = BHiddenPostService();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_onTabControllerChanged);
     _checkFirstTimeUser();
-    _loadData();
+    _setupScrollListeners();
+    _loadInitialData();
+  }
+  
+  void _setupScrollListeners() {
+    // Listen to scroll position for listings
+    _listingsScrollController.addListener(() {
+      if (_listingsScrollController.position.pixels >=
+          _listingsScrollController.position.maxScrollExtent * 0.8) {
+        // Load more when 80% scrolled
+        if (!_isLoadingMoreListings && _hasMoreListings) {
+          _loadMoreListings();
+        }
+      }
+    });
+    
+    // Listen to scroll position for looking for posts
+    _lookingForScrollController.addListener(() {
+      if (_lookingForScrollController.position.pixels >=
+          _lookingForScrollController.position.maxScrollExtent * 0.8) {
+        // Load more when 80% scrolled
+        if (!_isLoadingMorePosts && _hasMorePosts) {
+          _loadMoreLookingForPosts();
+        }
+      }
+    });
+  }
+  
+  Future<void> _loadInitialData() async {
+    await Future.wait([
+      _loadInitialListings(),
+      _loadInitialLookingForPosts(),
+    ]);
+  }
+  
+  Future<void> _loadInitialListings() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _listings = []; // Clear old data
+        _lastListingDocument = null;
+        _hasMoreListings = true;
+        _listingsPageOffset = 0; // Reset offset
+      });
+    }
+    
+    try {
+      final result = await _listingService.getListingsPaginated(
+        limit: 12,
+        lastDocument: null,
+        randomize: true,
+      );
+      
+      final listingsData = result['listings'] as List<Map<String, dynamic>>;
+      _lastListingDocument = result['lastDocument'] as DocumentSnapshot?;
+      _hasMoreListings = result['hasMore'] as bool;
+      
+      debugPrint('📊 [HomePage] Loaded ${listingsData.length} listings from pagination');
+      
+      // Convert to ListingModel and fetch ratings
+      final listings = await Future.wait(
+        listingsData.map((data) async {
+          // Fetch actual review count and average rating FIRST, before creating ListingModel
+          String listingId = data['id'] as String? ?? '';
+          int actualCount = 0;
+          double actualAverageRating = 0.0;
+          
+          try {
+            actualCount = await _reviewService.getReviewCount(listingId);
+            debugPrint('🔍 [HomePage] Fetching rating for $listingId: reviewCount=$actualCount');
+            
+            if (actualCount > 0) {
+              actualAverageRating = await _reviewService.getAverageRating(listingId);
+              debugPrint('✅ [HomePage] Fetched rating for $listingId: $actualAverageRating (from $actualCount reviews)');
+            } else {
+              debugPrint('📊 [HomePage] No reviews found for $listingId');
+            }
+          } catch (e, stackTrace) {
+            debugPrint('⚠️ [HomePage] Error fetching review data for $listingId: $e');
+            debugPrint('📚 Stack trace: $stackTrace');
+          }
+          
+          // Update data map with fetched values BEFORE creating ListingModel
+          final updatedData = Map<String, dynamic>.from(data);
+          updatedData['reviewCount'] = actualCount;
+          updatedData['averageRating'] = actualAverageRating; // Already a double from getAverageRating
+          
+          debugPrint('🔧 [HomePage] Creating ListingModel for $listingId with: reviewCount=$actualCount, averageRating=$actualAverageRating');
+          
+          // Create ListingModel with updated data
+          final listing = ListingModel.fromMap(updatedData);
+          
+          // Verify the values were set correctly
+          if ((listing.reviewCount != actualCount) || (listing.averageRating - actualAverageRating).abs() > 0.01) {
+            debugPrint('⚠️ [HomePage] WARNING: ListingModel values mismatch for $listingId!');
+            debugPrint('   Expected: reviewCount=$actualCount, averageRating=$actualAverageRating');
+            debugPrint('   Got: reviewCount=${listing.reviewCount}, averageRating=${listing.averageRating}');
+          } else {
+            debugPrint('✅ [HomePage] Verified listing $listingId: reviewCount=${listing.reviewCount}, averageRating=${listing.averageRating}');
+          }
+          
+          return listing;
+        }),
+      );
+      
+      if (mounted) {
+        setState(() {
+          _listings = listings;
+          _isLoading = false;
+          _listingsPageOffset = listings.length;
+        });
+        debugPrint('✅ [HomePage] Set ${listings.length} listings in state. Total listings available: ${listings.length}');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ [HomePage] Error loading initial listings: $e');
+      debugPrint('📚 Stack trace: $stackTrace');
+      if (mounted) {
+        setState(() {
+          _listings = [];
+          _isLoading = false;
+        });
+      }
+    }
+  }
+  
+  Future<void> _loadMoreListings() async {
+    if (_isLoadingMoreListings || !_hasMoreListings) return;
+    
+    setState(() {
+      _isLoadingMoreListings = true;
+    });
+    
+    try {
+      final result = await _listingService.getListingsPaginated(
+        limit: 12,
+        lastDocument: _lastListingDocument,
+        randomize: true,
+      );
+      
+      final listingsData = result['listings'] as List<Map<String, dynamic>>;
+      _lastListingDocument = result['lastDocument'] as DocumentSnapshot?;
+      _hasMoreListings = result['hasMore'] as bool;
+      
+      // Convert to ListingModel and fetch ratings
+      final newListings = await Future.wait(
+        listingsData.map((data) async {
+          // Fetch actual review count and average rating FIRST, before creating ListingModel
+          String listingId = data['id'] as String? ?? '';
+          int actualCount = 0;
+          double actualAverageRating = 0.0;
+          
+          try {
+            actualCount = await _reviewService.getReviewCount(listingId);
+            if (actualCount > 0) {
+              actualAverageRating = await _reviewService.getAverageRating(listingId);
+            }
+          } catch (e) {
+            debugPrint('⚠️ [HomePage] Error fetching review data for $listingId: $e');
+          }
+          
+          // Update data map with fetched values BEFORE creating ListingModel
+          final updatedData = Map<String, dynamic>.from(data);
+          updatedData['reviewCount'] = actualCount;
+          updatedData['averageRating'] = actualAverageRating;
+          
+          // Create ListingModel with updated data
+          return ListingModel.fromMap(updatedData);
+        }),
+      );
+      
+      if (mounted) {
+        setState(() {
+          _listings.addAll(newListings);
+          _isLoadingMoreListings = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [HomePage] Error loading more listings: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingMoreListings = false;
+        });
+      }
+    }
+  }
+  
+  Future<void> _loadInitialLookingForPosts() async {
+    if (mounted) {
+      setState(() {
+        _isLoadingLookingFor = true;
+        _lookingForPosts = []; // Clear old data
+        _lastPostDocument = null;
+        _hasMorePosts = true;
+      });
+    }
+    
+    try {
+      final result = await _lookingForPostService.getLookingForPostsPaginated(
+        limit: 12,
+        lastDocument: null,
+        randomize: true,
+      );
+      
+      final postsData = result['posts'] as List<Map<String, dynamic>>;
+      _lastPostDocument = result['lastDocument'] as DocumentSnapshot?;
+      _hasMorePosts = result['hasMore'] as bool;
+      
+      // Filter out hidden posts
+      final currentUserId = _auth.currentUser?.uid;
+      List<LookingForPostModel> posts = postsData
+          .map((data) => LookingForPostModel.fromMap(data))
+          .toList();
+      
+      if (currentUserId != null && posts.isNotEmpty) {
+        final hiddenPostIds = await _hiddenPostService.getHiddenPostIds(currentUserId);
+        posts = posts.where((post) => !hiddenPostIds.contains(post.id)).toList();
+      }
+      
+      if (mounted) {
+        setState(() {
+          _lookingForPosts = posts;
+          _isLoadingLookingFor = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [HomePage] Error loading initial looking for posts: $e');
+      if (mounted) {
+        setState(() {
+          _lookingForPosts = [];
+          _isLoadingLookingFor = false;
+        });
+      }
+    }
+  }
+  
+  Future<void> _loadMoreLookingForPosts() async {
+    if (_isLoadingMorePosts || !_hasMorePosts) return;
+    
+    setState(() {
+      _isLoadingMorePosts = true;
+    });
+    
+    try {
+      final result = await _lookingForPostService.getLookingForPostsPaginated(
+        limit: 12,
+        lastDocument: _lastPostDocument,
+        randomize: true,
+      );
+      
+      final postsData = result['posts'] as List<Map<String, dynamic>>;
+      _lastPostDocument = result['lastDocument'] as DocumentSnapshot?;
+      _hasMorePosts = result['hasMore'] as bool;
+      
+      // Filter out hidden posts
+      final currentUserId = _auth.currentUser?.uid;
+      List<LookingForPostModel> newPosts = postsData
+          .map((data) => LookingForPostModel.fromMap(data))
+          .toList();
+      
+      if (currentUserId != null && newPosts.isNotEmpty) {
+        final hiddenPostIds = await _hiddenPostService.getHiddenPostIds(currentUserId);
+        newPosts = newPosts.where((post) => !hiddenPostIds.contains(post.id)).toList();
+      }
+      
+      if (mounted) {
+        setState(() {
+          _lookingForPosts.addAll(newPosts);
+          _isLoadingMorePosts = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [HomePage] Error loading more looking for posts: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingMorePosts = false;
+        });
+      }
+    }
+  }
+
+  void _onTabControllerChanged() {
+    // Update UI when tab changes programmatically (e.g., when navigating after adding a post)
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _scrollToTopAndRefresh(int tabIndex) {
+    if (tabIndex == 0) {
+      // Listings tab - scroll to top and refresh
+      if (_listingsScrollController.hasClients) {
+        _listingsScrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+      _refreshListings();
+    } else if (tabIndex == 1) {
+      // Looking For tab - scroll to top and refresh
+      if (_lookingForScrollController.hasClients) {
+        _lookingForScrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+      _refreshLookingFor();
+    }
   }
 
   Future<void> _checkFirstTimeUser() async {
@@ -69,16 +404,6 @@ class _HomePageState extends State<HomePage>
   @override
   bool get wantKeepAlive => true; // Preserve scroll position when navigating away
 
-  Future<void> _loadData() async {
-    // Simulate network delay for skeleton loading (minimal delay for smooth UX)
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        _isLoadingLookingFor = false;
-      });
-    }
-  }
 
   // Exposed for children (e.g., post creation screens) to add new content to the top of feeds.
   void addNewListing(ListingModel listing) {
@@ -100,6 +425,7 @@ class _HomePageState extends State<HomePage>
   void dispose() {
     _listingsScrollController.dispose();
     _lookingForScrollController.dispose();
+    _tabController.removeListener(_onTabControllerChanged);
     _tabController.dispose();
     super.dispose();
   }
@@ -111,7 +437,7 @@ class _HomePageState extends State<HomePage>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final backgroundColor = isDark ? Colors.grey[900] : Colors.white;
-    final unselectedTabColor = isDark ? Colors.grey[400] : Colors.grey[600];
+    final Color unselectedTabColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
     
     if (_isLoading) {
       return HomeSkeleton(isDark: isDark, isFirstTimeUser: _isFirstTimeUser);
@@ -161,7 +487,7 @@ class _HomePageState extends State<HomePage>
                     unselectedLabelColor: unselectedTabColor,
                     indicatorColor: _themeColorDark,
                     indicatorWeight: 2.5,
-                    dividerColor: Colors.transparent, // Remove bottom outline
+                    dividerColor: Colors.transparent,
                     labelStyle: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -175,6 +501,12 @@ class _HomePageState extends State<HomePage>
                       Tab(text: 'Listings'),
                       Tab(text: 'Looking For'),
                     ],
+                    onTap: (index) {
+                      // If tapping the already-selected tab, scroll to top and refresh
+                      if (index == _tabController.index) {
+                        _scrollToTopAndRefresh(index);
+                      }
+                    },
                   ),
                 ),
                 // Shadow only at the bottom
@@ -211,16 +543,16 @@ class _HomePageState extends State<HomePage>
   }
 
   Future<void> _refreshListings() async {
-    // Reload listings data
-    setState(() {
-      _isLoading = true;
-    });
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
+    // Scroll to top if not already at top
+    if (_listingsScrollController.hasClients && _listingsScrollController.offset > 0) {
+      await _listingsScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     }
+    // Reload initial data
+    await _loadInitialListings();
   }
 
   Widget _buildListingsTab() {
@@ -231,20 +563,23 @@ class _HomePageState extends State<HomePage>
       onRefresh: _refreshListings,
       hasAnimatedOnce: _hasAnimatedOnce,
       isFirstTimeUser: _isFirstTimeUser,
+      isLoadingMore: _isLoadingMoreListings,
+      hasMore: _hasMoreListings,
+      onLoadMore: _loadMoreListings,
     );
   }
 
   Future<void> _refreshLookingFor() async {
-    // Reload looking for posts data
-    setState(() {
-      _isLoadingLookingFor = true;
-    });
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) {
-      setState(() {
-        _isLoadingLookingFor = false;
-      });
+    // Scroll to top if not already at top
+    if (_lookingForScrollController.hasClients && _lookingForScrollController.offset > 0) {
+      await _lookingForScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     }
+    // Reload initial data
+    await _loadInitialLookingForPosts();
   }
 
   Widget _buildLookingForTab() {
@@ -257,6 +592,9 @@ class _HomePageState extends State<HomePage>
       posts: _lookingForPosts,
       scrollController: _lookingForScrollController,
       onRefresh: _refreshLookingFor,
+      isLoadingMore: _isLoadingMorePosts,
+      hasMore: _hasMorePosts,
+      onLoadMore: _loadMoreLookingForPosts,
     );
   }
 }
@@ -268,6 +606,9 @@ class _ListingsSection extends StatefulWidget {
   final Future<void> Function()? onRefresh;
   final bool hasAnimatedOnce;
   final bool isFirstTimeUser;
+  final bool isLoadingMore;
+  final bool hasMore;
+  final Future<void> Function()? onLoadMore;
 
   const _ListingsSection({
     required this.categories,
@@ -276,6 +617,9 @@ class _ListingsSection extends StatefulWidget {
     this.onRefresh,
     required this.hasAnimatedOnce,
     required this.isFirstTimeUser,
+    this.isLoadingMore = false,
+    this.hasMore = true,
+    this.onLoadMore,
   });
 
   @override
@@ -347,6 +691,47 @@ class _ListingsSectionState extends State<_ListingsSection>
               ),
             ),
           ),
+          // Loading more indicator
+          if (widget.isLoadingMore)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ),
+          // "Continue to see more" message
+          if (!widget.isLoadingMore && widget.hasMore)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 24.0),
+                child: GestureDetector(
+                  onTap: widget.onLoadMore,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 24.0),
+                    decoration: BoxDecoration(
+                      color: _themeColorLight,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _themeColor.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.arrow_downward, color: _themeColorDark, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Continue to see more',
+                          style: TextStyle(
+                            color: _themeColorDark,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           const SliverToBoxAdapter(child: SizedBox(height: 16)),
         ],
       ),
@@ -837,28 +1222,57 @@ class _VisitListingsSection extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          itemCount: listings.length,
+        if (listings.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(Icons.home_outlined, size: 64, color: subtextColor),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No listings available',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: subtextColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Check back later for new listings',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: subtextColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            itemCount: listings.length,
             itemBuilder: (context, index) {
-            final listing = listings[index];
-            return Padding(
-              key: ValueKey(listing.id),
-              padding: EdgeInsets.only(
-                bottom: index == listings.length - 1 ? 0 : 20,
-              ),
-              child: _AnimatedFadeSlide(
-                delay: 400 + (index * 80), // Staggered animation with more spacing
-                child: _ModernListingCard(
-                  listing: listing,
-                  onTap: () => onListingTap(listing),
+              final listing = listings[index];
+              return Padding(
+                key: ValueKey(listing.id),
+                padding: EdgeInsets.only(
+                  bottom: index == listings.length - 1 ? 0 : 20,
                 ),
-              ),
-            );
-          },
-        ),
+                child: _AnimatedFadeSlide(
+                  delay: 400 + (index * 80), // Staggered animation with more spacing
+                  child: _ModernListingCard(
+                    listing: listing,
+                    onTap: () => onListingTap(listing),
+                  ),
+                ),
+              );
+            },
+          ),
       ],
     );
   }
@@ -869,6 +1283,68 @@ class _ModernListingCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _ModernListingCard({required this.listing, required this.onTap});
+
+  /// Build image widget that handles both network and asset images
+  Widget _buildListingImage(String imagePath) {
+    final isNetworkImage = imagePath.startsWith('http://') || 
+                           imagePath.startsWith('https://');
+    
+    if (isNetworkImage) {
+      return Image.network(
+        imagePath,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            color: Colors.grey[100],
+            child: Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+                color: Colors.grey[400],
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Colors.grey[100],
+            child: Center(
+              child: Icon(
+                Icons.image_outlined,
+                size: 48,
+                color: Colors.grey[400],
+              ),
+            ),
+          );
+        },
+      );
+    } else {
+      // Asset image
+      return Image(
+        image: AssetImage(imagePath),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Colors.grey[100],
+            child: Center(
+              child: Icon(
+                Icons.image_outlined,
+                size: 48,
+                color: Colors.grey[400],
+              ),
+            ),
+          );
+        },
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -923,24 +1399,7 @@ class _ModernListingCard extends StatelessWidget {
                     AspectRatio(
                       aspectRatio: 16 / 9,
                       child: listing.imagePaths.isNotEmpty
-                          ? Image(
-                              image: AssetImage(listing.imagePaths[0]),
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: Colors.grey[100],
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.image_outlined,
-                                      size: 48,
-                                      color: Colors.grey[400],
-                                    ),
-                                  ),
-                                );
-                              },
-                            )
+                          ? _buildListingImage(listing.imagePaths[0])
                           : Container(
                               color: Colors.grey[100],
                               child: Center(
@@ -1016,36 +1475,73 @@ class _ModernListingCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isDark 
-                                ? _themeColorDark.withValues(alpha: 0.25)
-                                : _themeColorLight,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            listing.category,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isDark 
-                                  ? _themeColorDark
-                                  : _themeColorDark,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark 
+                                    ? _themeColorDark.withValues(alpha: 0.25)
+                                    : _themeColorLight,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                listing.category,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark 
+                                      ? _themeColorDark
+                                      : _themeColorDark,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            Text(
+                              listing.timeAgo,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: subtextColor,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          listing.timeAgo,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: subtextColor,
-                            fontWeight: FontWeight.w400,
-                          ),
+                        // Average Rating Stars - Always show if there are reviews
+                        Builder(
+                          builder: (context) {
+                            // Debug: Log the rating value being displayed
+                            if (listing.reviewCount > 0) {
+                              debugPrint('🎨 [HomePage UI] Displaying rating for ${listing.id}: reviewCount=${listing.reviewCount}, averageRating=${listing.averageRating}');
+                            }
+                            
+                            if (listing.reviewCount > 0) {
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.star_rounded,
+                                    size: 16,
+                                    color: Colors.amber,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    listing.averageRating.toStringAsFixed(1),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: subtextColor,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
                         ),
                       ],
                     ),
@@ -1063,27 +1559,32 @@ class _ModernListingCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.location_on_rounded,
-                          size: 16,
-                          color: subtextColor,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            listing.location,
-                            style: TextStyle(
-                              fontSize: 13,
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        return Row(
+                          children: [
+                            Icon(
+                              Icons.location_on_rounded,
+                              size: 16,
                               color: subtextColor,
-                              fontWeight: FontWeight.w400,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
+                            const SizedBox(width: 6),
+                            SizedBox(
+                              width: constraints.maxWidth * 0.6,
+                              child: Text(
+                                listing.location,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: subtextColor,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -1151,15 +1652,29 @@ class _ModernListingCard extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _HeartActionIcon(likeCount: 24),
+                        _HeartActionIcon(
+                          listing: listing,
+                          favoriteCount: listing.favoriteCount,
+                        ),
                         _ModernActionIcon(
                           assetPath: 'assets/icons/navbar/comment_outlined.svg',
-                          count: 8,
-                          onTap: () {},
+                          count: listing.reviewCount,
+                          onTap: () {
+                            debugPrint('🔍 [HomePage] Comment icon tapped - reviewCount: ${listing.reviewCount}');
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ListingDetailsPage(
+                                  listing: listing,
+                                  initialTab: 1, // Open Review tab
+                                ),
+                              ),
+                            );
+                          },
                         ),
                         _ModernActionIcon(
                           assetPath: 'assets/icons/navbar/share_outlined.svg',
-                          count: 3,
+                          count: 0, // Share doesn't need a count
                           onTap: () {
                             _showShareModal(context, listing);
                           },
@@ -1177,7 +1692,7 @@ class _ModernListingCard extends StatelessWidget {
   }
 
   void _showShareModal(BuildContext context, ListingModel listing) {
-    const postLink = "https://example.com/post/123";
+    final listingLink = 'https://rentease.app/listing/${listing.id}';
 
     showModalBottomSheet(
       context: context,
@@ -1207,7 +1722,7 @@ class _ModernListingCard extends StatelessWidget {
                     iconPath: 'assets/icons/navbar/share_outlined.svg',
                     title: 'Copy link',
                     onTap: () {
-                      Clipboard.setData(ClipboardData(text: postLink));
+                      Clipboard.setData(ClipboardData(text: listingLink));
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBarUtils.buildThemedSnackBar(
@@ -1224,7 +1739,7 @@ class _ModernListingCard extends StatelessWidget {
                     title: 'Share to other apps',
                     onTap: () async {
                       Navigator.pop(context);
-                      await Share.share(postLink, subject: listing.title);
+                      await Share.share(listingLink, subject: listing.title);
                     },
                   ),
                   const SizedBox(height: 20),
@@ -1239,9 +1754,13 @@ class _ModernListingCard extends StatelessWidget {
 }
 
 class _HeartActionIcon extends StatefulWidget {
-  final int likeCount;
+  final ListingModel listing;
+  final int favoriteCount;
 
-  const _HeartActionIcon({required this.likeCount});
+  const _HeartActionIcon({
+    required this.listing,
+    required this.favoriteCount,
+  });
 
   @override
   State<_HeartActionIcon> createState() => _HeartActionIconState();
@@ -1250,12 +1769,19 @@ class _HeartActionIcon extends StatefulWidget {
 class _HeartActionIconState extends State<_HeartActionIcon>
     with SingleTickerProviderStateMixin {
   bool _isSaved = false;
+  int _currentCount = 0;
+  bool _isLoading = true;
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
+  final BFavoriteService _favoriteService = BFavoriteService();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  StreamSubscription<DocumentSnapshot>? _listingSubscription;
 
   @override
   void initState() {
     super.initState();
+    _currentCount = widget.favoriteCount;
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 200),
@@ -1263,21 +1789,118 @@ class _HeartActionIconState extends State<_HeartActionIcon>
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
+    _checkIfFavorite();
+    _setupRealtimeListener();
   }
 
   @override
   void dispose() {
+    _listingSubscription?.cancel();
     _animationController.dispose();
     super.dispose();
   }
 
-  void _handleTap() {
+  /// Setup realtime listener for favorite count updates
+  void _setupRealtimeListener() {
+    _listingSubscription = _firestore
+        .collection('listings')
+        .doc(widget.listing.id)
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted && snapshot.exists) {
+        final data = snapshot.data()!;
+        final favoriteCount = (data['favoriteCount'] as num?)?.toInt() ?? 0;
+        if (mounted) {
+          setState(() {
+            _currentCount = favoriteCount;
+          });
+        }
+      }
+    }, onError: (error) {
+      debugPrint('❌ [_HeartActionIcon] Error listening to listing: $error');
+    });
+  }
+
+  Future<void> _checkIfFavorite() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final isFav = await _favoriteService.isFavorite(user.uid, widget.listing.id);
+      if (mounted) {
+        setState(() {
+          _isSaved = isFav;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleTap() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBarUtils.buildThemedSnackBar(
+          context,
+          'Please sign in to save favorites',
+        ),
+      );
+      return;
+    }
+
+    // Optimistic update
+    final previousState = _isSaved;
+    final previousCount = _currentCount;
+    
     setState(() {
       _isSaved = !_isSaved;
+      _currentCount = _isSaved ? _currentCount + 1 : _currentCount - 1;
     });
+    
     _animationController.forward().then((_) {
       _animationController.reverse();
     });
+
+    try {
+      if (_isSaved) {
+        await _favoriteService.addFavorite(
+          userId: user.uid,
+          listingId: widget.listing.id,
+        );
+        // Realtime listener will update the count automatically
+      } else {
+        await _favoriteService.removeFavorite(
+          userId: user.uid,
+          listingId: widget.listing.id,
+        );
+        // Realtime listener will update the count automatically
+      }
+    } catch (e) {
+      // Revert on error
+      if (mounted) {
+        setState(() {
+          _isSaved = previousState;
+          _currentCount = previousCount;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Error updating favorite',
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -1314,16 +1937,26 @@ class _HeartActionIconState extends State<_HeartActionIcon>
                 },
               ),
               const SizedBox(width: 6),
-              Text(
-                widget.likeCount.toString(),
-                style: TextStyle(
-                  fontSize: 14,
-                  color: _isSaved
-                      ? const Color(0xFFE91E63)
-                      : const Color(0xFFB0B0B0),
-                  fontWeight: FontWeight.w600,
+              if (_isLoading)
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: _themeColorDark,
+                  ),
+                )
+              else
+                Text(
+                  _currentCount.toString(),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: _isSaved
+                        ? const Color(0xFFE91E63)
+                        : const Color(0xFFB0B0B0),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -1366,15 +1999,17 @@ class _ModernActionIcon extends StatelessWidget {
                   BlendMode.srcIn,
                 ),
               ),
-              const SizedBox(width: 6),
-              Text(
-                count.toString(),
-                style: TextStyle(
-                  fontSize: 14,
-                  color: const Color(0xFFB0B0B0),
-                  fontWeight: FontWeight.w600,
+              if (count > 0) ...[
+                const SizedBox(width: 6),
+                Text(
+                  count.toString(),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: const Color(0xFFB0B0B0),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -1435,11 +2070,17 @@ class _LookingForSection extends StatefulWidget {
   final List<LookingForPostModel> posts;
   final ScrollController? scrollController;
   final Future<void> Function()? onRefresh;
+  final bool isLoadingMore;
+  final bool hasMore;
+  final Future<void> Function()? onLoadMore;
 
   const _LookingForSection({
     required this.posts,
     this.scrollController,
     this.onRefresh,
+    this.isLoadingMore = false,
+    this.hasMore = true,
+    this.onLoadMore,
   });
 
   @override
@@ -1509,13 +2150,55 @@ class _LookingForSectionState extends State<_LookingForSection>
             delegate: SliverChildBuilderDelegate((context, index) {
               return Padding(
                 padding: EdgeInsets.only(
-                  bottom: index == widget.posts.length - 1 ? 32 : 16,
+                  bottom: index == widget.posts.length - 1 ? 16 : 16,
                 ),
                 child: _LookingForPostCard(post: widget.posts[index]),
               );
             }, childCount: widget.posts.length),
           ),
         ),
+        // Loading more indicator
+        if (widget.isLoadingMore)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+        // "Continue to see more" message
+        if (!widget.isLoadingMore && widget.hasMore)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 24.0),
+              child: GestureDetector(
+                onTap: widget.onLoadMore,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 24.0),
+                  decoration: BoxDecoration(
+                    color: _themeColorLight,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _themeColor.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.arrow_downward, color: _themeColorDark, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Continue to see more',
+                        style: TextStyle(
+                          color: _themeColorDark,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],
       ),
     );
@@ -1536,16 +2219,65 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
   int _likeCount = 0;
   int _commentCount = 0;
   final List<CommentModel> _comments = [];
+  final BHiddenPostService _hiddenPostService = BHiddenPostService();
+  final BCommentService _commentService = BCommentService();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  bool _isLoadingCommentCount = false;
 
   @override
   void initState() {
     super.initState();
     _likeCount = widget.post.likeCount;
     _commentCount = widget.post.commentCount;
-    _comments.addAll(CommentModel.getMockComments());
+    _loadCommentCount();
+  }
+  
+  Future<void> _loadCommentCount() async {
+    try {
+      setState(() {
+        _isLoadingCommentCount = true;
+      });
+      
+      final commentsData = await _commentService.getCommentsByLookingForPost(widget.post.id);
+      final actualCount = commentsData.length;
+      
+      if (mounted) {
+        setState(() {
+          _commentCount = actualCount;
+          _isLoadingCommentCount = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('⚠️ [LookingForPostCard] Error loading comment count: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingCommentCount = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(_LookingForPostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update counts when post data changes (e.g., from real-time listener)
+    if (oldWidget.post.commentCount != widget.post.commentCount) {
+      _commentCount = widget.post.commentCount;
+    }
+    if (oldWidget.post.likeCount != widget.post.likeCount) {
+      _likeCount = widget.post.likeCount;
+    }
   }
 
   void _showPostOptions() {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBarUtils.buildThemedSnackBar(context, 'Please log in to hide posts'),
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -1570,20 +2302,20 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
                     'Hide post',
                     style: TextStyle(color: textColor),
                   ),
-                onTap: () {
-                  Navigator.pop(context);
-                  // Note: Hide post functionality will be implemented when backend is ready
-                },
-              ),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _hidePost(currentUser.uid);
+                  },
+                ),
                 ListTile(
                   leading: const Icon(Icons.block, color: Colors.red),
                   title: const Text(
                     'Remove from feed',
                     style: TextStyle(color: Colors.red),
                   ),
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(context);
-                    // Note: Remove post functionality will be implemented when backend is ready
+                    await _hidePost(currentUser.uid);
                   },
                 ),
                 const SizedBox(height: 8),
@@ -1593,6 +2325,127 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
         );
       },
     );
+  }
+
+  void _showShareModal() {
+    final postLink = 'https://rentease.app/looking-for/${widget.post.id}';
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bgColor = isDark ? Colors.grey[800] : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[700] : Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  _ShareOption(
+                    iconPath: 'assets/icons/navbar/share_outlined.svg',
+                    title: 'Copy link',
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: postLink));
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBarUtils.buildThemedSnackBar(
+                          context,
+                          'Link copied to clipboard',
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _ShareOption(
+                    iconPath: 'assets/icons/navbar/share_outlined.svg',
+                    title: 'Share to other apps',
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await Share.share(postLink, subject: widget.post.description);
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _hidePost(String userId) async {
+    try {
+      debugPrint('🔒 [LookingForPostCard] Attempting to hide post: ${widget.post.id} for user: $userId');
+      
+      await _hiddenPostService.hidePost(
+        userId: userId,
+        postId: widget.post.id,
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            'Post hidden. It will no longer appear in your feed.',
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        
+        // Remove the post from the local list immediately
+        final homePageState = context.findAncestorStateOfType<_HomePageState>();
+        if (homePageState != null && mounted) {
+          homePageState.setState(() {
+            homePageState._lookingForPosts.removeWhere((p) => p.id == widget.post.id);
+          });
+        }
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ [LookingForPostCard] Error hiding post: $e');
+      debugPrint('❌ [LookingForPostCard] Stack trace: $stackTrace');
+      debugPrint('❌ [LookingForPostCard] Error type: ${e.runtimeType}');
+      
+      if (mounted) {
+        String errorMessage = 'Failed to hide post. Please try again.';
+        final errorString = e.toString().toLowerCase();
+        
+        // Check for specific error types
+        if (errorString.contains('permission-denied') || errorString.contains('permission')) {
+          errorMessage = 'Permission denied. Please make sure Firestore rules are deployed.';
+          debugPrint('🔒 PERMISSION DENIED - Check if Firestore rules are deployed!');
+        } else if (errorString.contains('network') || errorString.contains('connection')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else if (errorString.contains('already')) {
+          errorMessage = 'Post is already hidden.';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBarUtils.buildThemedSnackBar(
+            context,
+            errorMessage,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -1640,14 +2493,33 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
           // Post Body (Clickable)
           Material(
             color: Colors.transparent,
-            child: InkWell(
-              onTap: () {
-                Navigator.push(
+              child: InkWell(
+              onTap: () async {
+                final result = await Navigator.push<dynamic>(
                   context,
                   MaterialPageRoute(
                     builder: (context) => LookingForPostDetailPage(post: widget.post),
                   ),
                 );
+                
+                // Handle result: true = deleted, LookingForPostModel = updated
+                if (mounted) {
+                  final homePageState = context.findAncestorStateOfType<_HomePageState>();
+                  if (result == true) {
+                    // Post was deleted
+                    homePageState?.setState(() {
+                      homePageState._lookingForPosts.removeWhere((p) => p.id == widget.post.id);
+                    });
+                  } else if (result is LookingForPostModel) {
+                    // Post was updated
+                    homePageState?.setState(() {
+                      final index = homePageState._lookingForPosts.indexWhere((p) => p.id == result.id);
+                      if (index != -1) {
+                        homePageState._lookingForPosts[index] = result;
+                      }
+                    });
+                  }
+                }
               },
               borderRadius: const BorderRadius.vertical(
                 bottom: Radius.circular(12),
@@ -1712,14 +2584,37 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
                 _likeCount += _isLiked ? 1 : -1;
               });
             },
-            onCommentTap: () {
-              Navigator.push(
+            onCommentTap: () async {
+              final result = await Navigator.push<dynamic>(
                 context,
                 MaterialPageRoute(
                   builder: (context) => LookingForPostDetailPage(post: widget.post),
                 ),
               );
+              
+              // Handle result: true = deleted, LookingForPostModel = updated
+              if (mounted) {
+                final homePageState = context.findAncestorStateOfType<_HomePageState>();
+                if (result == true) {
+                  // Post was deleted
+                  homePageState?.setState(() {
+                    homePageState._lookingForPosts.removeWhere((p) => p.id == widget.post.id);
+                  });
+                } else if (result is LookingForPostModel) {
+                  // Post was updated
+                  homePageState?.setState(() {
+                    final index = homePageState._lookingForPosts.indexWhere((p) => p.id == result.id);
+                    if (index != -1) {
+                      homePageState._lookingForPosts[index] = result;
+                    }
+                  });
+                }
+              }
+              
+              // Refresh comment count after returning from detail page
+              await _loadCommentCount();
             },
+            onShareTap: _showShareModal,
           ),
         ],
       ),
@@ -1904,6 +2799,7 @@ class _PostActionBar extends StatelessWidget {
   final bool isDark;
   final VoidCallback onLikeTap;
   final VoidCallback onCommentTap;
+  final VoidCallback? onShareTap;
 
   const _PostActionBar({
     required this.likeCount,
@@ -1912,6 +2808,7 @@ class _PostActionBar extends StatelessWidget {
     required this.isDark,
     required this.onLikeTap,
     required this.onCommentTap,
+    this.onShareTap,
   });
 
   @override
@@ -1929,6 +2826,7 @@ class _PostActionBar extends StatelessWidget {
         ),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           // Like Button
           _ActionButton(
@@ -1940,7 +2838,6 @@ class _PostActionBar extends StatelessWidget {
             isDark: isDark,
             onTap: onLikeTap,
           ),
-          const SizedBox(width: 32),
           
           // Comment Button
           _ActionButton(
@@ -1949,6 +2846,15 @@ class _PostActionBar extends StatelessWidget {
             isDark: isDark,
             onTap: onCommentTap,
           ),
+          
+          // Share Button
+          if (onShareTap != null)
+            _ActionButton(
+              iconPath: 'assets/icons/navbar/share_outlined.svg',
+              count: 0,
+              isDark: isDark,
+              onTap: onShareTap!,
+            ),
         ],
       ),
     );
@@ -1975,6 +2881,9 @@ class _ActionButton extends StatelessWidget {
     final inactiveColor = isDark ? Colors.white : Colors.grey[600]!;
     final inactiveTextColor = isDark ? Colors.white : Colors.grey[600]!;
     
+    // Don't show count for share button (count is 0)
+    final shouldShowCount = count > 0;
+    
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1996,17 +2905,19 @@ class _ActionButton extends StatelessWidget {
                   BlendMode.srcIn,
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                count > 0 ? _formatCount(count) : '',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: isActive
+              if (shouldShowCount) ...[
+                const SizedBox(width: 8),
+                Text(
+                  count.toString(),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isActive
                       ? const Color(0xFFE91E63)
                       : inactiveTextColor,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -2271,9 +3182,9 @@ class _AnimatedTabBarState extends State<_AnimatedTabBar>
               height: widget.height,
               color: Colors.white,
               child: Transform.translate(
-                offset: Offset(0, _slideAnimation.value),
+                offset: Offset(0, _slideAnimation.value.isNaN ? 0.0 : _slideAnimation.value),
                 child: Opacity(
-                  opacity: _fadeAnimation.value,
+                  opacity: _fadeAnimation.value.isNaN ? 1.0 : _fadeAnimation.value,
                   child: widget.tabBar,
                 ),
               ),

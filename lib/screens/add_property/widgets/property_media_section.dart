@@ -1,17 +1,21 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 /// Section for uploading and managing property images
 /// 
 /// Features:
-/// - Upload up to 10 images
+/// - Upload up to 18 images
 /// - Preview thumbnails
 /// - Reorder images (drag to reorder)
 /// - Remove images
 /// - Set cover image
+/// - Support for existing image URLs (for edit mode)
 class PropertyMediaSection extends StatelessWidget {
   final List<XFile> images;
+  final List<String>? existingImageUrls; // Existing images from Firestore (for edit mode)
+  final List<int>? removedImageIndexes; // Track removed existing images (for edit mode)
   final int coverImageIndex;
   final VoidCallback onPickImages;
   final Function(int) onRemoveImage;
@@ -21,6 +25,8 @@ class PropertyMediaSection extends StatelessWidget {
   const PropertyMediaSection({
     super.key,
     required this.images,
+    this.existingImageUrls,
+    this.removedImageIndexes,
     required this.coverImageIndex,
     required this.onPickImages,
     required this.onRemoveImage,
@@ -60,19 +66,26 @@ class PropertyMediaSection extends StatelessWidget {
             final spacing = 12.0;
             final itemWidth = (screenWidth - (spacing * 2)) / 3; // 3 items per row
             
-            // Reorder images so cover is first
-            final orderedImages = List<XFile>.from(images);
-            if (orderedImages.isNotEmpty && coverImageIndex < orderedImages.length && coverImageIndex > 0) {
-              final coverImage = orderedImages.removeAt(coverImageIndex);
-              orderedImages.insert(0, coverImage);
+            // Get existing image URLs (excluding removed ones)
+            final existingUrls = existingImageUrls ?? <String>[];
+            final removed = removedImageIndexes ?? <int>[];
+            final visibleExistingUrls = <String>[];
+            for (int i = 0; i < existingUrls.length; i++) {
+              if (!removed.contains(i)) {
+                visibleExistingUrls.add(existingUrls[i]);
+              }
             }
+            
+            // Calculate total images (existing + new)
+            final totalImages = visibleExistingUrls.length + images.length;
+            final canAddMore = totalImages < 18;
             
             return Wrap(
               spacing: spacing,
               runSpacing: spacing,
               children: [
                 // Add Image Button
-                if (images.length < 18)
+                if (canAddMore)
                   SizedBox(
                     width: itemWidth,
                     height: itemWidth,
@@ -81,16 +94,49 @@ class PropertyMediaSection extends StatelessWidget {
                       colorScheme: colorScheme,
                     ),
                   ),
-                // Image Thumbnails - display 3 per row with drag to reorder
-                ...orderedImages.take(18).toList().asMap().entries.map((entry) {
+                // Existing image URLs (from Firestore, for edit mode)
+                ...visibleExistingUrls.asMap().entries.map((entry) {
+                  final displayIndex = entry.key;
+                  final imageUrl = entry.value;
+                  // Find original index in existingImageUrls (accounting for removed ones)
+                  int originalIndex = -1;
+                  int count = 0;
+                  for (int i = 0; i < existingUrls.length; i++) {
+                    if (!removed.contains(i)) {
+                      if (count == displayIndex) {
+                        originalIndex = i;
+                        break;
+                      }
+                      count++;
+                    }
+                  }
+                  // Cover index is relative to all images (existing + new)
+                  final isCover = (originalIndex >= 0 && coverImageIndex == originalIndex);
+                  
+                  return SizedBox(
+                    key: ValueKey('existing_image_$originalIndex'),
+                    width: itemWidth,
+                    height: itemWidth,
+                    child: _ExistingImageThumbnail(
+                      imageUrl: imageUrl,
+                      index: originalIndex,
+                      isCover: isCover,
+                      onRemove: () => onRemoveImage(originalIndex),
+                      onSetCover: () => onSetCoverImage(originalIndex),
+                      colorScheme: colorScheme,
+                    ),
+                  );
+                }),
+                // New image files (XFile)
+                ...images.asMap().entries.map((entry) {
                   final displayIndex = entry.key;
                   final image = entry.value;
-                  // Find original index
-                  final originalIndex = images.indexOf(image);
+                  // Original index is offset by existing images count in existingImageUrls
+                  final originalIndex = existingUrls.length + displayIndex;
                   final isCover = originalIndex == coverImageIndex;
                   
                   return SizedBox(
-                    key: ValueKey('image_$originalIndex'),
+                    key: ValueKey('new_image_$displayIndex'),
                     width: itemWidth,
                     height: itemWidth,
                     child: _ImageThumbnail(
@@ -100,7 +146,7 @@ class PropertyMediaSection extends StatelessWidget {
                       onRemove: () => onRemoveImage(originalIndex),
                       onSetCover: () => onSetCoverImage(originalIndex),
                       onReorder: (newIndex) => onReorderImage(originalIndex, newIndex),
-                      totalImages: images.length,
+                      totalImages: totalImages,
                       colorScheme: colorScheme,
                     ),
                   );
@@ -329,6 +375,191 @@ class _ImageThumbnailState extends State<_ImageThumbnail> {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Thumbnail widget for existing images from Firestore (URLs)
+class _ExistingImageThumbnail extends StatelessWidget {
+  final String imageUrl;
+  final int index;
+  final bool isCover;
+  final VoidCallback onRemove;
+  final VoidCallback onSetCover;
+  final ColorScheme colorScheme;
+
+  const _ExistingImageThumbnail({
+    required this.imageUrl,
+    required this.index,
+    required this.isCover,
+    required this.onRemove,
+    required this.onSetCover,
+    required this.colorScheme,
+  });
+
+  Widget _buildNetworkImage(String url, ColorScheme colorScheme) {
+    // Validate URL
+    if (url.isEmpty) {
+      return Container(
+        color: colorScheme.surfaceContainerHighest,
+        child: Icon(
+          Icons.broken_image,
+          color: colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+
+    // Check if it's a valid network URL
+    final isNetworkUrl = url.startsWith('http://') || url.startsWith('https://');
+    if (!isNetworkUrl) {
+      debugPrint('⚠️ [PropertyMediaSection] Invalid image URL (not http/https): $url');
+      return Container(
+        color: colorScheme.surfaceContainerHighest,
+        child: Icon(
+          Icons.broken_image,
+          color: colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+
+    debugPrint('🖼️ [PropertyMediaSection] Loading existing image: $url');
+
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) {
+          debugPrint('✅ [PropertyMediaSection] Image loaded successfully: $url');
+          return child;
+        }
+        // Show loading indicator
+        return Container(
+          color: colorScheme.surfaceContainerHighest,
+          child: Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                  : null,
+              strokeWidth: 2,
+              color: colorScheme.primary,
+            ),
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint('❌ [PropertyMediaSection] Error loading image: $url');
+        debugPrint('   Error: $error');
+        debugPrint('   StackTrace: $stackTrace');
+        return Container(
+          color: colorScheme.surfaceContainerHighest,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.broken_image,
+                color: colorScheme.onSurfaceVariant,
+                size: 32,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Failed to load',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      // Add frameBuilder to handle frames during loading
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded) {
+          return child;
+        }
+        return AnimatedOpacity(
+          opacity: frame == null ? 0 : 1,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          child: child,
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onDoubleTap: onSetCover,
+      child: Stack(
+        children: [
+          Container(
+            width: double.infinity,
+            height: double.infinity,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isCover
+                    ? colorScheme.primary
+                    : colorScheme.outline.withValues(alpha: 0.3),
+                width: isCover ? 2.5 : 1.5,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: _buildNetworkImage(imageUrl, colorScheme),
+            ),
+          ),
+          // Cover Badge
+          if (isCover)
+            Positioned(
+              top: 4,
+              left: 4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Cover',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            ),
+          // Remove Button
+          Positioned(
+            top: 4,
+            right: 4,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

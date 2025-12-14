@@ -6,6 +6,7 @@ import 'package:rentease_app/models/category_model.dart';
 import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
+import 'package:rentease_app/backend/BListingService.dart';
 
 // Theme color constants
 const Color _themeColor = Color(0xFF00D1FF);
@@ -22,12 +23,83 @@ class PostsPage extends StatefulWidget {
 }
 
 class _PostsPageState extends State<PostsPage> {
-  late List<ListingModel> _listings;
+  final BListingService _listingService = BListingService();
+  List<ListingModel> _listings = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _listings = ListingModel.getListingsByCategory(widget.category.name);
+    _loadListings();
+  }
+
+  Future<void> _loadListings() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Map CategoryModel names to Firestore category values
+      // Firestore may have variations (e.g., "Apartment" vs "Apartments")
+      // So we try both variations and combine results
+      List<String> categoryNames = _getCategoryVariations(widget.category.name);
+      debugPrint('🔍 [PostsPage] Category Model Name: ${widget.category.name}');
+      debugPrint('🔍 [PostsPage] Searching categories: $categoryNames');
+      
+      List<Map<String, dynamic>> allListings = [];
+      for (String categoryName in categoryNames) {
+        debugPrint('🔍 [PostsPage] Querying category: $categoryName');
+        final listingsData = await _listingService.getListingsByCategory(categoryName);
+        debugPrint('📊 [PostsPage] Found ${listingsData.length} listings for "$categoryName"');
+        allListings.addAll(listingsData);
+      }
+      
+      debugPrint('📊 [PostsPage] Total listings before dedupe: ${allListings.length}');
+      
+      // Remove duplicates based on listing ID
+      final uniqueListings = <String, Map<String, dynamic>>{};
+      for (var listing in allListings) {
+        final id = listing['id'] as String? ?? '';
+        if (id.isNotEmpty && !uniqueListings.containsKey(id)) {
+          uniqueListings[id] = listing;
+        }
+      }
+      
+      debugPrint('📊 [PostsPage] Total unique listings: ${uniqueListings.length}');
+      
+      setState(() {
+        _listings = uniqueListings.values.map((data) => ListingModel.fromMap(data)).toList();
+        _isLoading = false;
+      });
+    } catch (e, stackTrace) {
+      debugPrint('❌ [PostsPage] Error loading listings: $e');
+      debugPrint('❌ [PostsPage] Stack trace: $stackTrace');
+      setState(() {
+        _listings = [];
+        _isLoading = false;
+      });
+    }
+  }
+
+  List<String> _getCategoryVariations(String categoryModelName) {
+    // Map CategoryModel names to possible Firestore category values
+    // Firestore may have variations, so return all possible matches
+    switch (categoryModelName) {
+      case 'Apartments':
+        return ['Apartments', 'Apartment']; // Try both plural and singular
+      case 'House Rentals':
+        return ['House Rentals'];
+      case 'Rooms':
+        return ['Rooms'];
+      case 'Boarding House':
+        return ['Boarding House'];
+      case 'Condo Rentals':
+        return ['Condo Rentals'];
+      case 'Student Dorms':
+        return ['Student Dorms'];
+      default:
+        return [categoryModelName];
+    }
   }
 
   @override
@@ -58,29 +130,34 @@ class _PostsPageState extends State<PostsPage> {
         ),
         centerTitle: true,
       ),
-      body: _listings.isEmpty
-          ? _EmptyStateWidget(categoryName: widget.category.name)
-          : ListView.builder(
-              padding: const EdgeInsets.all(16.0),
-              itemCount: _listings.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: _ModernListingCard(
-                    listing: _listings[index],
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              ListingDetailsPage(listing: _listings[index]),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _listings.isEmpty
+              ? _EmptyStateWidget(categoryName: widget.category.name)
+              : RefreshIndicator(
+                  onRefresh: _loadListings,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16.0),
+                    itemCount: _listings.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _ModernListingCard(
+                          listing: _listings[index],
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    ListingDetailsPage(listing: _listings[index]),
+                              ),
+                            );
+                          },
                         ),
                       );
                     },
                   ),
-                );
-              },
-            ),
+                ),
     );
   }
 }
@@ -144,23 +221,9 @@ class _ModernListingCard extends StatelessWidget {
                     AspectRatio(
                       aspectRatio: 16 / 9,
                       child: listing.imagePaths.isNotEmpty
-                          ? Image(
-                              image: AssetImage(listing.imagePaths[0]),
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: isDark ? Colors.grey[800] : Colors.grey[100],
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.image_outlined,
-                                      size: 48,
-                                      color: isDark ? Colors.grey[600] : Colors.grey[400],
-                                    ),
-                                  ),
-                                );
-                              },
+                          ? _buildListingImage(
+                              listing.imagePaths[0],
+                              isDark: isDark,
                             )
                           : Container(
                               color: isDark ? Colors.grey[800] : Colors.grey[100],
@@ -395,8 +458,68 @@ class _ModernListingCard extends StatelessWidget {
     );
   }
 
+  Widget _buildListingImage(String imagePath, {required bool isDark}) {
+    final isNetworkImage = imagePath.startsWith('http://') || 
+                           imagePath.startsWith('https://');
+    
+    if (isNetworkImage) {
+      return Image.network(
+        imagePath,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            color: isDark ? Colors.grey[800] : Colors.grey[100],
+            child: Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+                color: _themeColorDark,
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: isDark ? Colors.grey[800] : Colors.grey[100],
+            child: Center(
+              child: Icon(
+                Icons.image_outlined,
+                size: 48,
+                color: isDark ? Colors.grey[600] : Colors.grey[400],
+              ),
+            ),
+          );
+        },
+      );
+    } else {
+      return Image(
+        image: AssetImage(imagePath),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: isDark ? Colors.grey[800] : Colors.grey[100],
+            child: Center(
+              child: Icon(
+                Icons.image_outlined,
+                size: 48,
+                color: isDark ? Colors.grey[600] : Colors.grey[400],
+              ),
+            ),
+          );
+        },
+      );
+    }
+  }
+
   void _showShareModal(BuildContext context, ListingModel listing) {
-    const postLink = "https://example.com/post/123";
+    final listingLink = 'https://rentease.app/listing/${listing.id}';
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final backgroundColor = isDark ? Colors.grey[900] : Colors.white;
@@ -430,7 +553,7 @@ class _ModernListingCard extends StatelessWidget {
                     iconPath: 'assets/icons/navbar/share_outlined.svg',
                     title: 'Copy link',
                     onTap: () {
-                      Clipboard.setData(ClipboardData(text: postLink));
+                      Clipboard.setData(ClipboardData(text: listingLink));
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBarUtils.buildThemedSnackBar(
@@ -447,7 +570,7 @@ class _ModernListingCard extends StatelessWidget {
                     title: 'Share to other apps',
                     onTap: () async {
                       Navigator.pop(context);
-                      await Share.share(postLink, subject: listing.title);
+                      await Share.share(listingLink, subject: listing.title);
                     },
                   ),
                   const SizedBox(height: 20),

@@ -18,6 +18,7 @@ class UserModel {
   // Stats
   final int propertiesCount;
   final int favoritesCount;
+  final int lookingForPostsCount;
   final int likesReceived;
   final int commentsReceived;
   
@@ -37,6 +38,7 @@ class UserModel {
     this.joinedDate,
     this.propertiesCount = 0,
     this.favoritesCount = 0,
+    this.lookingForPostsCount = 0,
     this.likesReceived = 0,
     this.commentsReceived = 0,
     this.followersCount,
@@ -56,6 +58,7 @@ class UserModel {
     DateTime? joinedDate,
     int? propertiesCount,
     int? favoritesCount,
+    int? lookingForPostsCount,
     int? likesReceived,
     int? commentsReceived,
     int? followersCount,
@@ -73,6 +76,7 @@ class UserModel {
       joinedDate: joinedDate ?? this.joinedDate,
       propertiesCount: propertiesCount ?? this.propertiesCount,
       favoritesCount: favoritesCount ?? this.favoritesCount,
+      lookingForPostsCount: lookingForPostsCount ?? this.lookingForPostsCount,
       likesReceived: likesReceived ?? this.likesReceived,
       commentsReceived: commentsReceived ?? this.commentsReceived,
       followersCount: followersCount ?? this.followersCount,
@@ -136,6 +140,7 @@ class UserModel {
       joinedDate: joinedDate,
       propertiesCount: (data['propertiesCount'] as num?)?.toInt() ?? 0,
       favoritesCount: (data['favoritesCount'] as num?)?.toInt() ?? 0,
+      lookingForPostsCount: (data['lookingForPostsCount'] as num?)?.toInt() ?? 0,
       likesReceived: (data['likesReceived'] as num?)?.toInt() ?? 0,
       commentsReceived: (data['commentsReceived'] as num?)?.toInt() ?? 0,
       followersCount: (data['followersCount'] as num?)?.toInt(),

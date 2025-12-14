@@ -11,12 +11,14 @@ class SnackBarUtils {
   /// [context] - BuildContext to access theme
   /// [message] - The message to display
   /// [duration] - Optional duration (defaults to 2 seconds)
+  /// [action] - Optional action button (e.g., undo button)
   /// 
   /// Returns a SnackBar with theme-appropriate colors
   static SnackBar buildThemedSnackBar(
     BuildContext context,
     String message, {
     Duration duration = const Duration(seconds: 2),
+    SnackBarAction? action,
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -31,6 +33,7 @@ class SnackBarUtils {
       backgroundColor: isDark ? Colors.white : Colors.black87,
       behavior: SnackBarBehavior.floating,
       duration: duration,
+      action: action,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
       ),
