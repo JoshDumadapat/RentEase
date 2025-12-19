@@ -44,9 +44,9 @@ if not FIREBASE_CREDENTIALS_PATH:
     FIREBASE_CREDENTIALS_PATH = os.path.join(_script_dir, 'firebase-credentials.json')
 
 if not os.path.exists(FIREBASE_CREDENTIALS_PATH):
-    print(f"[ERROR] Firebase credentials file not found at {FIREBASE_CREDENTIALS_PATH}")
-    print("Please download your Firebase service account key from Firebase Console")
-    print("and save it as 'backend/firebase-credentials.json'")
+    # print(f"[ERROR] Firebase credentials file not found at {FIREBASE_CREDENTIALS_PATH}")
+    # print("Please download your Firebase service account key from Firebase Console")
+    # print("and save it as 'backend/firebase-credentials.json'")
     sys.exit(1)
 
 cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
@@ -997,7 +997,7 @@ def get_profile_image_url(name: str, gender: str = None) -> str:
                     time.sleep(0.2)
                     return profile_url
         except Exception as e:
-            print(f"    [WARN] randomuser.me failed: {e}, trying alternative...")
+            # print(f"    [WARN] randomuser.me failed: {e}, trying alternative...")
         
         # Alternative 1: Use Picsum Photos with seed for consistent faces
         try:
@@ -1030,7 +1030,7 @@ def get_profile_image_url(name: str, gender: str = None) -> str:
         return ui_avatar_url
         
     except Exception as e:
-        print(f"  [WARN] Error getting profile image URL: {e}, using fallback")
+        # print(f"  [WARN] Error getting profile image URL: {e}, using fallback")
         # Final fallback to UI Avatars
         name_encoded = name.replace(" ", "+")
         return f"https://ui-avatars.com/api/?name={name_encoded}&size=400&background=00D1FF&color=fff&bold=true&format=png"
@@ -1039,11 +1039,11 @@ def get_profile_image_url(name: str, gender: str = None) -> str:
 def upload_image_to_cloudinary(image_url: str, folder: str = "properties") -> Optional[str]:
     """Download image from URL and upload to Cloudinary"""
     try:
-        print(f"  [DOWNLOAD] Downloading image from: {image_url[:80]}...")
+        # print(f"  [DOWNLOAD] Downloading image from: {image_url[:80]}...")
         response = requests.get(image_url, timeout=30)
         response.raise_for_status()
         
-        print(f"  [UPLOAD] Uploading to Cloudinary...")
+        # print(f"  [UPLOAD] Uploading to Cloudinary...")
         upload_result = cloudinary.uploader.upload(
             response.content,
             folder=folder,
@@ -1051,10 +1051,10 @@ def upload_image_to_cloudinary(image_url: str, folder: str = "properties") -> Op
         )
         
         cloudinary_url = upload_result.get('secure_url')
-        print(f"  [OK] Uploaded: {cloudinary_url[:80]}...")
+        # print(f"  [OK] Uploaded: {cloudinary_url[:80]}...")
         return cloudinary_url
     except Exception as e:
-        print(f"  [ERROR] Error uploading image: {e}")
+        # print(f"  [ERROR] Error uploading image: {e}")
         return None
 
 
@@ -1067,18 +1067,18 @@ def create_firebase_user(email: str, password: str, display_name: str) -> Option
             display_name=display_name,
             email_verified=True
         )
-        print(f"  [OK] Created Firebase Auth user: {user.uid}")
+        # print(f"  [OK] Created Firebase Auth user: {user.uid}")
         return user.uid
     except Exception as e:
         if "already exists" in str(e).lower():
-            print(f"  [WARN] User already exists, fetching...")
+            # print(f"  [WARN] User already exists, fetching...")
             # Try to get existing user
             try:
                 user = auth.get_user_by_email(email)
                 return user.uid
             except:
                 pass
-        print(f"  [ERROR] Error creating Firebase user: {e}")
+        # print(f"  [ERROR] Error creating Firebase user: {e}")
         return None
 
 
@@ -1107,9 +1107,9 @@ def create_user_document(uid: str, user_data: Dict, is_verified: bool = True, pr
             user_doc['profileImageUrl'] = profile_image_url
         
         db.collection('users').document(uid).set(user_doc)
-        print(f"  [OK] Created user document in Firestore (verified: {is_verified})")
+        # print(f"  [OK] Created user document in Firestore (verified: {is_verified})")
     except Exception as e:
-        print(f"  [ERROR] Error creating user document: {e}")
+        # print(f"  [ERROR] Error creating user document: {e}")
 
 
 def create_listing(uid: str, user_data: Dict, image_urls: List[str], is_owner_verified: bool = True) -> Optional[str]:
@@ -1159,10 +1159,10 @@ def create_listing(uid: str, user_data: Dict, image_urls: List[str], is_owner_ve
         
         doc_ref = db.collection('listings').add(listing_data)
         listing_id = doc_ref[1].id
-        print(f"  [OK] Created listing: {listing_id}")
+        # print(f"  [OK] Created listing: {listing_id}")
         return listing_id
     except Exception as e:
-        print(f"  [ERROR] Error creating listing: {e}")
+        # print(f"  [ERROR] Error creating listing: {e}")
         return None
 
 
@@ -1180,9 +1180,9 @@ def create_review(user_id: str, listing_id: str, reviewer_name: str, rating: int
         }
         
         db.collection('reviews').add(review_data)
-        print(f"  [OK] Created review")
+        # print(f"  [OK] Created review")
     except Exception as e:
-        print(f"  [ERROR] Error creating review: {e}")
+        # print(f"  [ERROR] Error creating review: {e}")
 
 
 def create_looking_for_post(user_id: str, username: str, description: str, location: str, 
@@ -1204,9 +1204,9 @@ def create_looking_for_post(user_id: str, username: str, description: str, locat
         }
         
         db.collection('lookingForPosts').add(post_data)
-        print(f"  [OK] Created looking for post")
+        # print(f"  [OK] Created looking for post")
     except Exception as e:
-        print(f"  [ERROR] Error creating looking for post: {e}")
+        # print(f"  [ERROR] Error creating looking for post: {e}")
 
 
 def create_comment(user_id: str, username: str, text: str, listing_id: str = None, 
@@ -1230,9 +1230,9 @@ def create_comment(user_id: str, username: str, text: str, listing_id: str = Non
             comment_data['propertyListingId'] = property_listing_id
         
         db.collection('comments').add(comment_data)
-        print(f"  [OK] Created comment")
+        # print(f"  [OK] Created comment")
     except Exception as e:
-        print(f"  [ERROR] Error creating comment: {e}")
+        # print(f"  [ERROR] Error creating comment: {e}")
 
 
 def create_favorite(user_id: str, listing_id: str) -> None:
@@ -1264,9 +1264,9 @@ def create_favorite(user_id: str, listing_id: str) -> None:
             'updatedAt': firestore.SERVER_TIMESTAMP,
         })
         
-        print(f"  [OK] Added favorite")
+        # print(f"  [OK] Added favorite")
     except Exception as e:
-        print(f"  [ERROR] Error creating favorite: {e}")
+        # print(f"  [ERROR] Error creating favorite: {e}")
 
 
 def like_looking_for_post(user_id: str, post_id: str) -> None:
@@ -1291,17 +1291,17 @@ def like_looking_for_post(user_id: str, post_id: str) -> None:
                     'updatedAt': firestore.SERVER_TIMESTAMP,
                 })
         
-        print(f"  [OK] Liked post")
+        # print(f"  [OK] Liked post")
     except Exception as e:
-        print(f"  [ERROR] Error liking post: {e}")
+        # print(f"  [ERROR] Error liking post: {e}")
 
 
 def main():
     """Main seeding function"""
-    print("=" * 80)
-    print("RentEase Data Seeding Script")
-    print("=" * 80)
-    print()
+    # print("=" * 80)
+    # print("RentEase Data Seeding Script")
+    # print("=" * 80)
+    # print()
     
     created_users = []
     created_listings = []
@@ -1312,12 +1312,12 @@ def main():
     # Process each user
     for user_data in USER_DATA:
         user_num = user_data['user_num']
-        print(f"\n{'='*80}")
-        print(f"[USER] Processing User {user_num}: {user_data['fname']} {user_data['lname']}")
-        print(f"{'='*80}")
+        # print(f"\n{'='*80}")
+        # print(f"[USER] Processing User {user_num}: {user_data['fname']} {user_data['lname']}")
+        # print(f"{'='*80}")
         
         # 1. Create Firebase Auth user
-        print(f"\n[1/4] Creating Firebase Auth user...")
+        # print(f"\n[1/4] Creating Firebase Auth user...")
         uid = create_firebase_user(
             user_data['email'],
             user_data['password'],
@@ -1325,23 +1325,23 @@ def main():
         )
         
         if not uid:
-            print(f"  [ERROR] Skipping user {user_num} due to auth creation failure")
+            # print(f"  [ERROR] Skipping user {user_num} due to auth creation failure")
             continue
         
         created_users.append(uid)
         
         # 2. Get and upload profile image
-        print(f"\n[2/5] Getting and uploading profile image...")
+        # print(f"\n[2/5] Getting and uploading profile image...")
         display_name = f"{user_data['fname']} {user_data['lname']}"
         profile_image_url = get_profile_image_url(display_name)
         cloudinary_profile_url = upload_image_to_cloudinary(profile_image_url, folder="users")
         
         # 3. Create user document in Firestore
-        print(f"\n[3/5] Creating user document in Firestore...")
+        # print(f"\n[3/5] Creating user document in Firestore...")
         create_user_document(uid, user_data, is_verified=True, properties_count=1, profile_image_url=cloudinary_profile_url)
         
         # 4. Upload property images to Cloudinary
-        print(f"\n[4/5] Uploading {len(user_data['image_urls'])} property images to Cloudinary...")
+        # print(f"\n[4/5] Uploading {len(user_data['image_urls'])} property images to Cloudinary...")
         cloudinary_urls = []
         for img_url in user_data['image_urls']:
             cloudinary_url = upload_image_to_cloudinary(img_url, folder="properties")
@@ -1349,22 +1349,22 @@ def main():
                 cloudinary_urls.append(cloudinary_url)
         
         if not cloudinary_urls:
-            print(f"  [WARN] No images uploaded, skipping listing creation")
+            # print(f"  [WARN] No images uploaded, skipping listing creation")
             continue
         
         # 5. Create listing
-        print(f"\n[5/5] Creating listing...")
+        # print(f"\n[5/5] Creating listing...")
         listing_id = create_listing(uid, user_data, cloudinary_urls, is_owner_verified=True)
         if listing_id:
             created_listings.append((uid, listing_id, True))  # (uid, listing_id, is_verified)
         
-        print(f"\n[OK] User {user_num} processing complete!")
+        # print(f"\n[OK] User {user_num} processing complete!")
     """
     
     # Process Student Users (not verified)
-    print(f"\n\n{'='*80}")
-    print("[STUDENTS] Processing 10 Student Users (Not Verified)...")
-    print(f"{'='*80}")
+    # print(f"\n\n{'='*80}")
+    # print("[STUDENTS] Processing 10 Student Users (Not Verified)...")
+    # print(f"{'='*80}")
     
     student_user_ids = []
     looking_for_post_ids = []
@@ -1433,7 +1433,7 @@ def main():
     ]
     
     for i, student_data in enumerate(STUDENT_USERS):
-        print(f"\n[STUDENT] Processing Student {student_data['user_num']}: {student_data['fname']} {student_data['lname']}")
+        # print(f"\n[STUDENT] Processing Student {student_data['user_num']}: {student_data['fname']} {student_data['lname']}")
         
         # Create Firebase Auth user
         uid = create_firebase_user(
@@ -1477,18 +1477,18 @@ def main():
             }
             post_ref = db.collection('lookingForPosts').add(post_data)
             looking_for_post_ids.append((post_ref[1].id, uid))
-            print(f"  [OK] Created 'Looking For' post")
+            # print(f"  [OK] Created 'Looking For' post")
     
     # Process Professional Users (not verified)
-    print(f"\n\n{'='*80}")
-    print("[PROFESSIONALS] Processing 10 Professional Users (Not Verified)...")
-    print(f"{'='*80}")
+    # print(f"\n\n{'='*80}")
+    # print("[PROFESSIONALS] Processing 10 Professional Users (Not Verified)...")
+    # print(f"{'='*80}")
     
     professional_user_ids = []
     professional_listing_ids = []
     
     for pro_data in PROFESSIONAL_USERS:
-        print(f"\n[PRO] Processing Professional {pro_data['user_num']}: {pro_data['fname']} {pro_data['lname']}")
+        # print(f"\n[PRO] Processing Professional {pro_data['user_num']}: {pro_data['fname']} {pro_data['lname']}")
         
         # Create Firebase Auth user
         uid = create_firebase_user(
@@ -1526,7 +1526,7 @@ def main():
                 created_listings.append((uid, listing_id, False))  # Not verified
     
     # Professional users comment on "Looking For" posts with their listing links
-    print(f"\n[COMMENTS] Professional users commenting on 'Looking For' posts...")
+    # print(f"\n[COMMENTS] Professional users commenting on 'Looking For' posts...")
     comment_templates = [
         "I have a property that might match what you're looking for! Check it out:",
         "This listing might be perfect for you:",
@@ -1552,7 +1552,7 @@ def main():
                 )
     
     # Students comment on each other's "Looking For" posts
-    print(f"\n[COMMENTS] Students commenting on 'Looking For' posts...")
+    # print(f"\n[COMMENTS] Students commenting on 'Looking For' posts...")
     student_comment_texts = [
         "Same here! Let me know if you find something good.",
         "I'm also looking in that area. Good luck!",
@@ -1579,13 +1579,13 @@ def main():
                     break
     
     # Create some reviews, comments, and looking for posts
-    print(f"\n\n{'='*80}")
-    print("[EXTRA] Creating additional data (reviews, comments, looking for posts)...")
-    print(f"{'='*80}")
+    # print(f"\n\n{'='*80}")
+    # print("[EXTRA] Creating additional data (reviews, comments, looking for posts)...")
+    # print(f"{'='*80}")
     
     # Create reviews for listings (only for newly created listings in this run)
     if created_listings:
-        print(f"\n[REVIEWS] Creating reviews for new listings...")
+        # print(f"\n[REVIEWS] Creating reviews for new listings...")
         review_comments = [
             "Great place! Very clean and well-maintained.",
             "Excellent location, close to everything I need.",
@@ -1632,7 +1632,7 @@ def main():
                 create_review(reviewer_id, listing_id, reviewer_name, rating, comment)
     
     # Create comments on some professional listings
-    print(f"\n[COMMENTS] Creating comments on professional listings...")
+    # print(f"\n[COMMENTS] Creating comments on professional listings...")
     comment_texts = [
         "I have a similar property available! Check it out.",
         "This looks great! Is it still available?",
@@ -1659,25 +1659,25 @@ def main():
             is_commenter_verified = data.get('isVerified', False)
             create_comment(commenter_id, commenter_name, comment_text, listing_id=listing_id, is_verified=is_commenter_verified)
     
-    print(f"\n\n{'='*80}")
-    print("[SUCCESS] Seeding Complete!")
-    print(f"{'='*80}")
-    print(f"\n[SUMMARY]")
-    print(f"  - Created {len(created_users)} new users (skipped existing verified users)")
-    print(f"    * {len(STUDENT_USERS)} student users (not verified, with 'Looking For' posts)")
-    print(f"    * {len(PROFESSIONAL_USERS)} professional users (not verified, with listings)")
-    print(f"  - Created {len(created_listings)} new listings")
+    # print(f"\n\n{'='*80}")
+    # print("[SUCCESS] Seeding Complete!")
+    # print(f"{'='*80}")
+    # print(f"\n[SUMMARY]")
+    # print(f"  - Created {len(created_users)} new users (skipped existing verified users)")
+    # print(f"    * {len(STUDENT_USERS)} student users (not verified, with 'Looking For' posts)")
+    # print(f"    * {len(PROFESSIONAL_USERS)} professional users (not verified, with listings)")
+    # print(f"  - Created {len(created_listings)} new listings")
     verified_count = sum(1 for _, _, is_v in created_listings if is_v)
-    print(f"    * {verified_count} verified listings")
-    print(f"    * {len(created_listings) - verified_count} non-verified listings")
-    print(f"  - Created {len(looking_for_post_ids)} 'Looking For' posts")
-    print(f"  - Created reviews (50% of non-verified listings)")
-    print(f"  - Created comments (on listings and 'Looking For' posts)")
+    # print(f"    * {verified_count} verified listings")
+    # print(f"    * {len(created_listings) - verified_count} non-verified listings")
+    # print(f"  - Created {len(looking_for_post_ids)} 'Looking For' posts")
+    # print(f"  - Created reviews (50% of non-verified listings)")
+    # print(f"  - Created comments (on listings and 'Looking For' posts)")
     
     # Create additional users with different names (reusing mock data)
-    print(f"\n\n{'='*80}")
-    print("[ADDITIONAL] Creating more users with different names (using mock data)...")
-    print(f"{'='*80}")
+    # print(f"\n\n{'='*80}")
+    # print("[ADDITIONAL] Creating more users with different names (using mock data)...")
+    # print(f"{'='*80}")
     
     # New names pool (different from existing)
     new_first_names = ["Andrea", "Benjamin", "Catherine", "Derek", "Elena", "Francis", "Grace", "Henry", "Iris", "Jake", "Katherine", "Lucas", "Maya", "Nathan", "Olivia", "Paul"]
@@ -1708,7 +1708,7 @@ def main():
         # Modify price slightly
         new_user_data["property_info"]["price"] = original_data["property_info"]["price"] + (i * 500)
         
-        print(f"\n[NEW USER] Creating User {new_user_num}: {new_user_data['fname']} {new_user_data['lname']}")
+        # print(f"\n[NEW USER] Creating User {new_user_num}: {new_user_data['fname']} {new_user_data['lname']}")
         
         # Create Firebase Auth user
         uid = create_firebase_user(
@@ -1746,9 +1746,9 @@ def main():
                 created_listings.append((uid, listing_id, True))
     
     # Add more listings to existing verified users
-    print(f"\n\n{'='*80}")
-    print("[EXISTING USERS] Adding more listings to existing verified users...")
-    print(f"{'='*80}")
+    # print(f"\n\n{'='*80}")
+    # print("[EXISTING USERS] Adding more listings to existing verified users...")
+    # print(f"{'='*80}")
     
     # Get existing verified users from Firestore
     existing_users_snapshot = db.collection('users').where('isVerified', '==', True).limit(20).get()
@@ -1756,7 +1756,7 @@ def main():
     additional_listings_to_existing = 0
     
     if existing_user_ids:
-        print(f"  Found {len(existing_user_ids)} existing verified users")
+        # print(f"  Found {len(existing_user_ids)} existing verified users")
         
         # Add 1 additional listing to each existing user
         for i, existing_uid in enumerate(existing_user_ids[:16]):  # Limit to first 16
@@ -1777,7 +1777,7 @@ def main():
             fname = user_data_dict.get('fname', 'Owner')
             lname = user_data_dict.get('lname', '')
             
-            print(f"\n[ADD LISTING] Adding listing to {fname} {lname}...")
+            # print(f"\n[ADD LISTING] Adding listing to {fname} {lname}...")
             
             # Upload images
             cloudinary_urls = []
@@ -1829,7 +1829,7 @@ def main():
                 listing_id = doc_ref[1].id
                 created_listings.append((existing_uid, listing_id, True))
                 additional_listings_to_existing += 1
-                print(f"  [OK] Added listing: {listing_id}")
+                # print(f"  [OK] Added listing: {listing_id}")
                 
                 # Update user's propertiesCount
                 current_count = user_data_dict.get('propertiesCount', 0)
@@ -1838,9 +1838,9 @@ def main():
                 })
     
     # Add more listings to existing professional users (non-verified)
-    print(f"\n\n{'='*80}")
-    print("[EXISTING PROS] Adding more listings to existing professional users...")
-    print(f"{'='*80}")
+    # print(f"\n\n{'='*80}")
+    # print("[EXISTING PROS] Adding more listings to existing professional users...")
+    # print(f"{'='*80}")
     
     # Get existing non-verified users who have listings
     # Query without propertiesCount filter to avoid composite index requirement
@@ -1858,7 +1858,7 @@ def main():
                 break
     
     if existing_pro_ids:
-        print(f"  Found {len(existing_pro_ids)} existing professional users")
+        # print(f"  Found {len(existing_pro_ids)} existing professional users")
         
         # Reuse property data from PROFESSIONAL_USERS
         for i, pro_uid in enumerate(existing_pro_ids[:10]):
@@ -1878,7 +1878,7 @@ def main():
                 fname = user_data_dict.get('fname', 'Owner')
                 lname = user_data_dict.get('lname', '')
                 
-                print(f"\n[ADD LISTING] Adding listing to {fname} {lname}...")
+                # print(f"\n[ADD LISTING] Adding listing to {fname} {lname}...")
                 
                 # Upload images
                 cloudinary_urls = []
@@ -1929,7 +1929,7 @@ def main():
                     listing_id = doc_ref[1].id
                     created_listings.append((pro_uid, listing_id, False))
                     additional_listings_to_pros += 1
-                    print(f"  [OK] Added listing: {listing_id}")
+                    # print(f"  [OK] Added listing: {listing_id}")
                     
                     # Update user's propertiesCount
                     current_count = user_data_dict.get('propertiesCount', 0)
@@ -1937,18 +1937,18 @@ def main():
                         'propertiesCount': current_count + 1
                     })
     
-    print(f"\n\n{'='*80}")
-    print("[SUCCESS] Additional Seeding Complete!")
-    print(f"{'='*80}")
-    print(f"\n[SUMMARY]")
-    print(f"  - Created {len(additional_users)} new verified users (with different names)")
-    print(f"  - Added {additional_listings_to_existing} additional listings to existing verified users")
-    print(f"  - Added {additional_listings_to_pros} additional listings to existing professional users")
-    print(f"  - Total new listings created: {len(additional_listings) + additional_listings_to_existing + additional_listings_to_pros}")
+    # print(f"\n\n{'='*80}")
+    # print("[SUCCESS] Additional Seeding Complete!")
+    # print(f"{'='*80}")
+    # print(f"\n[SUMMARY]")
+    # print(f"  - Created {len(additional_users)} new verified users (with different names)")
+    # print(f"  - Added {additional_listings_to_existing} additional listings to existing verified users")
+    # print(f"  - Added {additional_listings_to_pros} additional listings to existing professional users")
+    # print(f"  - Total new listings created: {len(additional_listings) + additional_listings_to_existing + additional_listings_to_pros}")
     # Update existing users with profile images (if they don't have one)
-    print(f"\n\n{'='*80}")
-    print("[PROFILE IMAGES] Updating existing users with profile images...")
-    print(f"{'='*80}")
+    # print(f"\n\n{'='*80}")
+    # print("[PROFILE IMAGES] Updating existing users with profile images...")
+    # print(f"{'='*80}")
     
     all_existing_users = db.collection('users').limit(100).get()
     users_updated = 0
@@ -1978,16 +1978,16 @@ def main():
                     'updatedAt': firestore.SERVER_TIMESTAMP,
                 })
                 users_updated += 1
-                print(f"  [OK] Updated profile image for {display_name}")
+                # print(f"  [OK] Updated profile image for {display_name}")
         except Exception as e:
-            print(f"  [ERROR] Error updating profile image for {display_name}: {e}")
+            # print(f"  [ERROR] Error updating profile image for {display_name}: {e}")
     
-    print(f"\n  [SUMMARY] Updated {users_updated} users with profile images")
+    # print(f"\n  [SUMMARY] Updated {users_updated} users with profile images")
     
     # Seed reviews, ratings, favorites, and likes
-    print(f"\n\n{'='*80}")
-    print("[ENGAGEMENT] Seeding reviews, ratings, favorites, and likes...")
-    print(f"{'='*80}")
+    # print(f"\n\n{'='*80}")
+    # print("[ENGAGEMENT] Seeding reviews, ratings, favorites, and likes...")
+    # print(f"{'='*80}")
     
     # Get all listings from Firestore
     all_listings_snapshot = db.collection('listings').where('status', '==', 'published').limit(50).get()
@@ -2018,7 +2018,7 @@ def main():
         post_owner_map[post_id] = owner_id
     
     # Create more reviews with ratings
-    print(f"\n[REVIEWS] Creating more reviews and ratings...")
+    # print(f"\n[REVIEWS] Creating more reviews and ratings...")
     review_comments = [
         "Amazing place! Exceeded my expectations. Very clean and well-maintained.",
         "Great location, close to everything. The owner is very responsive.",
@@ -2081,7 +2081,7 @@ def main():
                 create_review(reviewer_id, listing_id, reviewer_name, rating, comment)
     
     # Create favorites (users saving listings)
-    print(f"\n[FAVORITES] Creating favorites (users saving listings)...")
+    # print(f"\n[FAVORITES] Creating favorites (users saving listings)...")
     
     # Separate verified and non-verified listings
     verified_listing_ids = []
@@ -2099,10 +2099,10 @@ def main():
             else:
                 non_verified_listing_ids.append(listing_id)
     
-    print(f"  Found {len(verified_listing_ids)} verified listings and {len(non_verified_listing_ids)} non-verified listings")
+    # print(f"  Found {len(verified_listing_ids)} verified listings and {len(non_verified_listing_ids)} non-verified listings")
     
     # STEP 1: Ensure ALL verified listings get at least 5-15 favorites (none should have 0)
-    print(f"\n  [STEP 1] Ensuring verified listings have favorites...")
+    # print(f"\n  [STEP 1] Ensuring verified listings have favorites...")
     verified_favorites_count = 0
     for listing_id in verified_listing_ids:
         owner_id = listing_owner_map.get(listing_id)
@@ -2130,10 +2130,10 @@ def main():
             favorites_added += 1
             verified_favorites_count += 1
     
-    print(f"  [OK] Added {verified_favorites_count} favorites to verified listings")
+    # print(f"  [OK] Added {verified_favorites_count} favorites to verified listings")
     
     # STEP 2: Add more favorites to non-verified listings (3-10 per listing)
-    print(f"\n  [STEP 2] Adding favorites to non-verified listings...")
+    # print(f"\n  [STEP 2] Adding favorites to non-verified listings...")
     non_verified_favorites_count = 0
     for listing_id in non_verified_listing_ids:
         owner_id = listing_owner_map.get(listing_id)
@@ -2161,10 +2161,10 @@ def main():
             favorites_added += 1
             non_verified_favorites_count += 1
     
-    print(f"  [OK] Added {non_verified_favorites_count} favorites to non-verified listings")
+    # print(f"  [OK] Added {non_verified_favorites_count} favorites to non-verified listings")
     
     # STEP 3: Additional random favorites - users favoriting more listings
-    print(f"\n  [STEP 3] Adding additional random favorites...")
+    # print(f"\n  [STEP 3] Adding additional random favorites...")
     additional_favorites_count = 0
     for user_id in all_user_ids[:50]:  # More users (50 instead of 40)
         num_favorites = 5 + (abs(hash(user_id)) % 8)  # 5-12 favorites per user
@@ -2201,16 +2201,16 @@ def main():
                     favorites_added += 1
                     additional_favorites_count += 1
     
-    print(f"  [OK] Added {additional_favorites_count} additional random favorites")
+    # print(f"  [OK] Added {additional_favorites_count} additional random favorites")
     
     total_favorites = verified_favorites_count + non_verified_favorites_count + additional_favorites_count
-    print(f"\n  [SUMMARY] Total favorites created: {total_favorites}")
-    print(f"    - Verified listings: {verified_favorites_count}")
-    print(f"    - Non-verified listings: {non_verified_favorites_count}")
-    print(f"    - Additional random: {additional_favorites_count}")
+    # print(f"\n  [SUMMARY] Total favorites created: {total_favorites}")
+    # print(f"    - Verified listings: {verified_favorites_count}")
+    # print(f"    - Non-verified listings: {non_verified_favorites_count}")
+    # print(f"    - Additional random: {additional_favorites_count}")
     
     # Like "Looking For" posts
-    print(f"\n[LIKES] Creating likes on 'Looking For' posts...")
+    # print(f"\n[LIKES] Creating likes on 'Looking For' posts...")
     
     # Each post gets 5-15 likes from different users
     for post_id in all_post_ids:
@@ -2234,7 +2234,7 @@ def main():
                 like_looking_for_post(liker_id, post_id)
     
     # Update listing average ratings based on reviews
-    print(f"\n[RATINGS] Updating listing average ratings...")
+    # print(f"\n[RATINGS] Updating listing average ratings...")
     
     for listing_id in all_listing_ids[:30]:
         # Get all reviews for this listing
@@ -2260,19 +2260,19 @@ def main():
                     'updatedAt': firestore.SERVER_TIMESTAMP,
                 })
     
-    print(f"\n\n{'='*80}")
-    print("[SUCCESS] Engagement Data Seeding Complete!")
-    print(f"{'='*80}")
-    print(f"\n[SUMMARY]")
-    print(f"  - Created reviews for listings (2-4 reviews per listing)")
-    print(f"  - Created favorites:")
-    print(f"    * Verified listings: guaranteed 5-15 favorites each (none with 0)")
-    print(f"    * Non-verified listings: 3-10 favorites each")
-    print(f"    * Additional random favorites from users")
-    print(f"  - Created likes on 'Looking For' posts (5-15 likes per post)")
-    print(f"  - Updated listing average ratings and review counts")
-    print(f"  - Updated user favoritesCount and likesReceived")
-    print(f"\n[OK] All engagement data has been seeded successfully!")
+    # print(f"\n\n{'='*80}")
+    # print("[SUCCESS] Engagement Data Seeding Complete!")
+    # print(f"{'='*80}")
+    # print(f"\n[SUMMARY]")
+    # print(f"  - Created reviews for listings (2-4 reviews per listing)")
+    # print(f"  - Created favorites:")
+    # print(f"    * Verified listings: guaranteed 5-15 favorites each (none with 0)")
+    # print(f"    * Non-verified listings: 3-10 favorites each")
+    # print(f"    * Additional random favorites from users")
+    # print(f"  - Created likes on 'Looking For' posts (5-15 likes per post)")
+    # print(f"  - Updated listing average ratings and review counts")
+    # print(f"  - Updated user favoritesCount and likesReceived")
+    # print(f"\n[OK] All engagement data has been seeded successfully!")
 
 
 if __name__ == "__main__":

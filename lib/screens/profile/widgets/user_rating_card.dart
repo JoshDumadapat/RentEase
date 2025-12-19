@@ -110,7 +110,7 @@ class _UserRatingCardState extends State<UserRatingCard> {
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Container(
         height: 80,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: BorderRadius.circular(20),
@@ -138,8 +138,8 @@ class _UserRatingCardState extends State<UserRatingCard> {
                 size: 24,
               ),
             ),
-            const SizedBox(width: 16),
-            // Rating info
+            const SizedBox(width: 12),
+            // Rating info - use Expanded to prevent overflow
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -165,22 +165,28 @@ class _UserRatingCardState extends State<UserRatingCard> {
                           ),
                         )
                       : Row(
-                          mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              _averageRating > 0
-                                  ? _averageRating.toStringAsFixed(1)
-                                  : 'N/A',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: textColor,
-                                height: 1.2,
+                            // Rating number - can shrink if needed
+                            Flexible(
+                              child: Text(
+                                _averageRating > 0
+                                    ? _averageRating.toStringAsFixed(1)
+                                    : 'N/A',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor,
+                                  height: 1.2,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                               ),
                             ),
                             if (_averageRating > 0) ...[
                               const SizedBox(width: 4),
+                              // Star icon - fixed size
                               Icon(
                                 Icons.star_rounded,
                                 color: _themeColorDark,
@@ -188,6 +194,7 @@ class _UserRatingCardState extends State<UserRatingCard> {
                               ),
                               if (_totalReviewCount > 0) ...[
                                 const SizedBox(width: 6),
+                                // Review count - can shrink and truncate
                                 Flexible(
                                   child: Text(
                                     '(${_totalReviewCount} ${_totalReviewCount == 1 ? 'review' : 'reviews'})',
@@ -197,6 +204,7 @@ class _UserRatingCardState extends State<UserRatingCard> {
                                       height: 1.2,
                                     ),
                                     overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
                                   ),
                                 ),
                               ],

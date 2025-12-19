@@ -101,6 +101,20 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   final BListingService _listingService = BListingService();
   final BUserService _userService = BUserService();
   final CloudinaryService _cloudinaryService = CloudinaryService();
+
+  /// Parse formatted price string (removes commas and other formatting)
+  double? _parsePrice(String value) {
+    if (value.isEmpty) {
+      debugPrint('⚠️ [AddPropertyPage] Price is empty');
+      return null;
+    }
+    // Remove all non-digit characters (commas, currency symbols, etc.)
+    final cleaned = value.replaceAll(RegExp(r'[^\d.]'), '');
+    debugPrint('💰 [AddPropertyPage] Parsing price: "$value" -> cleaned: "$cleaned"');
+    final parsed = double.tryParse(cleaned);
+    debugPrint('💰 [AddPropertyPage] Parsed price: $parsed');
+    return parsed;
+  }
   final FirebaseAuth _auth = FirebaseAuth.instance;
   
   // Location coordinates (from map picker)
@@ -915,7 +929,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
           title: _titleController.text.isNotEmpty ? _titleController.text : null,
           category: _propertyType,
           location: _addressController.text.isNotEmpty ? _addressController.text : null,
-          price: double.tryParse(_monthlyRentController.text),
+          price: _parsePrice(_monthlyRentController.text),
           description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
           imageUrls: draftImageUrls.isNotEmpty ? draftImageUrls : null,
           currentStep: _currentStep,
@@ -1001,6 +1015,26 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
 
         setState(() => _uploadProgress = 0.9);
 
+        // Parse and validate price
+        final parsedPrice = _parsePrice(_monthlyRentController.text);
+        if (parsedPrice == null || parsedPrice <= 0) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBarUtils.buildThemedSnackBar(
+                context,
+                'Please enter a valid monthly rent amount',
+              ),
+            );
+          }
+          setState(() {
+            _isSubmitting = false;
+            _uploadProgress = 0.0;
+          });
+          return;
+        }
+
+        debugPrint('💰 [AddPropertyPage] Final price to save: $parsedPrice');
+        
         // Create listing in Firestore
         final listingId = await _listingService.createListing(
           userId: user.uid,
@@ -1009,7 +1043,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
           title: _titleController.text.trim(),
           category: _propertyType ?? 'Apartment',
           location: _addressController.text.trim(),
-          price: double.tryParse(_monthlyRentController.text) ?? 0.0,
+          price: parsedPrice,
           description: _descriptionController.text.trim(),
           imageUrls: imageUrls,
           bedrooms: _bedroomsController.text.isNotEmpty 
@@ -1022,10 +1056,10 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
               ? double.tryParse(_areaController.text) 
               : null,
           deposit: _depositController.text.isNotEmpty 
-              ? double.tryParse(_depositController.text) 
+              ? _parsePrice(_depositController.text) 
               : null,
           advance: _advanceController.text.isNotEmpty 
-              ? double.tryParse(_advanceController.text) 
+              ? _parsePrice(_advanceController.text) 
               : null,
           landmark: _landmarkController.text.trim().isNotEmpty 
               ? _landmarkController.text.trim() 
@@ -1214,7 +1248,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         'title': _titleController.text.trim(),
         'category': _propertyType ?? 'Apartment',
         'location': _addressController.text.trim(),
-        'price': double.tryParse(_monthlyRentController.text) ?? 0.0,
+        'price': _parsePrice(_monthlyRentController.text) ?? 0.0,
         'description': _descriptionController.text.trim(),
         'imageUrls': finalImageUrls,
         
@@ -1226,9 +1260,9 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         if (_areaController.text.isNotEmpty)
           'area': double.tryParse(_areaController.text),
         if (_depositController.text.isNotEmpty)
-          'deposit': double.tryParse(_depositController.text),
+          'deposit': _parsePrice(_depositController.text),
         if (_advanceController.text.isNotEmpty)
-          'advance': double.tryParse(_advanceController.text),
+          'advance': _parsePrice(_advanceController.text),
         if (_landmarkController.text.trim().isNotEmpty)
           'landmark': _landmarkController.text.trim(),
         if (_latitude != null) 'latitude': _latitude,

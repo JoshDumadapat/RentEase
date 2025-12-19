@@ -23,7 +23,7 @@ class DetectionResult {
   });
 }
 
-/// Backend service for camera detection and analysis
+/// Camera detection service
 class BCameraDetectionService {
   StreamController<DetectionResult>? _streamController;
   img.Image? _previousFrame;

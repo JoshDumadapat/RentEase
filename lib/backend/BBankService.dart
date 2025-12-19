@@ -22,15 +22,15 @@ class BBankService {
       final banks = querySnapshot.docs
           .map((doc) {
             final data = doc.data();
-            debugPrint(' bank [${doc.id}]: name=${data['name']}, logoUrl=${data['logoUrl']}');
+            // debugPrint(' bank [${doc.id}]: name=${data['name']}, logoUrl=${data['logoUrl']}');
             return BankModel.fromFirestore(data, doc.id);
           })
           .toList();
       
-      debugPrint('✅ [BBankService] Loaded ${banks.length} banks');
+      // debugPrint('✅ [BBankService] Loaded ${banks.length} banks');
       return banks;
     } catch (e) {
-      debugPrint('❌ [BBankService] Error fetching banks: $e');
+      // debugPrint('❌ [BBankService] Error fetching banks: $e');
       return [];
     }
   }
@@ -44,7 +44,7 @@ class BBankService {
       }
       return null;
     } catch (e) {
-      debugPrint('❌ [BBankService] Error fetching bank: $e');
+      // debugPrint('❌ [BBankService] Error fetching bank: $e');
       return null;
     }
   }

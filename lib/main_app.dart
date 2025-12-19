@@ -89,6 +89,12 @@ class _MainAppState extends State<MainApp> {
       // IndexedStack handles tab switching and preserves state independently
       // Each tab maintains its own navigation stack, so we don't need to pop
       // when switching tabs - just update the index
+      
+      // If switching TO search tab (index 1), refresh search data to get newly added listings
+      if (index == 1 && _currentBottomNavIndex != 1) {
+        // SearchPage will refresh when it detects tab change
+      }
+      
       setState(() {
         _currentBottomNavIndex = index;
       });

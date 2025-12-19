@@ -11,8 +11,11 @@ import 'package:rentease_app/backend/BListingService.dart';
 import 'package:rentease_app/backend/BLookingForPostService.dart';
 import 'package:rentease_app/widgets/subscription_promotion_card.dart';
 import 'package:rentease_app/screens/subscription/subscription_page.dart';
+import 'package:rentease_app/screens/chat/chats_list_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 
 // Theme color constants
 const Color _themeColor = Color(0xFF00D1FF);
@@ -26,7 +29,7 @@ class SearchPage extends StatefulWidget {
   State<SearchPage> createState() => _SearchPageState();
 }
 
-class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateMixin {
+class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
   late TabController _tabController;
   
@@ -45,6 +48,9 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
   bool _isLoading = true;
   bool _isLoadingLookingFor = true;
   
+  // Track if we've loaded data to avoid unnecessary reloads
+  bool _hasLoadedData = false;
+  
   // Cache filtered listings to avoid recalculating on every build
   String? _lastSelectedCategory;
   double? _lastMinPrice;
@@ -60,17 +66,36 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_onTabChanged);
     _filterModel.addListener(_onFilterChanged);
     _loadSearchData();
     _loadLookingForPosts();
     _checkVerificationStatus();
+    _hasLoadedData = true;
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Refresh data when app comes back to foreground to get newly added listings
+    if (state == AppLifecycleState.resumed && _hasLoadedData) {
+      debugPrint('🔄 [SearchPage] App resumed - refreshing search data...');
+      _refreshSearchData();
+    }
   }
   
   void _onTabChanged() {
     if (_tabController.indexIsChanging) {
       setState(() {});
+    }
+  }
+  
+  /// Called when search tab becomes visible - refresh data to ensure new listings appear
+  void refreshOnTabVisible() {
+    if (_hasLoadedData && mounted) {
+      debugPrint('🔄 [SearchPage] Tab became visible - refreshing search data...');
+      _refreshSearchData();
     }
   }
   
@@ -115,7 +140,21 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
     
     try {
       final listingsData = await _listingService.getAllListings();
-      final listings = listingsData.map((data) => ListingModel.fromMap(data)).toList();
+      
+      // Remove duplicates by ID before converting to ListingModel
+      final seenIds = <String>{};
+      final uniqueListingsData = <String, Map<String, dynamic>>{};
+      for (var data in listingsData) {
+        final listingId = data['id'] as String? ?? '';
+        if (listingId.isNotEmpty && !seenIds.contains(listingId)) {
+          seenIds.add(listingId);
+          uniqueListingsData[listingId] = data;
+        }
+      }
+      
+      final listings = uniqueListingsData.values.map((data) => ListingModel.fromMap(data)).toList();
+      
+      debugPrint('✅ [SearchPage] Loaded ${listings.length} unique listings (removed ${listingsData.length - listings.length} duplicates)');
       
       if (mounted) {
         setState(() {
@@ -146,7 +185,21 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
     
     try {
       final postsData = await _lookingForPostService.getAllLookingForPosts();
-      final posts = postsData.map((data) => LookingForPostModel.fromMap(data)).toList();
+      
+      // Remove duplicates by ID before converting to LookingForPostModel
+      final seenIds = <String>{};
+      final uniquePostsData = <String, Map<String, dynamic>>{};
+      for (var data in postsData) {
+        final postId = data['id'] as String? ?? '';
+        if (postId.isNotEmpty && !seenIds.contains(postId)) {
+          seenIds.add(postId);
+          uniquePostsData[postId] = data;
+        }
+      }
+      
+      final posts = uniquePostsData.values.map((data) => LookingForPostModel.fromMap(data)).toList();
+      
+      debugPrint('✅ [SearchPage] Loaded ${posts.length} unique looking for posts (removed ${postsData.length - posts.length} duplicates)');
       
       if (mounted) {
         setState(() {
@@ -186,6 +239,17 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
     }
     
     try {
+      final searchQuery = _searchController.text.trim();
+      final hasSearchQuery = searchQuery.isNotEmpty;
+      final hasFilters = _filterModel.hasActiveFilters || _selectedCategory != null;
+      
+      // If no search query and no filters, use getAllListings for better performance and completeness
+      if (!hasSearchQuery && !hasFilters) {
+        debugPrint('🔍 [SearchPage] No search query or filters - loading all listings...');
+        await _loadSearchData();
+        return;
+      }
+      
       // Parse filter values
       int? bedroomsFilter;
       if (_filterModel.selectedBedrooms != null) {
@@ -221,12 +285,15 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
       }
       
       debugPrint('🔍 [SearchPage] Performing listings search with filters:');
-      debugPrint('   - Search query: "${_searchController.text.trim()}"');
+      debugPrint('   - Search query: "$searchQuery"');
       debugPrint('   - Category: $_selectedCategory');
       debugPrint('   - Property Type: $propertyTypeFilter');
+      debugPrint('   - Has filters: $hasFilters');
       
+      // Use searchListingsWithFilters which queries Firestore directly for fresh data
+      // This ensures we always get the latest listings from Firestore, including newly added ones
       final listingsData = await _listingService.searchListingsWithFilters(
-        searchQuery: _searchController.text.trim().isEmpty ? null : _searchController.text.trim(),
+        searchQuery: hasSearchQuery ? searchQuery : null,
         category: null,
         minPrice: _filterModel.currentMinPrice > 0 ? _filterModel.currentMinPrice : null,
         maxPrice: _filterModel.currentMaxPrice < 50000 ? _filterModel.currentMaxPrice : null,
@@ -235,9 +302,20 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
         propertyType: propertyTypeFilter ?? _filterModel.selectedPropertyType,
       );
       
-      debugPrint('📊 [SearchPage] Received ${listingsData.length} listings from service');
+      debugPrint('📊 [SearchPage] Received ${listingsData.length} listings from Firestore');
       
-      var listings = listingsData.map((data) => ListingModel.fromMap(data)).toList();
+      // Remove duplicates by ID before converting to ListingModel
+      final seenIds = <String>{};
+      final uniqueListingsData = <String, Map<String, dynamic>>{};
+      for (var data in listingsData) {
+        final listingId = data['id'] as String? ?? '';
+        if (listingId.isNotEmpty && !seenIds.contains(listingId)) {
+          seenIds.add(listingId);
+          uniqueListingsData[listingId] = data;
+        }
+      }
+      
+      var listings = uniqueListingsData.values.map((data) => ListingModel.fromMap(data)).toList();
       
       // Apply additional filters that can't be done in Firestore
       if (bedroomsFilter == 4) {
@@ -248,7 +326,7 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
         listings = listings.where((l) => l.bathrooms >= 4).toList();
       }
       
-      debugPrint('✅ [SearchPage] Final filtered results: ${listings.length} listings');
+      debugPrint('✅ [SearchPage] Final filtered results: ${listings.length} unique listings (removed ${listingsData.length - uniqueListingsData.length} duplicates)');
       
       if (mounted) {
         setState(() {
@@ -279,6 +357,9 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
     }
     
     try {
+      final searchQuery = _searchController.text.trim();
+      final hasSearchQuery = searchQuery.isNotEmpty;
+      
       // Map category filter to propertyType
       String? propertyTypeFilter = _filterModel.selectedPropertyType;
       if (_selectedCategory != null && propertyTypeFilter == null) {
@@ -293,11 +374,19 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
       }
       
       debugPrint('🔍 [SearchPage] Performing looking for posts search:');
-      debugPrint('   - Search query: "${_searchController.text.trim()}"');
+      debugPrint('   - Search query: "${searchQuery}" (hasQuery: $hasSearchQuery)');
       debugPrint('   - Property Type: $propertyTypeFilter');
+      debugPrint('   - Has filters: ${_filterModel.hasActiveFilters}');
+      
+      // If no search query and no filters, load all posts
+      if (!hasSearchQuery && propertyTypeFilter == null && !_filterModel.hasActiveFilters) {
+        debugPrint('📋 [SearchPage] No search query or filters - loading all posts');
+        await _loadLookingForPosts();
+        return;
+      }
       
       final postsData = await _lookingForPostService.searchLookingForPosts(
-        searchQuery: _searchController.text.trim().isEmpty ? null : _searchController.text.trim(),
+        searchQuery: hasSearchQuery ? searchQuery : null,
         location: null, // Could add location filter later
         propertyType: propertyTypeFilter ?? _filterModel.selectedPropertyType,
         budget: null, // Could add budget filter later
@@ -305,9 +394,20 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
       
       debugPrint('📊 [SearchPage] Received ${postsData.length} looking for posts from service');
       
-      final posts = postsData.map((data) => LookingForPostModel.fromMap(data)).toList();
+      // Remove duplicates by ID before converting to LookingForPostModel
+      final seenIds = <String>{};
+      final uniquePostsData = <String, Map<String, dynamic>>{};
+      for (var data in postsData) {
+        final postId = data['id'] as String? ?? '';
+        if (postId.isNotEmpty && !seenIds.contains(postId)) {
+          seenIds.add(postId);
+          uniquePostsData[postId] = data;
+        }
+      }
       
-      debugPrint('✅ [SearchPage] Final filtered results: ${posts.length} looking for posts');
+      final posts = uniquePostsData.values.map((data) => LookingForPostModel.fromMap(data)).toList();
+      
+      debugPrint('✅ [SearchPage] Final filtered results: ${posts.length} unique looking for posts (removed ${postsData.length - posts.length} duplicates)');
       
       if (mounted) {
         setState(() {
@@ -332,13 +432,24 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
   /// Refresh search data
   Future<void> _refreshSearchData() async {
     debugPrint('🔄 [SearchPage] Refreshing search data...');
-    // Always perform search when refreshing to respect current filters
+    // Always refresh and then perform search to respect current filters and search query
     if (_tabController.index == 0) {
+      // Reload all listings first to get fresh data
       await _loadSearchData();
-      await _performListingsSearch();
+      // Then apply search/filters if any
+      final hasSearchQuery = _searchController.text.trim().isNotEmpty;
+      final hasFilters = _filterModel.hasActiveFilters || _selectedCategory != null;
+      if (hasSearchQuery || hasFilters) {
+        await _performListingsSearch();
+      }
     } else {
       await _loadLookingForPosts();
-      await _performLookingForSearch();
+      // Then apply search/filters if any
+      final hasSearchQuery = _searchController.text.trim().isNotEmpty;
+      final hasFilters = _filterModel.hasActiveFilters || _selectedCategory != null;
+      if (hasSearchQuery || hasFilters) {
+        await _performLookingForSearch();
+      }
     }
   }
 
@@ -355,6 +466,7 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
@@ -390,9 +502,9 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
             children: [
               _buildHeader(),
               _buildSearchBar(),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               _buildTabs(),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               _buildCategoryFilters(),
               const SizedBox(height: 16),
               // Subscription Promotion Card (only show if not verified)
@@ -454,6 +566,36 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
         ),
       ),
       actions: [
+        Builder(
+          builder: (context) {
+            final theme = Theme.of(context);
+            final isDark = theme.brightness == Brightness.dark;
+            return IconButton(
+              icon: Image.asset(
+                'assets/chat.png',
+                width: 22,
+                height: 22,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    Icons.chat_bubble_outline,
+                    size: 22,
+                    color: isDark ? Colors.white : Colors.black87,
+                  );
+                },
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ChatsListPage(),
+                  ),
+                );
+              },
+              tooltip: 'Messages',
+            );
+          },
+        ),
+        const SizedBox(width: 2),
         const ThreeDotsMenu(),
         const SizedBox(width: 8),
       ],
@@ -549,7 +691,7 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
                 ),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 12,
+                  vertical: 8,
                 ),
                 filled: true,
                 fillColor: fillColor,
@@ -557,9 +699,9 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
               ),
               onChanged: (value) {
                 setState(() {});
-                // Perform search as user types (debounced in production)
+                // Perform search as user types (debounced)
                 if (value.isEmpty) {
-                  // Reload data for current tab
+                  // Clear search - reload all data for current tab
                   if (_tabController.index == 0) {
                     _loadSearchData();
                   } else {
@@ -567,6 +709,7 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
                   }
                 } else {
                   // Debounce search - wait 500ms after user stops typing
+                  // This ensures we fetch fresh data each time user searches
                   Future.delayed(const Duration(milliseconds: 500), () {
                     if (mounted && _searchController.text == value) {
                       _performSearch();
@@ -582,8 +725,8 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
           const SizedBox(width: 12),
           // Filter button
           Container(
-            width: 48,
-            height: 48,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: _themeColorDark,
               borderRadius: BorderRadius.circular(12),
@@ -592,7 +735,7 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
               icon: const Icon(
                 Icons.tune,
                 color: Colors.white,
-                size: 20,
+                size: 18,
               ),
               padding: EdgeInsets.zero,
               onPressed: () {
@@ -627,35 +770,40 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
           color: isDark ? const Color(0xFF2A2A2A) : Colors.grey[100],
           borderRadius: BorderRadius.circular(12),
         ),
-        child: TabBar(
-          controller: _tabController,
-          indicator: BoxDecoration(
-            color: _themeColorDark,
-            borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          height: 36, // Reduced height for smaller tabs
+          child: TabBar(
+            controller: _tabController,
+            indicator: BoxDecoration(
+              color: _themeColorDark,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            indicatorSize: TabBarIndicatorSize.tab,
+            dividerColor: Colors.transparent,
+            labelColor: Colors.white,
+            unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
+            labelStyle: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+            unselectedLabelStyle: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+            labelPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+            tabAlignment: TabAlignment.fill,
+            tabs: const [
+              Tab(text: 'Listings'),
+              Tab(text: 'Looking For'),
+            ],
+            onTap: (index) {
+              setState(() {});
+              // Perform search when switching tabs
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _performSearch();
+              });
+            },
           ),
-          indicatorSize: TabBarIndicatorSize.tab,
-          dividerColor: Colors.transparent,
-          labelColor: Colors.white,
-          unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
-          labelStyle: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-          unselectedLabelStyle: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-          tabs: const [
-            Tab(text: 'Listings'),
-            Tab(text: 'Looking For'),
-          ],
-          onTap: (index) {
-            setState(() {});
-            // Perform search when switching tabs
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _performSearch();
-            });
-          },
         ),
       ),
     );
@@ -787,13 +935,89 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
       );
     }
 
+    // Get featured listings (first 5 listings or verified user listings)
+    // Remove duplicates by ID
+    final seenFeaturedIds = <String>{};
+    final featuredListings = <ListingModel>[];
+    
+    // First, add verified listings
+    for (final listing in filteredListings) {
+      if (listing.isOwnerVerified && !seenFeaturedIds.contains(listing.id) && featuredListings.length < 5) {
+        seenFeaturedIds.add(listing.id);
+        featuredListings.add(listing);
+      }
+    }
+    
+    // If no verified listings, use first 5 unique listings as featured
+    if (featuredListings.isEmpty) {
+      for (final listing in filteredListings) {
+        if (!seenFeaturedIds.contains(listing.id) && featuredListings.length < 5) {
+          seenFeaturedIds.add(listing.id);
+          featuredListings.add(listing);
+        }
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Featured Listings Section (if we have listings)
+        if (featuredListings.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Featured',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 320,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              itemCount: featuredListings.length,
+              itemBuilder: (context, index) {
+                final listing = featuredListings[index];
+                return Padding(
+                  key: ValueKey('featured_${listing.id}'),
+                  padding: EdgeInsets.only(
+                    right: index == featuredListings.length - 1 ? 0 : 16,
+                  ),
+                  child: _FeaturedListingCard(
+                    listing: listing,
+                    isDark: isDark,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ListingDetailsPage(
+                            listing: listing,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+        // All Results Section
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Text(
-            'Search Results (${filteredListings.length})',
+            'All Results (${filteredListings.length})',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -923,6 +1147,9 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: filteredPosts.length,
+            cacheExtent: 500,
+            addAutomaticKeepAlives: false,
+            addRepaintBoundaries: true,
             itemBuilder: (context, index) {
               final post = filteredPosts[index];
               return Padding(
@@ -958,37 +1185,38 @@ Widget _buildListingImage(String imagePath, Color placeholderColor, Color iconCo
   final isNetworkImage = imagePath.startsWith('http://') || imagePath.startsWith('https://');
   
   if (isNetworkImage) {
-    return Image.network(
-      imagePath,
+    return CachedNetworkImage(
+      imageUrl: imagePath,
       fit: BoxFit.cover,
       width: width,
       height: height,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return Container(
-          color: placeholderColor,
-          child: Center(
+      memCacheWidth: width != null ? (width * 2).toInt() : 800,
+      memCacheHeight: height != null ? (height * 2).toInt() : 450,
+      maxWidthDiskCache: width != null ? (width * 3).toInt() : 1200,
+      maxHeightDiskCache: height != null ? (height * 3).toInt() : 675,
+      placeholder: (context, url) => Container(
+        color: placeholderColor,
+        child: const Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
             child: CircularProgressIndicator(
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                  : null,
               strokeWidth: 2,
+              color: Colors.grey,
             ),
           ),
-        );
-      },
-      errorBuilder: (context, error, stackTrace) {
-        return Container(
-          color: placeholderColor,
-          child: Center(
-            child: Icon(
-              Icons.image_outlined,
-              size: width != null ? 32 : 48,
-              color: iconColor,
-            ),
+        ),
+      ),
+      errorWidget: (context, url, error) => Container(
+        color: placeholderColor,
+        child: Center(
+          child: Icon(
+            Icons.image_outlined,
+            size: width != null ? 32 : 48,
+            color: iconColor,
           ),
-        );
-      },
+        ),
+      ),
     );
   } else {
     return Image.asset(
@@ -1098,7 +1326,9 @@ class _FeaturedListingCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        '₱${listing.price.toStringAsFixed(0)}/mo',
+                        listing.price > 0 
+                            ? '₱${listing.price.toStringAsFixed(0)}/mo'
+                            : 'Price not set',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -1173,7 +1403,69 @@ class _FeaturedListingCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 12),
+                    // Monthly Payment and Rating Row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Monthly Payment
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '₱${listing.price.toStringAsFixed(0)}',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: _themeColorDark,
+                              ),
+                            ),
+                            Text(
+                              '/month',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: subtextColor,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                        // Rating
+                        if (listing.reviewCount > 0)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.star_rounded,
+                                size: 16,
+                                color: Colors.amber,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                listing.averageRating.toStringAsFixed(1),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: textColor,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '(${listing.reviewCount})',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: subtextColor,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          const SizedBox.shrink(),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     Text(
                       listing.timeAgo,
                       style: TextStyle(
@@ -1340,23 +1632,33 @@ class _NearbyListingCard extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text(
-                            '₱${listing.price.toStringAsFixed(0)}',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: _themeColorDark,
+                          Flexible(
+                            child: Text(
+                              listing.price > 0 
+                                  ? '₱${listing.price.toStringAsFixed(0)}'
+                                  : 'Price not set',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: listing.price > 0 
+                                    ? _themeColorDark 
+                                    : subtextColor,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '/mo',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.normal,
-                              color: subtextColor,
+                          if (listing.price > 0) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              '/mo',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.normal,
+                                color: subtextColor,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ],

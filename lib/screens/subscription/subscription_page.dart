@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rentease_app/widgets/shimmer_effect.dart';
 import 'package:rentease_app/screens/subscription/payment_selection_page.dart';
+import 'package:rentease_app/screens/subscription/manage_subscription_page.dart';
 
 const Color _themeColorDark = Color(0xFF00B8E6);
 const Color _themeColor = Color(0xFF00D1FF);
@@ -38,9 +39,21 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             .get();
         
         if (mounted) {
+          final isVerified = userDoc.data()?['isVerified'] ?? false;
           setState(() {
-            _isVerified = userDoc.data()?['isVerified'] ?? false;
+            _isVerified = isVerified;
           });
+          
+          // Redirect verified users to manage subscription page
+          if (isVerified) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => const ManageSubscriptionPage(),
+                ),
+              );
+            });
+          }
         }
       }
     } catch (e) {
@@ -130,7 +143,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                   height: 80,
                   width: 80,
                   decoration: BoxDecoration(
-                    color: _themeColorDark.withValues(alpha: 0.2),
+                    color: _themeColorDark.withValues(alpha: isDark ? 0.2 : 0.35),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -303,7 +316,7 @@ class _BenefitsSection extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: _themeColorDark.withValues(alpha: 0.15),
+                      color: _themeColorDark.withValues(alpha: isDark ? 0.15 : 0.25),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -390,8 +403,8 @@ class _SubscriptionPlanCard extends StatelessWidget {
                         const Color(0xFF2A2A2A),
                       ]
                     : [
-                        _themeColorDark.withValues(alpha: 0.12),
-                        _themeColor.withValues(alpha: 0.08),
+                        _themeColorDark.withValues(alpha: 0.25),
+                        _themeColor.withValues(alpha: 0.18),
                         Colors.white,
                       ],
               )
@@ -404,14 +417,14 @@ class _SubscriptionPlanCard extends StatelessWidget {
           color: isSelected
               ? _themeColorDark
               : isPopular
-                  ? _themeColorDark.withValues(alpha: isDark ? 0.6 : 0.8)
+                  ? _themeColorDark.withValues(alpha: isDark ? 0.6 : 1.0)
                   : (isDark ? Colors.grey[700]! : Colors.grey[400]!),
           width: isSelected ? 2.5 : (isPopular ? 2 : 1.5),
         ),
         boxShadow: isSelected || isPopular
             ? [
                 BoxShadow(
-                  color: _themeColorDark.withValues(alpha: isPopular ? (isDark ? 0.4 : 0.25) : (isDark ? 0.3 : 0.2)),
+                  color: _themeColorDark.withValues(alpha: isPopular ? (isDark ? 0.4 : 0.5) : (isDark ? 0.3 : 0.4)),
                   blurRadius: isPopular ? 16 : 12,
                   spreadRadius: 0,
                   offset: Offset(0, isPopular ? 6 : 4),
@@ -556,13 +569,13 @@ class _SubscriptionPlanCard extends StatelessWidget {
                                   _themeColor.withValues(alpha: 0.2),
                                 ]
                               : [
-                                  _themeColorDark.withValues(alpha: 0.2),
-                                  _themeColor.withValues(alpha: 0.15),
+                                  _themeColorDark.withValues(alpha: 0.4),
+                                  _themeColor.withValues(alpha: 0.3),
                                 ],
                       ),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: _themeColorDark.withValues(alpha: isDark ? 0.5 : 0.6),
+                        color: _themeColorDark.withValues(alpha: isDark ? 0.5 : 0.8),
                         width: 1.5,
                       ),
                     ),
@@ -597,11 +610,11 @@ class _SubscriptionPlanCard extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? _themeColorDark.withValues(alpha: 0.25)
-                          : _themeColorDark.withValues(alpha: 0.2),
+                          ? _themeColorDark.withValues(alpha: isDark ? 0.25 : 0.4)
+                          : _themeColorDark.withValues(alpha: isDark ? 0.2 : 0.35),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: _themeColorDark.withValues(alpha: isDark ? 0.4 : 0.5),
+                        color: _themeColorDark.withValues(alpha: isDark ? 0.4 : 0.7),
                         width: 1.5,
                       ),
                     ),

@@ -10,6 +10,7 @@ import 'package:rentease_app/dialogs/confirmation_dialog.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
 import 'package:rentease_app/widgets/subscription_promotion_card.dart';
 import 'package:rentease_app/screens/subscription/subscription_page.dart';
+import 'package:rentease_app/screens/subscription/manage_subscription_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -450,7 +451,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const SubscriptionPage(),
+                      builder: (context) => const ManageSubscriptionPage(),
                     ),
                   );
                 },

@@ -11,6 +11,7 @@ import 'package:rentease_app/backend/BLookingForPostService.dart';
 import 'package:rentease_app/screens/notifications/widgets/empty_state_widget.dart';
 import 'package:rentease_app/screens/notifications/widgets/notification_skeleton.dart';
 import 'package:rentease_app/screens/notifications/widgets/notification_tile.dart';
+import 'package:rentease_app/screens/chat/chats_list_page.dart';
 
 /// Notifications Page
 /// 
@@ -68,54 +69,127 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
 
   /// Navigate to the relevant listing or looking-for post based on notification type
   Future<void> _navigateToNotificationTarget(NotificationModel notification) async {
-    // Mark as read when tapped (but don't remove the notification)
-    if (!notification.read) {
-      await _controller.markAsRead(notification.id);
-    }
-
     // Skip navigation for friend requests
     if (notification.type == NotificationType.friendRequest) {
       return;
     }
 
-    // Navigate based on postType
-    if (notification.postId != null) {
+    // Validate postId
+    if (notification.postId == null || notification.postId!.isEmpty) {
+      debugPrint('⚠️ [NotificationsPage] Cannot navigate: empty postId');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to open post. Post ID is missing.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Show loading indicator
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    try {
+      // Mark as read when tapped (after navigation starts, but don't remove the notification)
+      if (!notification.read) {
+        // Mark as read in background, don't wait for it
+        _controller.markAsRead(notification.id).catchError((e) {
+          debugPrint('⚠️ [NotificationsPage] Error marking notification as read: $e');
+        });
+      }
+
+      // Navigate based on postType
       if (notification.postType == 'lookingFor') {
         // Navigate to looking-for post detail page
-        try {
-          final lookingForPostService = BLookingForPostService();
-          final postData = await lookingForPostService.getLookingForPost(notification.postId!);
+        final lookingForPostService = BLookingForPostService();
+        final postData = await lookingForPostService.getLookingForPost(notification.postId!);
+        
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading dialog
+
+        if (postData != null) {
+          // Ensure ID is included
+          final postDataWithId = {
+            'id': notification.postId!,
+            ...postData,
+          };
+          final post = LookingForPostModel.fromMap(postDataWithId);
           
-          if (postData != null && mounted) {
-            final post = LookingForPostModel.fromMap(postData);
-            Navigator.push(
+          if (mounted) {
+            await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => LookingForPostDetailPage(post: post),
               ),
             );
           }
-        } catch (e) {
-          debugPrint('❌ [NotificationsPage] Error loading looking-for post: $e');
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Post not found. It may have been deleted.'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
         }
       } else {
         // Default to listing (or if postType is 'listing' or null)
-        try {
-          final listingService = BListingService();
-          final listingData = await listingService.getListing(notification.postId!);
+        final listingService = BListingService();
+        final listingData = await listingService.getListing(notification.postId!);
+        
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading dialog
+
+        if (listingData != null) {
+          // Ensure ID is included
+          final listingDataWithId = {
+            'id': notification.postId!,
+            ...listingData,
+          };
+          final listing = ListingModel.fromMap(listingDataWithId);
           
-          if (listingData != null && mounted) {
-            final listing = ListingModel.fromMap(listingData);
-            Navigator.push(
+          if (mounted) {
+            await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => ListingDetailsPage(listing: listing),
               ),
             );
           }
-        } catch (e) {
-          debugPrint('❌ [NotificationsPage] Error loading listing: $e');
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Listing not found. It may have been deleted.'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
         }
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ [NotificationsPage] Error navigating to notification target: $e');
+      debugPrint('❌ [NotificationsPage] Stack trace: $stackTrace');
+      
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog if still open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading post: ${e.toString()}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     }
   }
@@ -149,6 +223,36 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         actions: [
+          Builder(
+            builder: (context) {
+              final theme = Theme.of(context);
+              final isDark = theme.brightness == Brightness.dark;
+              return IconButton(
+                icon: Image.asset(
+                  'assets/chat.png',
+                  width: 22,
+                  height: 22,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(
+                      Icons.chat_bubble_outline,
+                      size: 22,
+                      color: isDark ? Colors.white : Colors.black87,
+                    );
+                  },
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ChatsListPage(),
+                    ),
+                  );
+                },
+                tooltip: 'Messages',
+              );
+            },
+          ),
+          const SizedBox(width: 2),
           ThreeDotsMenu(),
         ],
         bottom: PreferredSize(
@@ -335,7 +439,8 @@ class _NotificationsPageState extends State<NotificationsPage> with SingleTicker
     final now = DateTime.now();
     return notifications.where((n) {
       final diff = now.difference(n.timestamp);
-      return diff.inMinutes < 60 && !n.read;
+      // Include all notifications from last 60 minutes (both read and unread)
+      return diff.inMinutes < 60;
     }).toList();
   }
 

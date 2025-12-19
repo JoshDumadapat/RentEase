@@ -28,6 +28,7 @@ import 'package:rentease_app/screens/profile/edit_profile_page.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
 import 'package:rentease_app/widgets/subscription_promotion_card.dart';
 import 'package:rentease_app/screens/subscription/subscription_page.dart';
+import 'package:rentease_app/screens/chat/chats_list_page.dart';
 import 'package:rentease_app/admin/utils/admin_auth_utils.dart';
 import 'package:rentease_app/admin/admin_dashboard_page.dart';
 
@@ -63,7 +64,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   List<LookingForPostModel> _allLookingForPosts = []; // Store original unfiltered list
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
-  String _selectedTab = 'properties'; // 'properties', 'favorites', or 'lookingFor'
+  String _selectedTab = 'properties'; // 'properties', 'favorites', 'lookingFor', or 'followers'
   bool _isAdmin = false;
   
   // Check if viewing own profile or another user's profile
@@ -94,6 +95,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
   
   // Subscription promotion card state
   bool _showSubscriptionCard = true;
+  bool _currentUserIsVerified = false; // Track current logged-in user's verification status
 
   @override
   void initState() {
@@ -103,6 +105,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
     if (widget.userId != null) {
       _selectedTab = 'properties';
     }
+    _loadCurrentUserVerificationStatus();
     _loadProfileData();
     _checkAdminStatus();
     // Only setup favorites for own profile
@@ -123,6 +126,26 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
       setState(() {
         _isAdmin = isAdmin;
       });
+    }
+  }
+
+  /// Load current logged-in user's verification status
+  Future<void> _loadCurrentUserVerificationStatus() async {
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    if (firebaseUser == null) {
+      return;
+    }
+    
+    try {
+      final userService = BUserService();
+      final userData = await userService.getUserData(firebaseUser.uid);
+      if (mounted && userData != null) {
+        setState(() {
+          _currentUserIsVerified = userData['isVerified'] == true;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [ProfilePage] Error loading current user verification status: $e');
     }
   }
 
@@ -504,6 +527,7 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
         if (_user != null && _user!.isVerified != isVerified) {
           setState(() {
             _user = _user!.copyWith(isVerified: isVerified);
+            _currentUserIsVerified = isVerified; // Also update current user's verification status
           });
           
           // Show success message if just verified
@@ -1443,6 +1467,36 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                               },
                               tooltip: 'Admin Dashboard',
                             ),
+                          Builder(
+                            builder: (context) {
+                              final theme = Theme.of(context);
+                              final isDark = theme.brightness == Brightness.dark;
+                              return IconButton(
+                                icon: Image.asset(
+                                  'assets/chat.png',
+                                  width: 22,
+                                  height: 22,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Icon(
+                                      Icons.chat_bubble_outline,
+                                      size: 22,
+                                      color: isDark ? Colors.white : Colors.black87,
+                                    );
+                                  },
+                                ),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const ChatsListPage(),
+                                    ),
+                                  );
+                                },
+                                tooltip: 'Messages',
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 2),
                           ThreeDotsMenu(),
                         ],
                       ),
@@ -1462,11 +1516,14 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                         
                         const SizedBox(height: 16),
                         
-                        // Subscription Promotion Card (only show if user is NOT verified)
+                        // Subscription Promotion Card (only show on own profile if current user is NOT verified)
                         AnimatedSize(
                           duration: const Duration(milliseconds: 300),
                           curve: Curves.easeInOut,
-                          child: (_showSubscriptionCard && _user != null && !_user!.isVerified)
+                          child: (_showSubscriptionCard && 
+                                  widget.userId == null && // Only show on own profile
+                                  _user != null && 
+                                  !_currentUserIsVerified) // Check logged-in user's verification status
                               ? Column(
                                   children: [
                                     Padding(

@@ -98,6 +98,9 @@ class NotificationModel {
         case 'review':
           type = NotificationType.review;
           break;
+        case 'follow':
+          type = NotificationType.follow;
+          break;
         default:
           type = NotificationType.comment; // Default fallback
       }
@@ -230,5 +233,6 @@ enum NotificationType {
   comment, // Commented on a post
   mention, // Mentioned you in a comment
   review, // Reviewed a listing
+  follow, // Started following you
 }
 

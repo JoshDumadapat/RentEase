@@ -76,7 +76,9 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
             _userCache[userId] = userData;
           }
         } catch (e) {
-          debugPrint('Error loading user $userId: $e');
+          if (kDebugMode) {
+            debugPrint('Error loading user $userId: $e');
+          }
         }
       }
       
@@ -450,6 +452,9 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                     : RefreshIndicator(
                         onRefresh: _loadReports,
                         child: ListView.builder(
+                          cacheExtent: 500,
+                          addAutomaticKeepAlives: false,
+                          addRepaintBoundaries: true,
                           key: const PageStorageKey<String>('admin_reports_list'),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _filteredReports.length,

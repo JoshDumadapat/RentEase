@@ -7,6 +7,9 @@ import 'package:rentease_app/models/listing_model.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
 import 'package:rentease_app/backend/BListingService.dart';
+import 'package:rentease_app/backend/BReviewService.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 
 // Theme color constants
 const Color _themeColor = Color(0xFF00D1FF);
@@ -24,6 +27,7 @@ class PostsPage extends StatefulWidget {
 
 class _PostsPageState extends State<PostsPage> {
   final BListingService _listingService = BListingService();
+  final BReviewService _reviewService = BReviewService();
   List<ListingModel> _listings = [];
   bool _isLoading = true;
 
@@ -43,32 +47,125 @@ class _PostsPageState extends State<PostsPage> {
       // Firestore may have variations (e.g., "Apartment" vs "Apartments")
       // So we try both variations and combine results
       List<String> categoryNames = _getCategoryVariations(widget.category.name);
-      debugPrint('🔍 [PostsPage] Category Model Name: ${widget.category.name}');
-      debugPrint('🔍 [PostsPage] Searching categories: $categoryNames');
-      
-      List<Map<String, dynamic>> allListings = [];
-      for (String categoryName in categoryNames) {
-        debugPrint('🔍 [PostsPage] Querying category: $categoryName');
-        final listingsData = await _listingService.getListingsByCategory(categoryName);
-        debugPrint('📊 [PostsPage] Found ${listingsData.length} listings for "$categoryName"');
-        allListings.addAll(listingsData);
+      if (kDebugMode) {
+        debugPrint('🔍 [PostsPage] Category Model Name: ${widget.category.name}');
+        debugPrint('🔍 [PostsPage] Searching categories: $categoryNames');
       }
       
-      debugPrint('📊 [PostsPage] Total listings before dedupe: ${allListings.length}');
-      
-      // Remove duplicates based on listing ID
+      // Use a Map to track unique listings by ID as we fetch them
+      // This prevents duplicates during fetching from multiple category variations
       final uniqueListings = <String, Map<String, dynamic>>{};
-      for (var listing in allListings) {
-        final id = listing['id'] as String? ?? '';
-        if (id.isNotEmpty && !uniqueListings.containsKey(id)) {
-          uniqueListings[id] = listing;
+      
+      for (String categoryName in categoryNames) {
+        if (kDebugMode) {
+          debugPrint('🔍 [PostsPage] Querying category: $categoryName');
+        }
+        final listingsData = await _listingService.getListingsByCategory(categoryName);
+        if (kDebugMode) {
+          debugPrint('📊 [PostsPage] Found ${listingsData.length} listings for "$categoryName"');
+        }
+        
+        // Add listings only if they haven't been seen before (by ID)
+        // This ensures no duplicates when querying multiple category variations
+        int addedCount = 0;
+        int skippedCount = 0;
+        for (var listing in listingsData) {
+          final id = listing['id'] as String?;
+          if (id == null || id.isEmpty) {
+            if (kDebugMode) {
+              debugPrint('⚠️ [PostsPage] Skipping listing with empty/null ID from category "$categoryName"');
+            }
+            skippedCount++;
+            continue;
+          }
+          
+          if (!uniqueListings.containsKey(id)) {
+            uniqueListings[id] = listing;
+            addedCount++;
+          } else {
+            skippedCount++;
+            if (kDebugMode) {
+              debugPrint('⚠️ [PostsPage] Duplicate listing ID "$id" already found - skipping');
+            }
+          }
+        }
+        
+        if (kDebugMode) {
+          debugPrint('✅ [PostsPage] Added $addedCount new listings from "$categoryName"');
+          if (skippedCount > 0) {
+            debugPrint('⚠️ [PostsPage] Skipped $skippedCount duplicate/empty listings from "$categoryName"');
+          }
         }
       }
       
-      debugPrint('📊 [PostsPage] Total unique listings: ${uniqueListings.length}');
+      debugPrint('✅ [PostsPage] Total unique listings after deduplication: ${uniqueListings.length}');
+      
+      // Fetch review count and average rating for each listing
+      final listingsWithReviews = await Future.wait(
+        uniqueListings.values.map((data) async {
+          // Fetch actual review count and average rating FIRST, before creating ListingModel
+          String listingId = data['id'] as String? ?? '';
+          int actualCount = 0;
+          double actualAverageRating = 0.0;
+          
+          try {
+            actualCount = await _reviewService.getReviewCount(listingId);
+            debugPrint('🔍 [PostsPage] Fetching rating for $listingId: reviewCount=$actualCount');
+            
+            if (actualCount > 0) {
+              actualAverageRating = await _reviewService.getAverageRating(listingId);
+              debugPrint('✅ [PostsPage] Fetched rating for $listingId: $actualAverageRating (from $actualCount reviews)');
+            } else {
+              debugPrint('📊 [PostsPage] No reviews found for $listingId');
+            }
+          } catch (e, stackTrace) {
+            debugPrint('⚠️ [PostsPage] Error fetching review data for $listingId: $e');
+            debugPrint('📚 Stack trace: $stackTrace');
+          }
+          
+          // Update data map with fetched values BEFORE creating ListingModel
+          final updatedData = Map<String, dynamic>.from(data);
+          updatedData['reviewCount'] = actualCount;
+          updatedData['averageRating'] = actualAverageRating; // Already a double from getAverageRating
+          
+          debugPrint('🔧 [PostsPage] Creating ListingModel for $listingId with: reviewCount=$actualCount, averageRating=$actualAverageRating');
+          
+          // Create ListingModel with updated data
+          return ListingModel.fromMap(updatedData);
+        }),
+      );
+      
+      // Final deduplication pass - ensure no duplicates in the final list
+      // Use a Map to track by ID and preserve order (first occurrence wins)
+      final finalUniqueListings = <String, ListingModel>{};
+      int finalDuplicates = 0;
+      for (var listing in listingsWithReviews) {
+        if (listing.id.isEmpty) {
+          finalDuplicates++;
+          if (kDebugMode) {
+            debugPrint('⚠️ [PostsPage] Skipping listing with empty ID in final list');
+          }
+          continue;
+        }
+        
+        if (!finalUniqueListings.containsKey(listing.id)) {
+          finalUniqueListings[listing.id] = listing;
+        } else {
+          finalDuplicates++;
+          if (kDebugMode) {
+            debugPrint('⚠️ [PostsPage] Removing duplicate listing ID "${listing.id}" from final list');
+          }
+        }
+      }
+      
+      if (kDebugMode && finalDuplicates > 0) {
+        debugPrint('⚠️ [PostsPage] Removed $finalDuplicates duplicate listings from final list');
+      }
+      
+      debugPrint('✅ [PostsPage] Final list contains ${finalUniqueListings.length} unique listings');
       
       setState(() {
-        _listings = uniqueListings.values.map((data) => ListingModel.fromMap(data)).toList();
+        _listings = finalUniqueListings.values.toList();
         _isLoading = false;
       });
     } catch (e, stackTrace) {
@@ -137,6 +234,9 @@ class _PostsPageState extends State<PostsPage> {
               : RefreshIndicator(
                   onRefresh: _loadListings,
                   child: ListView.builder(
+                    cacheExtent: 500,
+                    addAutomaticKeepAlives: false,
+                    addRepaintBoundaries: true,
                     padding: const EdgeInsets.all(16.0),
                     itemCount: _listings.length,
                     itemBuilder: (context, index) {
@@ -300,34 +400,71 @@ class _ModernListingCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isDark 
-                                ? _themeColorDark.withValues(alpha: 0.25)
-                                : _themeColorLight,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            listing.category,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: _themeColorDark,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark 
+                                    ? _themeColorDark.withValues(alpha: 0.25)
+                                    : _themeColorLight,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                listing.category,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: _themeColorDark,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            Text(
+                              listing.timeAgo,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: subtextColor,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          listing.timeAgo,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: subtextColor,
-                            fontWeight: FontWeight.w400,
-                          ),
+                        // Average Rating Stars - Always show if there are reviews
+                        Builder(
+                          builder: (context) {
+                            // Debug: Log the rating value being displayed
+                            if (listing.reviewCount > 0) {
+                              debugPrint('🎨 [PostsPage UI] Displaying rating for ${listing.id}: reviewCount=${listing.reviewCount}, averageRating=${listing.averageRating}');
+                            }
+                            
+                            if (listing.reviewCount > 0) {
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.star_rounded,
+                                    size: 16,
+                                    color: Colors.amber,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    listing.averageRating.toStringAsFixed(1),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: subtextColor,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
                         ),
                       ],
                     ),
@@ -436,12 +573,23 @@ class _ModernListingCard extends StatelessWidget {
                         _HeartActionIcon(likeCount: 24),
                         _ModernActionIcon(
                           assetPath: 'assets/icons/navbar/comment_outlined.svg',
-                          count: 8,
-                          onTap: () {},
+                          count: listing.reviewCount,
+                          onTap: () {
+                            debugPrint('🔍 [PostsPage] Comment icon tapped - reviewCount: ${listing.reviewCount}');
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ListingDetailsPage(
+                                  listing: listing,
+                                  initialTab: 1, // Open Review tab
+                                ),
+                              ),
+                            );
+                          },
                         ),
                         _ModernActionIcon(
                           assetPath: 'assets/icons/navbar/share_outlined.svg',
-                          count: 3,
+                          count: 0, // Share doesn't need a count
                           onTap: () {
                             _showShareModal(context, listing);
                           },
@@ -463,38 +611,38 @@ class _ModernListingCard extends StatelessWidget {
                            imagePath.startsWith('https://');
     
     if (isNetworkImage) {
-      return Image.network(
-        imagePath,
+      return CachedNetworkImage(
+        imageUrl: imagePath,
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Container(
-            color: isDark ? Colors.grey[800] : Colors.grey[100],
-            child: Center(
+        memCacheWidth: 800,
+        memCacheHeight: 450,
+        maxWidthDiskCache: 1200,
+        maxHeightDiskCache: 675,
+        placeholder: (context, url) => Container(
+          color: isDark ? Colors.grey[800] : Colors.grey[100],
+          child: const Center(
+            child: SizedBox(
+              width: 24,
+              height: 24,
               child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
-                    : null,
-                color: _themeColorDark,
+                strokeWidth: 2,
+                color: Colors.grey,
               ),
             ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            color: isDark ? Colors.grey[800] : Colors.grey[100],
-            child: Center(
-              child: Icon(
-                Icons.image_outlined,
-                size: 48,
-                color: isDark ? Colors.grey[600] : Colors.grey[400],
-              ),
+          ),
+        ),
+        errorWidget: (context, url, error) => Container(
+          color: isDark ? Colors.grey[800] : Colors.grey[100],
+          child: Center(
+            child: Icon(
+              Icons.image_outlined,
+              size: 48,
+              color: isDark ? Colors.grey[600] : Colors.grey[400],
             ),
-          );
-        },
+          ),
+        ),
       );
     } else {
       return Image(

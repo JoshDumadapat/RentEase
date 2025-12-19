@@ -18,6 +18,9 @@ import 'package:rentease_app/backend/BListingService.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
 import 'package:rentease_app/screens/listing_details/osm_location_view_page.dart';
 import 'package:rentease_app/screens/profile/profile_page.dart';
+import 'package:rentease_app/screens/chat/chats_list_page.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 
 // Theme colors to match HomePage
 const Color _themeColorLight = Color(0xFFE5F9FF);
@@ -68,8 +71,49 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
   void initState() {
     super.initState();
     _currentListing = widget.listing;
+    _checkIfDraftAccess();
     _checkIfFavorite();
     _setupRealtimeListeners();
+  }
+
+  /// Check if user is trying to access a draft listing from another user
+  /// If so, prevent access and navigate back
+  void _checkIfDraftAccess() async {
+    final currentUser = _auth.currentUser;
+    final listing = widget.listing;
+    
+    // Check Firestore directly to see if this listing is a draft
+    try {
+      final doc = await _firestore.collection('listings').doc(listing.id).get();
+      if (doc.exists) {
+        final data = doc.data();
+        final isDraft = data?['isDraft'] as bool? ?? false;
+        final status = data?['status'] as String? ?? '';
+        final listingUserId = data?['userId'] as String?;
+        
+        // If listing is a draft or has draft status, and current user is not the owner, prevent access
+        if ((isDraft == true || status == 'draft') && 
+            currentUser != null && 
+            listingUserId != null && 
+            listingUserId != currentUser.uid) {
+          debugPrint('🚫 [ListingDetailsPage] Blocked access to draft listing ${listing.id} from user $listingUserId');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBarUtils.buildThemedSnackBar(
+                  context,
+                  'This listing is not available.',
+                ),
+              );
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [ListingDetailsPage] Error checking draft access: $e');
+      // If check fails, allow access (fail open for better UX)
+    }
   }
 
 
@@ -611,6 +655,30 @@ class _ListingDetailsPageState extends State<ListingDetailsPage> {
           ),
           actions: [
             IconButton(
+              icon: Image.asset(
+                'assets/chat.png',
+                width: 22,
+                height: 22,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    Icons.chat_bubble_outline,
+                    size: 22,
+                    color: iconColor,
+                  );
+                },
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ChatsListPage(),
+                  ),
+                );
+              },
+              tooltip: 'Messages',
+            ),
+            const SizedBox(width: 2),
+            IconButton(
               icon: Icon(Icons.more_vert, color: iconColor),
               onPressed: () => _showOptionsBottomSheet(context),
             ),
@@ -897,39 +965,38 @@ class _ImageCarousel extends StatelessWidget {
                   _showFullScreenImage(context, images, index, listing);
                 },
                 child: isNetworkImage
-                    ? Image.network(
-                        imagePath,
+                    ? CachedNetworkImage(
+                        imageUrl: imagePath,
                         fit: BoxFit.cover,
                         width: double.infinity,
                         height: double.infinity,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            color: Colors.grey[300],
-                            child: Center(
+                        memCacheWidth: 1200,
+                        memCacheHeight: 675,
+                        maxWidthDiskCache: 1600,
+                        maxHeightDiskCache: 900,
+                        placeholder: (context, url) => Container(
+                          color: Colors.grey[300],
+                          child: const Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
                               child: CircularProgressIndicator(
-                                value:
-                                    loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
-                                    : null,
-                                color: _themeColorDark,
-                              ),
-                            ),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: Colors.grey[300],
-                            child: const Center(
-                              child: Icon(
-                                Icons.image,
-                                size: 80,
+                                strokeWidth: 2,
                                 color: Colors.grey,
                               ),
                             ),
-                          );
-                        },
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: Colors.grey[300],
+                          child: const Center(
+                            child: Icon(
+                              Icons.image,
+                              size: 80,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
                       )
                     : Image(
                         image: AssetImage(imagePath),
@@ -1674,15 +1741,47 @@ class _OwnerSectionState extends State<_OwnerSection> {
                 width: 2,
               ),
             ),
-            child: CircleAvatar(
-              radius: 30,
-              backgroundColor: Colors.transparent,
-              backgroundImage:
-                  _profileImageUrl != null && _profileImageUrl!.isNotEmpty
-                  ? NetworkImage(_profileImageUrl!)
-                  : null,
-              child: _profileImageUrl == null || _profileImageUrl!.isEmpty
-                  ? Text(
+            child: _profileImageUrl != null && _profileImageUrl!.isNotEmpty
+                ? ClipOval(
+                    child: CachedNetworkImage(
+                      imageUrl: _profileImageUrl!,
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                      memCacheWidth: 120,
+                      memCacheHeight: 120,
+                      placeholder: (context, url) => CircleAvatar(
+                        radius: 30,
+                        backgroundColor: Colors.transparent,
+                        child: Text(
+                          (_username ?? widget.ownerName.split(' ').first)[0]
+                              .toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : _themeColorDark,
+                          ),
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => CircleAvatar(
+                        radius: 30,
+                        backgroundColor: Colors.transparent,
+                        child: Text(
+                          (_username ?? widget.ownerName.split(' ').first)[0]
+                              .toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : _themeColorDark,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                : CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.transparent,
+                    child: Text(
                       (_username ?? widget.ownerName.split(' ').first)[0]
                           .toUpperCase(),
                       style: TextStyle(
@@ -1690,9 +1789,8 @@ class _OwnerSectionState extends State<_OwnerSection> {
                         fontWeight: FontWeight.bold,
                         color: isDark ? Colors.white : _themeColorDark,
                       ),
-                    )
-                  : null,
-            ),
+                    ),
+                  ),
           ),
           const SizedBox(width: 16),
           Expanded(

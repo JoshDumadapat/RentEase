@@ -18,43 +18,45 @@ class NotificationSkeleton extends StatelessWidget {
     final skeletonColor = isDarkMode ? Colors.grey[700]! : Colors.grey[300]!;
     final cardColor = isDarkMode ? const Color(0xFF2A2A2A) : Colors.white;
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: AppBar(
-        title: ShimmerEffect(
-          isDark: isDarkMode,
-          child: Container(
-            width: 120,
-            height: 20,
-            decoration: BoxDecoration(
-              color: skeletonColor,
-              borderRadius: BorderRadius.circular(8),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: backgroundColor,
+        appBar: AppBar(
+          title: ShimmerEffect(
+            isDark: isDarkMode,
+            child: Container(
+              width: 120,
+              height: 20,
+              decoration: BoxDecoration(
+                color: skeletonColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+          backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          actions: [
+            const ThreeDotsMenu(),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(48),
+            child: Container(
+              color: isDarkMode ? Colors.grey[900] : Colors.white,
+              child: TabBar(
+                indicatorColor: const Color(0xFF00B8E6),
+                labelColor: const Color(0xFF00B8E6),
+                unselectedLabelColor: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                tabs: const [
+                  Tab(text: 'All'),
+                  Tab(text: 'Unread'),
+                ],
+              ),
             ),
           ),
         ),
-        backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        surfaceTintColor: Colors.transparent,
-        actions: [
-          const ThreeDotsMenu(),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Container(
-            color: isDarkMode ? Colors.grey[900] : Colors.white,
-            child: TabBar(
-              indicatorColor: const Color(0xFF00B8E6),
-              labelColor: const Color(0xFF00B8E6),
-              unselectedLabelColor: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-              tabs: const [
-                Tab(text: 'All'),
-                Tab(text: 'Unread'),
-              ],
-            ),
-          ),
-        ),
-      ),
       body: ListView(
         children: [
           // New Section
@@ -88,6 +90,7 @@ class NotificationSkeleton extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
+      ),
       ),
     );
   }

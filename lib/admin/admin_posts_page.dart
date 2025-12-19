@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:rentease_app/admin/utils/admin_auth_utils.dart';
 import 'package:rentease_app/backend/BAdminService.dart';
@@ -201,7 +202,9 @@ class _AdminPostsPageState extends State<AdminPostsPage> {
             _userCache[userId] = userData;
           }
         } catch (e) {
-          debugPrint('Error loading user $userId: $e');
+          if (kDebugMode) {
+            debugPrint('Error loading user $userId: $e');
+          }
         }
       }
       
@@ -728,6 +731,9 @@ class _AdminPostsPageState extends State<AdminPostsPage> {
                     : RefreshIndicator(
                         onRefresh: _loadListings,
                         child: ListView.builder(
+                          cacheExtent: 500,
+                          addAutomaticKeepAlives: false,
+                          addRepaintBoundaries: true,
                           key: const PageStorageKey<String>('admin_posts_list'),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _filteredListings.length,

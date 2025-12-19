@@ -1,11 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:rentease_app/backend/BNotificationService.dart';
+import 'package:rentease_app/backend/BUserService.dart';
 
-/// Backend service for follow/unfollow functionality
+/// Follow service
 class BFollowService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final BNotificationService _notificationService = BNotificationService();
+  final BUserService _userService = BUserService();
   
   static const String _followersCollection = 'followers';
   static const String _followingCollection = 'following';
@@ -27,7 +31,7 @@ class BFollowService {
       
       return doc.exists;
     } catch (e) {
-      debugPrint('Error checking follow status: $e');
+      // debugPrint('Error checking follow status: $e');
       return false;
     }
   }
@@ -74,7 +78,7 @@ class BFollowService {
       // Update follower count in users collection
       final targetUserRef = _firestore.collection('users').doc(targetUserId);
       batch.update(targetUserRef, {
-        'followerCount': FieldValue.increment(1),
+        'followersCount': FieldValue.increment(1),
       });
 
       // Update following count in users collection
@@ -84,8 +88,34 @@ class BFollowService {
       });
 
       await batch.commit();
+
+      // Create notification for the followed user
+      try {
+        // Get follower's data for notification
+        final followerData = await _userService.getUserData(currentUserId);
+        final followerName = followerData?['username'] as String? ??
+            followerData?['displayName'] as String? ??
+            (followerData?['fname'] != null && followerData?['lname'] != null
+                ? '${followerData!['fname']} ${followerData['lname']}'.trim()
+                : null) ??
+            followerData?['fname'] as String? ??
+            followerData?['lname'] as String? ??
+            'Someone';
+        final followerAvatarUrl = followerData?['profileImageUrl'] as String?;
+
+        await _notificationService.notifyFollow(
+          followedUserId: targetUserId,
+          followerId: currentUserId,
+          followerName: followerName,
+          followerAvatarUrl: followerAvatarUrl,
+        );
+        // debugPrint('✅ [BFollowService] Notification created for followed user');
+      } catch (e) {
+        // Log error but don't throw - notification failure shouldn't break follow creation
+        // debugPrint('⚠️ [BFollowService] Error creating follow notification: $e');
+      }
     } catch (e) {
-      debugPrint('Error following user: $e');
+      // debugPrint('Error following user: $e');
       rethrow;
     }
   }
@@ -125,7 +155,7 @@ class BFollowService {
       // Update follower count in users collection
       final targetUserRef = _firestore.collection('users').doc(targetUserId);
       batch.update(targetUserRef, {
-        'followerCount': FieldValue.increment(-1),
+        'followersCount': FieldValue.increment(-1),
       });
 
       // Update following count in users collection
@@ -136,7 +166,7 @@ class BFollowService {
 
       await batch.commit();
     } catch (e) {
-      debugPrint('Error unfollowing user: $e');
+      // debugPrint('Error unfollowing user: $e');
       rethrow;
     }
   }
@@ -146,11 +176,11 @@ class BFollowService {
     try {
       final doc = await _firestore.collection('users').doc(userId).get();
       if (doc.exists) {
-        return (doc.data()?['followerCount'] as int?) ?? 0;
+        return (doc.data()?['followersCount'] as int?) ?? 0;
       }
       return 0;
     } catch (e) {
-      debugPrint('Error getting follower count: $e');
+      // debugPrint('Error getting follower count: $e');
       return 0;
     }
   }
@@ -164,7 +194,7 @@ class BFollowService {
       }
       return 0;
     } catch (e) {
-      debugPrint('Error getting following count: $e');
+      // debugPrint('Error getting following count: $e');
       return 0;
     }
   }
@@ -180,7 +210,7 @@ class BFollowService {
       
       return snapshot.docs.map((doc) => doc.data()['followerId'] as String).toList();
     } catch (e) {
-      debugPrint('Error getting followers: $e');
+      // debugPrint('Error getting followers: $e');
       return [];
     }
   }
@@ -196,7 +226,7 @@ class BFollowService {
       
       return snapshot.docs.map((doc) => doc.data()['followingId'] as String).toList();
     } catch (e) {
-      debugPrint('Error getting following: $e');
+      // debugPrint('Error getting following: $e');
       return [];
     }
   }

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:rentease_app/models/user_model.dart';
 import 'package:rentease_app/backend/BUserService.dart';
+import 'package:rentease_app/services/ai_chat_service.dart';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 
 const Color _themeColor = Color(0xFF00D1FF);
 
@@ -21,38 +23,11 @@ class _AIChatPageState extends State<AIChatPage> with SingleTickerProviderStateM
   final ScrollController _scrollController = ScrollController();
   late AnimationController _rotationController;
   final BUserService _userService = BUserService();
+  final AIChatService _aiChatService = AIChatService();
   UserModel? _currentUser;
   bool _isLoadingUser = true;
+  bool _isSendingMessage = false;
   String _logoUrl = 'https://res.cloudinary.com/dqymvfmbi/image/upload/v1765755084/ai/subspace_logo.jpg';
-
-  // Mock chat messages
-  final List<ChatMessage> _messages = [
-    ChatMessage(
-      text: "Hello! I'm Subspace, your AI assistant. How can I help you today?",
-      isFromSubspace: true,
-      timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-    ),
-    ChatMessage(
-      text: "Hi Subspace! Can you help me find a good apartment?",
-      isFromSubspace: false,
-      timestamp: DateTime.now().subtract(const Duration(minutes: 4)),
-    ),
-    ChatMessage(
-      text: "Of course! I'd be happy to help you find the perfect apartment. What's your budget range and preferred location?",
-      isFromSubspace: true,
-      timestamp: DateTime.now().subtract(const Duration(minutes: 3)),
-    ),
-    ChatMessage(
-      text: "I'm looking for something around \$800-1200 in the downtown area.",
-      isFromSubspace: false,
-      timestamp: DateTime.now().subtract(const Duration(minutes: 2)),
-    ),
-    ChatMessage(
-      text: "Great! I found several listings in that range. Would you like me to show you the top 5 options?",
-      isFromSubspace: true,
-      timestamp: DateTime.now().subtract(const Duration(minutes: 1)),
-    ),
-  ];
 
   @override
   void initState() {
@@ -111,29 +86,33 @@ class _AIChatPageState extends State<AIChatPage> with SingleTickerProviderStateM
     super.dispose();
   }
 
-  void _sendMessage() {
-    if (_messageController.text.trim().isEmpty) return;
+  Future<void> _sendMessage() async {
+    if (_messageController.text.trim().isEmpty || _isSendingMessage) return;
+
+    final userMessage = _messageController.text.trim();
+    _messageController.clear();
 
     setState(() {
-      _messages.add(
-        ChatMessage(
-          text: _messageController.text.trim(),
-          isFromSubspace: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-      // Add mock Subspace response
-      _messages.add(
-        ChatMessage(
-          text: "Thanks for your message! I'm here to help you with any questions about listings, rentals, or property management.",
-          isFromSubspace: true,
-          timestamp: DateTime.now().add(const Duration(seconds: 1)),
-        ),
-      );
+      _isSendingMessage = true;
     });
 
-    _messageController.clear();
-    _scrollToBottom();
+    try {
+      // Get conversation history from stream (we'll pass empty for now, backend will handle it)
+      await _aiChatService.sendMessage(userMessage);
+      
+      // Scroll to bottom after a short delay to allow message to appear
+      Future.delayed(const Duration(milliseconds: 300), () {
+        _scrollToBottom();
+      });
+    } catch (e) {
+      debugPrint('Error sending message: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSendingMessage = false;
+        });
+      }
+    }
   }
 
   void _scrollToBottom() {
@@ -152,7 +131,7 @@ class _AIChatPageState extends State<AIChatPage> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final backgroundColor = isDark ? Colors.grey[900] : Colors.white;
+    final backgroundColor = isDark ? Colors.grey[900]! : Colors.white;
     final cardColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtextColor = (isDark ? Colors.grey[300] : Colors.grey[600])!;
@@ -223,7 +202,9 @@ class _AIChatPageState extends State<AIChatPage> with SingleTickerProviderStateM
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline),
-            onPressed: () {},
+            onPressed: () {
+              _showInfoScreen(context);
+            },
             color: textColor,
             tooltip: 'Info',
           ),
@@ -231,86 +212,281 @@ class _AIChatPageState extends State<AIChatPage> with SingleTickerProviderStateM
       ),
       body: Column(
         children: [
-          // Messages List
+          // Messages List - Messenger style
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final message = _messages[index];
-                return _buildMessageBubble(message, isDark, cardColor, textColor, subtextColor);
-              },
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: isDark
+                    ? LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.grey[900]!,
+                          Colors.grey[900]!,
+                        ],
+                      )
+                    : null,
+                color: isDark ? null : Colors.grey[50],
+              ),
+              child: StreamBuilder<List<ChatMessage>>(
+                stream: _aiChatService.getMessagesStream(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(_themeColor),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Loading conversation...',
+                            style: TextStyle(color: subtextColor),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline, color: Colors.red, size: 48),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Error loading messages',
+                            style: TextStyle(color: subtextColor),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  final messages = snapshot.data ?? [];
+                  
+                  // Show welcome message if no messages
+                  if (messages.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildSubspaceAvatar(isDark),
+                          const SizedBox(height: 24),
+                          Text(
+                            "Hello! I'm Subspace",
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Your AI assistant for RentEase',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: subtextColor,
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+                          Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 32),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.grey[800]! : Colors.grey[100]!,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              "I can help you find rental properties, calculate costs, answer questions about listings, and perform simple math. How can I assist you today?",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: textColor,
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  // Auto-scroll when new messages arrive
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (_scrollController.hasClients) {
+                      _scrollToBottom();
+                    }
+                  });
+
+                  return ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    itemCount: messages.length + (_isSendingMessage ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == messages.length && _isSendingMessage) {
+                        return _buildTypingIndicator(isDark, cardColor, textColor);
+                      }
+                      final message = messages[index];
+                      return _buildMessageBubble(
+                        message, 
+                        isDark, 
+                        cardColor, 
+                        textColor, 
+                        subtextColor,
+                        onLongPress: () => _showMessageOptions(context, message),
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ),
-          // Input Area - Simplified
+          // Input Area - Modern Messenger Style
           Container(
             decoration: BoxDecoration(
               color: cardColor,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
-                  blurRadius: 10,
+                  color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.08),
+                  blurRadius: 12,
                   offset: const Offset(0, -2),
                 ),
               ],
             ),
             padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).padding.bottom + 8,
-              left: 16,
-              right: 16,
-              top: 12,
+              bottom: MediaQuery.of(context).padding.bottom + 4,
+              left: 8,
+              right: 8,
+              top: 8,
             ),
             child: SafeArea(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // Text input field
+                  // Plus/Attachment button
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6, left: 4),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {},
+                        borderRadius: BorderRadius.circular(24),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.add,
+                            color: textColor,
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Text input field - Messenger style
                   Expanded(
                     child: Container(
                       constraints: const BoxConstraints(maxHeight: 120),
                       decoration: BoxDecoration(
                         color: isDark ? Colors.grey[800] : Colors.grey[100],
                         borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: isDark 
+                              ? Colors.grey[700]!.withValues(alpha: 0.5)
+                              : Colors.grey[300]!.withValues(alpha: 0.5),
+                          width: 1,
+                        ),
                       ),
                       child: TextField(
                         controller: _messageController,
                         decoration: InputDecoration(
                           hintText: 'Type a message...',
-                          hintStyle: TextStyle(color: subtextColor, fontSize: 15),
+                          hintStyle: TextStyle(
+                            color: subtextColor, 
+                            fontSize: 15,
+                            fontWeight: FontWeight.w400,
+                          ),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
+                            horizontal: 20,
+                            vertical: 12,
                           ),
                         ),
-                        style: TextStyle(color: textColor, fontSize: 15),
+                        style: TextStyle(
+                          color: textColor, 
+                          fontSize: 15,
+                          height: 1.4,
+                        ),
                         maxLines: null,
                         textCapitalization: TextCapitalization.sentences,
                         textInputAction: TextInputAction.newline,
                         onSubmitted: (_) {
-                          if (_messageController.text.trim().isNotEmpty) {
+                          if (_messageController.text.trim().isNotEmpty && !_isSendingMessage) {
                             _sendMessage();
                           }
                         },
+                        enabled: !_isSendingMessage,
                       ),
                     ),
                   ),
-                  // Send button (icon only, no background)
+                  const SizedBox(width: 8),
+                  // Send button - Messenger style circular button
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 8, left: 8),
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.send,
-                        color: _messageController.text.trim().isNotEmpty 
-                            ? _themeColor 
-                            : (isDark ? Colors.grey[600] : Colors.grey[400]),
-                        size: 26,
+                    padding: const EdgeInsets.only(bottom: 6, right: 4),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _messageController.text.trim().isNotEmpty && !_isSendingMessage
+                            ? _sendMessage 
+                            : null,
+                        borderRadius: BorderRadius.circular(24),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: _messageController.text.trim().isNotEmpty && !_isSendingMessage
+                                ? _themeColor 
+                                : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
+                            shape: BoxShape.circle,
+                            boxShadow: _messageController.text.trim().isNotEmpty && !_isSendingMessage
+                                ? [
+                                    BoxShadow(
+                                      color: _themeColor.withValues(alpha: 0.4),
+                                      blurRadius: 8,
+                                      spreadRadius: 0,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: _isSendingMessage
+                              ? SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      isDark ? Colors.grey[500]! : Colors.grey[500]!,
+                                    ),
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.send_rounded,
+                                  color: _messageController.text.trim().isNotEmpty && !_isSendingMessage
+                                      ? Colors.white 
+                                      : (isDark ? Colors.grey[500] : Colors.grey[500]),
+                                  size: 20,
+                                ),
+                        ),
                       ),
-                      onPressed: _messageController.text.trim().isNotEmpty 
-                          ? _sendMessage 
-                          : null,
-                      tooltip: 'Send',
                     ),
                   ),
                 ],
@@ -336,27 +512,27 @@ class _AIChatPageState extends State<AIChatPage> with SingleTickerProviderStateM
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: _themeColor.withValues(alpha: 0.2),
-                blurRadius: 8,
-                spreadRadius: 1,
+                color: _themeColor.withValues(alpha: 0.3),
+                blurRadius: 10,
+                spreadRadius: 1.5,
               ),
             ],
           ),
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Subtle rotating glow ring (reduced opacity)
+              // Subtle rotating glow ring
               Transform.rotate(
                 angle: _rotationController.value * 2 * math.pi,
                 child: Container(
-                  width: 46,
-                  height: 46,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: SweepGradient(
                       colors: [
                         Colors.transparent,
-                        _themeColor.withValues(alpha: 0.15),
+                        _themeColor.withValues(alpha: 0.35),
                         Colors.transparent,
                       ],
                       stops: const [0.0, 0.5, 1.0],
@@ -410,12 +586,14 @@ class _AIChatPageState extends State<AIChatPage> with SingleTickerProviderStateM
     bool isDark,
     Color cardColor,
     Color textColor,
-    Color subtextColor,
-  ) {
+    Color subtextColor, {
+    VoidCallback? onLongPress,
+  }) {
     final isSubspace = message.isFromSubspace;
+    final timeStr = _formatTime(message.timestamp);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16, top: 4),
+      padding: const EdgeInsets.only(bottom: 12, top: 4),
       child: Row(
         mainAxisAlignment:
             isSubspace ? MainAxisAlignment.start : MainAxisAlignment.end,
@@ -423,68 +601,128 @@ class _AIChatPageState extends State<AIChatPage> with SingleTickerProviderStateM
         children: [
           // Profile picture for Subspace messages (left side)
           if (isSubspace) ...[
-            _buildSubspaceAvatar(isDark),
-            const SizedBox(width: 12),
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              child: _buildSubspaceAvatar(isDark),
+            ),
           ],
-          // Message bubble
+          // Message bubble - Enhanced Messenger style
           Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              decoration: BoxDecoration(
-                color: isSubspace
-                    ? (isDark ? Colors.grey[800] : Colors.grey[200])
-                    : _themeColor,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(isSubspace ? 4 : 20),
-                  bottomRight: Radius.circular(isSubspace ? 20 : 4),
+            child: Column(
+              crossAxisAlignment: isSubspace ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+              children: [
+                GestureDetector(
+                  onLongPress: onLongPress,
+                  child: Container(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.75,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isSubspace
+                          ? (isDark ? Colors.grey[800]! : Colors.grey[200]!)
+                          : _themeColor,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(20),
+                        topRight: const Radius.circular(20),
+                        bottomLeft: Radius.circular(isSubspace ? 4 : 20),
+                        bottomRight: Radius.circular(isSubspace ? 20 : 4),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                          spreadRadius: 0,
+                        ),
+                      ],
+                    ),
+                    child: SelectableText(
+                      message.text,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isSubspace ? textColor : Colors.white,
+                        height: 1.5,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              child: Text(
-                message.text,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: isSubspace ? textColor : Colors.white,
-                  height: 1.5,
+                // Timestamp
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
+                  child: Text(
+                    timeStr,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: subtextColor.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
           // Profile picture for user messages (right side)
           if (!isSubspace && _currentUser != null) ...[
-            const SizedBox(width: 12),
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: isDark ? Colors.grey[800] : Colors.grey[300],
-              backgroundImage: _currentUser!.profileImageUrl != null &&
-                      _currentUser!.profileImageUrl!.isNotEmpty
-                  ? NetworkImage(_currentUser!.profileImageUrl!)
-                  : null,
-              child: _currentUser!.profileImageUrl == null ||
-                      _currentUser!.profileImageUrl!.isEmpty
-                  ? Text(
-                      _currentUser!.displayName.isNotEmpty
-                          ? _currentUser!.displayName[0].toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.grey[300] : Colors.grey[700],
-                      ),
-                    )
-                  : null,
+            const SizedBox(width: 8),
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: _themeColor.withValues(alpha: 0.3),
+                  width: 2.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: _themeColor.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: CircleAvatar(
+                radius: 20,
+                backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
+                backgroundImage: _currentUser!.profileImageUrl != null &&
+                        _currentUser!.profileImageUrl!.isNotEmpty
+                    ? NetworkImage(_currentUser!.profileImageUrl!)
+                    : null,
+                child: _currentUser!.profileImageUrl == null ||
+                        _currentUser!.profileImageUrl!.isEmpty
+                    ? Text(
+                        _currentUser!.displayName.isNotEmpty
+                            ? _currentUser!.displayName[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: _themeColor,
+                        ),
+                      )
+                    : null,
+              ),
             ),
           ] else if (!isSubspace) ...[
             // Show placeholder if user not loaded yet
-            const SizedBox(width: 12),
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: isDark ? Colors.grey[800] : Colors.grey[300],
-              child: Icon(
-                Icons.person,
-                size: 18,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
+            const SizedBox(width: 8),
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                  width: 2,
+                ),
+              ),
+              child: CircleAvatar(
+                radius: 20,
+                backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
+                child: Icon(
+                  Icons.person,
+                  size: 20,
+                  color: isDark ? Colors.grey[400]! : Colors.grey[600]!,
+                ),
               ),
             ),
           ],
@@ -492,16 +730,353 @@ class _AIChatPageState extends State<AIChatPage> with SingleTickerProviderStateM
       ),
     );
   }
+
+  String _formatTime(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${timestamp.day}/${timestamp.month}/${timestamp.year}';
+    }
+  }
+
+  Widget _buildTypingIndicator(bool isDark, Color cardColor, Color textColor) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, top: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: _buildSubspaceAvatar(isDark),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.grey[800] : Colors.grey[200],
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(18),
+                topRight: Radius.circular(18),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(18),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(textColor),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Subspace is typing...',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: textColor.withValues(alpha: 0.7),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMessageOptions(BuildContext context, ChatMessage message) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[900] : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!message.isFromSubspace) ...[
+                ListTile(
+                  leading: const Icon(Icons.delete_outline, color: Colors.red),
+                  title: const Text('Delete for me'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    try {
+                      await _aiChatService.deleteMessageForMe(message.messageId!);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Message deleted'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error: ${e.toString()}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_forever, color: Colors.red),
+                  title: const Text('Delete for everyone'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Delete Message'),
+                        content: const Text('Are you sure you want to delete this message for everyone? This action cannot be undone.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            style: TextButton.styleFrom(foregroundColor: Colors.red),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      try {
+                        await _aiChatService.deleteMessageForEveryone(message.messageId!);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Message deleted'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error: ${e.toString()}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    }
+                  },
+                ),
+              ],
+              ListTile(
+                leading: Icon(Icons.copy, color: textColor),
+                title: const Text('Copy'),
+                onTap: () {
+                  Navigator.pop(context);
+                  // Copy functionality would go here
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showInfoScreen(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? Colors.grey[900]! : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = (isDark ? Colors.grey[300] : Colors.grey[600])!;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[700] : Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                _buildSubspaceAvatar(isDark),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Subspace',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                      ),
+                      Text(
+                        'AI Assistant',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: subtextColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'About',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Subspace is your AI assistant for RentEase. I can help you find rental properties, calculate costs, answer questions about listings, and perform simple math calculations.',
+              style: TextStyle(
+                fontSize: 14,
+                color: subtextColor,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Capabilities',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildCapabilityItem(Icons.search, 'Find rental properties', subtextColor),
+            _buildCapabilityItem(Icons.calculate, 'Calculate rental costs', subtextColor),
+            _buildCapabilityItem(Icons.help_outline, 'Answer questions', subtextColor),
+            _buildCapabilityItem(Icons.calculate_outlined, 'Perform math calculations', subtextColor),
+            const SizedBox(height: 24),
+            Divider(color: subtextColor.withValues(alpha: 0.3)),
+            const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text('Clear Chat'),
+              subtitle: const Text('Delete all messages in this conversation'),
+              onTap: () async {
+                Navigator.pop(context);
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Clear Chat'),
+                    content: const Text('Are you sure you want to delete all messages? This action cannot be undone.'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                        child: const Text('Clear'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  try {
+                    await _aiChatService.clearChat();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Chat cleared successfully'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error: ${e.toString()}'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                }
+              },
+            ),
+            SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCapabilityItem(IconData icon, String text, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 14,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class ChatMessage {
-  final String text;
-  final bool isFromSubspace;
-  final DateTime timestamp;
-
-  ChatMessage({
-    required this.text,
-    required this.isFromSubspace,
-    required this.timestamp,
-  });
-}
+// ChatMessage class is imported from ai_chat_service.dart

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rentease_app/backend/BUserService.dart';
@@ -119,10 +120,9 @@ class PaymentSelectionPage extends StatelessWidget {
             // GCash
             _PaymentMethodCard(
               isDark: isDark,
-              icon: Icons.account_balance_wallet,
+              logoPath: 'assets/gcash.png',
               title: 'GCash',
               subtitle: 'Pay using GCash wallet',
-              color: const Color(0xFF007BFF),
               onTap: () {
                 Navigator.push(
                   context,
@@ -140,13 +140,12 @@ class PaymentSelectionPage extends StatelessWidget {
             
             const SizedBox(height: 16),
             
-            // PayMaya
+            // PayMaya (Maya)
             _PaymentMethodCard(
               isDark: isDark,
-              icon: Icons.payment,
-              title: 'PayMaya',
-              subtitle: 'Pay using PayMaya wallet',
-              color: const Color(0xFF00D4AA),
+              logoPath: 'assets/paymaya.png',
+              title: 'Maya',
+              subtitle: 'Pay using Maya wallet',
               onTap: () {
                 Navigator.push(
                   context,
@@ -155,7 +154,7 @@ class PaymentSelectionPage extends StatelessWidget {
                       planName: planName,
                       price: price,
                       planId: planId,
-                      paymentMethod: 'PayMaya',
+                      paymentMethod: 'Maya',
                     ),
                   ),
                 );
@@ -167,10 +166,9 @@ class PaymentSelectionPage extends StatelessWidget {
             // Bank Transfer
             _PaymentMethodCard(
               isDark: isDark,
-              icon: Icons.account_balance,
+              logoPath: 'assets/visamastercard.png',
               title: 'Bank Transfer',
               subtitle: 'Pay via bank deposit or transfer',
-              color: const Color(0xFF6C757D),
               onTap: () {
                 Navigator.push(
                   context,
@@ -188,13 +186,12 @@ class PaymentSelectionPage extends StatelessWidget {
             
             const SizedBox(height: 16),
             
-            // ePay
+            // ePay (Visa/Mastercard)
             _PaymentMethodCard(
               isDark: isDark,
-              icon: Icons.credit_card,
-              title: 'ePay',
-              subtitle: 'Pay using ePay online',
-              color: const Color(0xFF28A745),
+              logoPath: 'assets/visamastercard.png',
+              title: 'Credit/Debit Card',
+              subtitle: 'Pay using Visa or Mastercard',
               onTap: () {
                 Navigator.push(
                   context,
@@ -220,18 +217,16 @@ class PaymentSelectionPage extends StatelessWidget {
 
 class _PaymentMethodCard extends StatelessWidget {
   final bool isDark;
-  final IconData icon;
+  final String? logoPath;
   final String title;
   final String subtitle;
-  final Color color;
   final VoidCallback onTap;
 
   const _PaymentMethodCard({
     required this.isDark,
-    required this.icon,
+    this.logoPath,
     required this.title,
     required this.subtitle,
-    required this.color,
     required this.onTap,
   });
 
@@ -262,17 +257,32 @@ class _PaymentMethodCard extends StatelessWidget {
           ),
           child: Row(
             children: [
+              // Logo Container - Fixed Size
               Container(
-                padding: const EdgeInsets.all(12),
+                width: 60,
+                height: 60,
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
+                  color: isDark ? Colors.grey[800] : Colors.grey[100],
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 28,
-                ),
+                child: logoPath != null
+                    ? Image.asset(
+                        logoPath!,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            Icons.payment,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            size: 28,
+                          );
+                        },
+                      )
+                    : Icon(
+                        Icons.payment,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        size: 28,
+                      ),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -339,6 +349,8 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
   
   // Form controllers
   final _mobileController = TextEditingController();
+  final _gcashUsernameController = TextEditingController();
+  final _mayaUsernameController = TextEditingController();
   final _pinController = TextEditingController();
   final _otpController = TextEditingController();
   final _accountNumberController = TextEditingController();
@@ -368,10 +380,6 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
     setState(() => _isLoadingBanks = true);
     try {
       final banks = await _bankService.getAllBanks();
-      debugPrint('📊 [PaymentProcessingPage] Loaded ${banks.length} banks');
-      for (var bank in banks) {
-        debugPrint('  - ${bank.name}: ${bank.logoUrl}');
-      }
       setState(() {
         _banks = banks;
         _isLoadingBanks = false;
@@ -385,6 +393,8 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
   @override
   void dispose() {
     _mobileController.dispose();
+    _gcashUsernameController.dispose();
+    _mayaUsernameController.dispose();
     _pinController.dispose();
     _otpController.dispose();
     _accountNumberController.dispose();
@@ -464,32 +474,87 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'GCash Payment',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Enter your GCash mobile number and PIN',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
-            ),
+          Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[800] : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Image.asset(
+                  'assets/gcash.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'GCash Payment',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Enter your GCash details',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 24),
+          
+          // GCash Username
+          TextFormField(
+            controller: _gcashUsernameController,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              labelText: 'GCash Username',
+              hintText: 'Enter your GCash username',
+              prefixIcon: const Icon(Icons.person),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter your GCash username';
+              }
+              if (value.length < 3) {
+                return 'Username must be at least 3 characters';
+              }
+              return null;
+            },
+          ),
+          
+          const SizedBox(height: 20),
           
           // Mobile Number
           TextFormField(
             controller: _mobileController,
             keyboardType: TextInputType.phone,
+            maxLength: 11,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
+            ],
             decoration: InputDecoration(
               labelText: 'Mobile Number',
-              hintText: '09XX XXX XXXX',
+              hintText: '09123456789',
               prefixIcon: const Icon(Icons.phone),
+              counterText: '',
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -498,8 +563,11 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
               if (value == null || value.isEmpty) {
                 return 'Please enter your mobile number';
               }
-              if (value.length < 11) {
-                return 'Please enter a valid mobile number';
+              if (!value.startsWith('09')) {
+                return 'Mobile number must start with 09';
+              }
+              if (value.length != 11) {
+                return 'Mobile number must be 11 digits';
               }
               return null;
             },
@@ -507,15 +575,20 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
           
           const SizedBox(height: 20),
           
-          // PIN
+          // MPIN
           TextFormField(
             controller: _pinController,
             obscureText: !_showPin,
             keyboardType: TextInputType.number,
+            maxLength: 4,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
+            ],
             decoration: InputDecoration(
               labelText: 'GCash MPIN',
-              hintText: 'Enter your 4-digit MPIN',
+              hintText: 'Enter 4-digit MPIN',
               prefixIcon: const Icon(Icons.lock),
+              counterText: '',
               suffixIcon: IconButton(
                 icon: Icon(_showPin ? Icons.visibility_off : Icons.visibility),
                 onPressed: () => setState(() => _showPin = !_showPin),
@@ -529,7 +602,7 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
                 return 'Please enter your MPIN';
               }
               if (value.length != 4) {
-                return 'MPIN must be 4 digits';
+                return 'MPIN must be exactly 4 digits';
               }
               return null;
             },
@@ -539,7 +612,7 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
     );
   }
 
-  Widget _buildPayMayaForm() {
+  Widget _buildMayaForm() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
@@ -548,32 +621,87 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'PayMaya Payment',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Enter your PayMaya mobile number',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
-            ),
+          Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[800] : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Image.asset(
+                  'assets/paymaya.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Maya Payment',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Enter your Maya details',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 24),
+          
+          // Maya Username
+          TextFormField(
+            controller: _mayaUsernameController,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              labelText: 'Maya Username',
+              hintText: 'Enter your Maya username',
+              prefixIcon: const Icon(Icons.person),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter your Maya username';
+              }
+              if (value.length < 3) {
+                return 'Username must be at least 3 characters';
+              }
+              return null;
+            },
+          ),
+          
+          const SizedBox(height: 20),
           
           // Mobile Number
           TextFormField(
             controller: _mobileController,
             keyboardType: TextInputType.phone,
+            maxLength: 11,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
+            ],
             decoration: InputDecoration(
               labelText: 'Mobile Number',
-              hintText: '09XX XXX XXXX',
+              hintText: '09123456789',
               prefixIcon: const Icon(Icons.phone),
+              counterText: '',
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -582,8 +710,11 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
               if (value == null || value.isEmpty) {
                 return 'Please enter your mobile number';
               }
-              if (value.length < 11) {
-                return 'Please enter a valid mobile number';
+              if (!value.startsWith('09')) {
+                return 'Mobile number must start with 09';
+              }
+              if (value.length != 11) {
+                return 'Mobile number must be 11 digits';
               }
               return null;
             },
@@ -596,10 +727,15 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
             controller: _otpController,
             obscureText: !_showOtp,
             keyboardType: TextInputType.number,
+            maxLength: 6,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
+            ],
             decoration: InputDecoration(
               labelText: 'OTP',
               hintText: 'Enter 6-digit OTP',
               prefixIcon: const Icon(Icons.sms),
+              counterText: '',
               suffixIcon: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -622,7 +758,7 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
                 return 'Please enter OTP';
               }
               if (value.length != 6) {
-                return 'OTP must be 6 digits';
+                return 'OTP must be exactly 6 digits';
               }
               return null;
             },
@@ -641,21 +777,46 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Bank Transfer',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Select your bank and enter account details',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
-            ),
+          Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[800] : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Image.asset(
+                  'assets/visamastercard.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Bank Transfer',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Select bank and enter account details',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 24),
           
@@ -697,6 +858,9 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
           TextFormField(
             controller: _accountNumberController,
             keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
+            ],
             decoration: InputDecoration(
               labelText: 'Account Number',
               hintText: 'Enter your account number',
@@ -710,7 +874,10 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
                 return 'Please enter account number';
               }
               if (value.length < 10) {
-                return 'Please enter a valid account number';
+                return 'Account number must be at least 10 digits';
+              }
+              if (value.length > 20) {
+                return 'Account number is too long';
               }
               return null;
             },
@@ -721,9 +888,10 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
           // Account Name
           TextFormField(
             controller: _accountNameController,
+            textCapitalization: TextCapitalization.words,
             decoration: InputDecoration(
               labelText: 'Account Holder Name',
-              hintText: 'Enter account holder name',
+              hintText: 'Enter account holder name as it appears on bank records',
               prefixIcon: const Icon(Icons.person),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -733,8 +901,29 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
               if (value == null || value.isEmpty) {
                 return 'Please enter account holder name';
               }
+              if (value.length < 3) {
+                return 'Name must be at least 3 characters';
+              }
+              if (!RegExp(r'^[a-zA-Z\s]+$').hasMatch(value)) {
+                return 'Name can only contain letters and spaces';
+              }
               return null;
             },
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Reference Number (Optional)
+          TextFormField(
+            keyboardType: TextInputType.text,
+            decoration: InputDecoration(
+              labelText: 'Reference Number (Optional)',
+              hintText: 'Enter transaction reference if available',
+              prefixIcon: const Icon(Icons.receipt),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
           ),
         ],
       ),
@@ -919,7 +1108,7 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: _themeColorDark.withValues(alpha: 0.4),
+                                  color: _themeColorDark.withValues(alpha: isDark ? 0.4 : 0.6),
                                   blurRadius: 20,
                                   spreadRadius: 5,
                                 ),
@@ -972,7 +1161,7 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: _themeColorDark.withValues(alpha: 0.3),
+                            color: _themeColorDark.withValues(alpha: isDark ? 0.3 : 0.5),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -1053,7 +1242,7 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: _themeColorDark.withValues(alpha: 0.1),
+                        color: _themeColorDark.withValues(alpha: isDark ? 0.1 : 0.25),
                         shape: BoxShape.circle,
                       ),
                       child: const CircularProgressIndicator(
@@ -1137,8 +1326,8 @@ class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
                   // Payment Form
                   if (widget.paymentMethod == 'GCash')
                     _buildGCashForm()
-                  else if (widget.paymentMethod == 'PayMaya')
-                    _buildPayMayaForm()
+                  else if (widget.paymentMethod == 'Maya')
+                    _buildMayaForm()
                   else if (widget.paymentMethod == 'Bank Transfer')
                     _buildBankTransferForm()
                   else if (widget.paymentMethod == 'ePay')
@@ -1203,9 +1392,7 @@ class _BankSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('🎨 [BankSelector] Building with ${banks.length} banks');
     if (banks.isEmpty) {
-      debugPrint('⚠️ [BankSelector] No banks available!');
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -1251,7 +1438,6 @@ class _BankSelector extends StatelessWidget {
           itemBuilder: (context, index) {
             final bank = banks[index];
             final isSelected = selectedBank?.id == bank.id;
-            debugPrint('🏦 [BankSelector] Building bank card: ${bank.name}, logoUrl: ${bank.logoUrl}');
 
             return Material(
               color: Colors.transparent,
@@ -1261,7 +1447,7 @@ class _BankSelector extends StatelessWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? _themeColorDark.withValues(alpha: 0.15)
+                        ? _themeColorDark.withValues(alpha: isDark ? 0.15 : 0.3)
                         : (isDark ? const Color(0xFF2A2A2A) : Colors.white),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
@@ -1273,7 +1459,7 @@ class _BankSelector extends StatelessWidget {
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: _themeColorDark.withValues(alpha: 0.3),
+                              color: _themeColorDark.withValues(alpha: isDark ? 0.3 : 0.5),
                               blurRadius: 8,
                               spreadRadius: 0,
                               offset: const Offset(0, 2),
@@ -1291,25 +1477,22 @@ class _BankSelector extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Bank Logo
+                      // Bank Logo - Fixed Size Container
                       Container(
                         width: 50,
                         height: 50,
+                        padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           color: isDark ? Colors.grey[800] : Colors.grey[100],
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: bank.logoUrl.isNotEmpty
                             ? ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(6),
                                 child: Image.network(
                                   bank.logoUrl,
                                   fit: BoxFit.contain,
-                                  width: 50,
-                                  height: 50,
                                   errorBuilder: (context, error, stackTrace) {
-                                    debugPrint('❌ [BankSelector] Error loading logo for ${bank.name}: $error');
-                                    debugPrint('   URL: ${bank.logoUrl}');
                                     return Icon(
                                       Icons.account_balance,
                                       color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -1318,7 +1501,6 @@ class _BankSelector extends StatelessWidget {
                                   },
                                   loadingBuilder: (context, child, loadingProgress) {
                                     if (loadingProgress == null) {
-                                      debugPrint('✅ [BankSelector] Loaded logo for ${bank.name}');
                                       return child;
                                     }
                                     return Center(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:rentease_app/models/listing_model.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 // Theme colors matching the listing cards
 const Color _themeColorDark = Color(0xFF00B8E6); // Darker shade for text (like blue[700])
@@ -263,25 +264,24 @@ class PropertyTile extends StatelessWidget {
                            imagePath.startsWith('https://');
     
     if (isNetworkImage) {
-      return Image.network(
-        imagePath,
+      return CachedNetworkImage(
+        imageUrl: imagePath,
         fit: BoxFit.cover,
         width: 100,
         height: 120,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Center(
+        memCacheWidth: 200,
+        memCacheHeight: 240,
+        placeholder: (context, url) => Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
             child: CircularProgressIndicator(
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded /
-                      loadingProgress.expectedTotalBytes!
-                  : null,
               strokeWidth: 2,
               color: _themeColorDark,
             ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) => _buildPlaceholder(isDark),
+          ),
+        ),
+        errorWidget: (context, url, error) => _buildPlaceholder(isDark),
       );
     } else {
       return Image.asset(

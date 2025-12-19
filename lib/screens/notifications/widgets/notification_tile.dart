@@ -208,6 +208,12 @@ class NotificationTile extends StatelessWidget {
           size: 14,
           color: isDark ? Colors.amber[300] : Colors.amber[600],
         );
+      case NotificationType.follow:
+        return Icon(
+          Icons.person_add,
+          size: 14,
+          color: isDark ? Colors.blue[300] : Colors.blue[600],
+        );
     }
   }
 
@@ -273,6 +279,9 @@ class NotificationTile extends StatelessWidget {
         } else if (notification.postTitle != null) {
           text += ': "${notification.postTitle}"';
         }
+        break;
+      case NotificationType.follow:
+        text = '${notification.actorName} started following you';
         break;
     }
 

@@ -2,8 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Backend service for hidden post operations in Firestore
-/// Handles hiding/unhiding "looking for" posts from user's feed
+/// Service for hiding posts
 class BHiddenPostService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const String _collectionName = 'hiddenPosts';
@@ -14,19 +13,19 @@ class BHiddenPostService {
     required String postId,
   }) async {
     try {
-      debugPrint('🔒 [BHiddenPostService] Checking if post is already hidden: $postId for user: $userId');
+      // debugPrint('🔒 [BHiddenPostService] Checking if post is already hidden: $postId for user: $userId');
       
       // Check if already hidden
       final existing = await isPostHidden(userId, postId);
       if (existing) {
-        debugPrint('⚠️ [BHiddenPostService] Post already hidden');
+        // debugPrint('⚠️ [BHiddenPostService] Post already hidden');
         return;
       }
 
-      debugPrint('🔒 [BHiddenPostService] Creating hidden post document...');
-      debugPrint('   - userId: $userId');
-      debugPrint('   - postId: $postId');
-      debugPrint('   - collection: $_collectionName');
+      // debugPrint('🔒 [BHiddenPostService] Creating hidden post document...');
+      // debugPrint('   - userId: $userId');
+      // debugPrint('   - postId: $postId');
+      // debugPrint('   - collection: $_collectionName');
 
       // Create hidden post document
       await _firestore.collection(_collectionName).add({
@@ -35,20 +34,20 @@ class BHiddenPostService {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      debugPrint('✅ [BHiddenPostService] Post hidden successfully: $userId -> $postId');
+      // debugPrint('✅ [BHiddenPostService] Post hidden successfully: $userId -> $postId');
     } catch (e, stackTrace) {
-      debugPrint('❌ [BHiddenPostService] Error hiding post: $e');
-      debugPrint('❌ [BHiddenPostService] Stack trace: $stackTrace');
-      debugPrint('❌ [BHiddenPostService] Error type: ${e.runtimeType}');
+      // debugPrint('❌ [BHiddenPostService] Error hiding post: $e');
+      // debugPrint('❌ [BHiddenPostService] Stack trace: $stackTrace');
+      // debugPrint('❌ [BHiddenPostService] Error type: ${e.runtimeType}');
       
       // Check if it's a Firestore permission error
       if (e.toString().contains('permission-denied')) {
-        debugPrint('🔒 PERMISSION DENIED ERROR');
-        debugPrint('   This usually means:');
-        debugPrint('   1. User is not authenticated');
-        debugPrint('   2. Firestore rules are blocking the operation');
-        debugPrint('   3. userId does not match auth.uid');
-        debugPrint('   Make sure Firestore rules are deployed!');
+        // debugPrint('🔒 PERMISSION DENIED ERROR');
+        // debugPrint('   This usually means:');
+        // debugPrint('   1. User is not authenticated');
+        // debugPrint('   2. Firestore rules are blocking the operation');
+        // debugPrint('   3. userId does not match auth.uid');
+        // debugPrint('   Make sure Firestore rules are deployed!');
       }
       
       rethrow;
@@ -70,16 +69,16 @@ class BHiddenPostService {
           .get();
 
       if (snapshot.docs.isEmpty) {
-        debugPrint('⚠️ [BHiddenPostService] Hidden post not found');
+        // debugPrint('⚠️ [BHiddenPostService] Hidden post not found');
         return;
       }
 
       // Delete hidden post document
       await snapshot.docs.first.reference.delete();
 
-      debugPrint('✅ [BHiddenPostService] Post unhidden: $userId -> $postId');
+      // debugPrint('✅ [BHiddenPostService] Post unhidden: $userId -> $postId');
     } catch (e) {
-      debugPrint('❌ [BHiddenPostService] Error unhiding post: $e');
+      // debugPrint('❌ [BHiddenPostService] Error unhiding post: $e');
       rethrow;
     }
   }
@@ -99,7 +98,7 @@ class BHiddenPostService {
         return true;
       }
     } catch (e) {
-      debugPrint('❌ [BHiddenPostService] Error toggling hide status: $e');
+      // debugPrint('❌ [BHiddenPostService] Error toggling hide status: $e');
       rethrow;
     }
   }
@@ -116,7 +115,7 @@ class BHiddenPostService {
 
       return snapshot.docs.isNotEmpty;
     } catch (e) {
-      debugPrint('❌ [BHiddenPostService] Error checking if post is hidden: $e');
+      // debugPrint('❌ [BHiddenPostService] Error checking if post is hidden: $e');
       return false;
     }
   }
@@ -134,7 +133,7 @@ class BHiddenPostService {
           .where((id) => id.isNotEmpty)
           .toSet();
     } catch (e) {
-      debugPrint('❌ [BHiddenPostService] Error getting hidden post IDs: $e');
+      // debugPrint('❌ [BHiddenPostService] Error getting hidden post IDs: $e');
       return {};
     }
   }

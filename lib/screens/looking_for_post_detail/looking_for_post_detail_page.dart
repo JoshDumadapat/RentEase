@@ -13,6 +13,7 @@ import 'package:rentease_app/backend/BCommentService.dart';
 import 'package:rentease_app/backend/BLookingForPostService.dart';
 import 'package:rentease_app/backend/BUserService.dart';
 import 'package:rentease_app/backend/BListingService.dart';
+import 'package:rentease_app/backend/BLikeService.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
 
 // Theme colors aligned with Home and Listing details review cards
@@ -44,6 +45,7 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
   final BLookingForPostService _lookingForPostService = BLookingForPostService();
   final BUserService _userService = BUserService();
   final BListingService _listingService = BListingService();
+  final BLikeService _likeService = BLikeService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   @override
@@ -51,7 +53,40 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
     super.initState();
     _likeCount = widget.post.likeCount;
     _commentCount = widget.post.commentCount;
-    _loadComments();
+    
+    // Validate post ID before loading comments
+    if (widget.post.id.isEmpty) {
+      debugPrint('⚠️ [LookingForPostDetail] Warning: Post ID is empty in initState');
+    } else {
+      _loadComments();
+      _checkLikeStatus();
+    }
+  }
+
+  Future<void> _checkLikeStatus() async {
+    final user = _auth.currentUser;
+    if (user != null && widget.post.id.isNotEmpty) {
+      try {
+        final isLikedPost = await _likeService.isLiked(user.uid, widget.post.id);
+        if (mounted) {
+          setState(() {
+            _isLiked = isLikedPost;
+          });
+        }
+      } catch (e) {
+        debugPrint('⚠️ [LookingForPostDetail] Error checking like status: $e');
+      }
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload comments when page becomes visible (e.g., when navigating from notification)
+    // Only reload if we haven't loaded yet or if post ID is now valid
+    if (widget.post.id.isNotEmpty && !_isLoadingComments && _comments.isEmpty) {
+      _loadComments();
+    }
   }
 
   void _showShareModal() {
@@ -120,6 +155,15 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
   }
 
   Future<void> _loadComments() async {
+    // Validate post ID before loading
+    if (widget.post.id.isEmpty) {
+      debugPrint('⚠️ [LookingForPostDetail] Cannot load comments: empty post ID');
+      setState(() {
+        _isLoadingComments = false;
+      });
+      return;
+    }
+
     setState(() {
       _isLoadingComments = true;
     });
@@ -426,11 +470,49 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
                           commentCount: _commentCount,
                           isLiked: _isLiked,
                           isDark: isDark,
-                          onLikeTap: () {
+                          onLikeTap: () async {
+                            final user = _auth.currentUser;
+                            if (user == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBarUtils.buildThemedSnackBar(context, 'Please sign in to like posts'),
+                              );
+                              return;
+                            }
+
+                            if (widget.post.id.isEmpty) {
+                              debugPrint('⚠️ [LookingForPostDetail] Cannot like: empty post ID');
+                              return;
+                            }
+
+                            // Optimistically update UI
                             setState(() {
                               _isLiked = !_isLiked;
                               _likeCount += _isLiked ? 1 : -1;
                             });
+
+                            try {
+                              // Toggle like in backend
+                              await _likeService.toggleLike(
+                                userId: user.uid,
+                                postId: widget.post.id,
+                              );
+                              debugPrint('✅ [LookingForPostDetail] Like toggled successfully');
+                            } catch (e) {
+                              debugPrint('❌ [LookingForPostDetail] Error toggling like: $e');
+                              // Revert optimistic update on error
+                              if (mounted) {
+                                setState(() {
+                                  _isLiked = !_isLiked;
+                                  _likeCount += _isLiked ? 1 : -1;
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBarUtils.buildThemedSnackBar(
+                                    context,
+                                    'Error updating like. Please try again.',
+                                  ),
+                                );
+                              }
+                            }
                           },
                           onShareTap: _showShareModal,
                         ),
@@ -613,9 +695,18 @@ class _LookingForPostDetailPageState extends State<LookingForPostDetailPage> {
       );
       debugPrint('✅ [LookingForPostDetail] Comment created with ID: $commentId');
 
-      // Increment comment count
-      await _lookingForPostService.incrementCommentCount(widget.post.id);
-      debugPrint('✅ [LookingForPostDetail] Comment count incremented');
+      // Increment comment count (only if post ID is valid)
+      if (widget.post.id.isNotEmpty) {
+        try {
+          await _lookingForPostService.incrementCommentCount(widget.post.id);
+          debugPrint('✅ [LookingForPostDetail] Comment count incremented');
+        } catch (e) {
+          debugPrint('⚠️ [LookingForPostDetail] Error incrementing comment count: $e');
+          // Don't fail the whole operation if count increment fails
+        }
+      } else {
+        debugPrint('⚠️ [LookingForPostDetail] Cannot increment comment count: empty post ID');
+      }
 
       // Add a small delay to ensure Firestore has processed the write
       await Future.delayed(const Duration(milliseconds: 500));

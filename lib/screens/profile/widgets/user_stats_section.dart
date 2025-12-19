@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:rentease_app/models/user_model.dart';
 import 'package:rentease_app/backend/BReviewService.dart';
+import 'package:rentease_app/screens/profile/widgets/followers_list_section.dart';
 
 /// User Stats Section Widget
 /// 
@@ -67,6 +68,63 @@ class _UserStatsSectionState extends State<UserStatsSection> {
         oldWidget.listingIds != widget.listingIds) {
       _loadUserRating();
     }
+  }
+
+  void _showFollowersModal(BuildContext context, String userId) {
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: theme.brightness == Brightness.dark
+                      ? Colors.grey[700]
+                      : Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Title
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'Followers',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: theme.brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black87,
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+              // Followers list
+              Expanded(
+                child: FollowersListModal(userId: userId),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _loadUserRating() async {
@@ -140,7 +198,7 @@ class _UserStatsSectionState extends State<UserStatsSection> {
         children: [
           // Stats Carousel (horizontal scrollable)
           SizedBox(
-            height: 120, // Height to accommodate the card content
+            height: 130, // Increased height to accommodate rating card with subtext
             child: ListView(
               controller: _scrollController,
               scrollDirection: Axis.horizontal,
@@ -161,6 +219,15 @@ class _UserStatsSectionState extends State<UserStatsSection> {
                   isDark: isDark,
                   width: cardWidth,
                   onTap: widget.onStatTap != null ? () => widget.onStatTap!('lookingFor') : null,
+                ),
+                const SizedBox(width: 12),
+                _StatTile(
+                  label: 'Followers',
+                  value: (widget.user.followersCount ?? 0).toString(),
+                  icon: Icons.people_outline,
+                  isDark: isDark,
+                  width: cardWidth,
+                  onTap: () => _showFollowersModal(context, widget.user.id),
                 ),
                 const SizedBox(width: 12),
                 _StatTile(
@@ -247,6 +314,9 @@ class _StatTile extends StatelessWidget {
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min, // Minimize vertical space
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           iconPath != null
               ? SvgPicture.asset(
@@ -271,6 +341,8 @@ class _StatTile extends StatelessWidget {
               fontWeight: FontWeight.w700,
               color: isDark ? Colors.white : Colors.black87,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           if (showSubtext && subtext != null) ...[
             const SizedBox(height: 2),
@@ -295,6 +367,8 @@ class _StatTile extends StatelessWidget {
               fontWeight: FontWeight.w500,
             ),
             textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

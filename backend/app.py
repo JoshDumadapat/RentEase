@@ -1,6 +1,7 @@
 """
 ID Validation Backend Service
 Uses InsightFace for face comparison, Tesseract OCR for text extraction, and fuzzywuzzy for text matching
+Also includes AI Chat functionality using OpenAI API
 """
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -13,18 +14,40 @@ from fuzzywuzzy import fuzz
 import base64
 import io
 import os
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    # print("⚠️  OpenAI library not installed. Install with: pip install openai")
+from typing import List, Dict, Optional
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter app
 
+# Initialize OpenAI client (optional - will use if API key is set)
+openai_api_key = os.environ.get('OPENAI_API_KEY')
+openai_client = None
+if OPENAI_AVAILABLE and openai_api_key:
+    try:
+        openai_client = openai.OpenAI(api_key=openai_api_key)
+        # print("✅ OpenAI API key loaded successfully!")
+    except Exception as e:
+        # print(f"⚠️  Error initializing OpenAI: {e}")
+        openai_client = None
+elif not OPENAI_AVAILABLE:
+    # print("⚠️  OpenAI library not installed. AI chat will use fallback responses.")
+else:
+    # print("⚠️  OpenAI API key not found. AI chat will use fallback responses.")
+
 # Initialize InsightFace model (CORRECT SETUP)
-print("Loading InsightFace model...")
+# print("Loading InsightFace model...")
 face_model = insightface.app.FaceAnalysis(
     name="buffalo_l",  # Use buffalo_l model
     providers=['CPUExecutionProvider']  # or ['CUDAExecutionProvider'] if GPU available
 )
 face_model.prepare(ctx_id=0, det_size=(640, 640))
-print("InsightFace model loaded successfully!")
+# print("InsightFace model loaded successfully!")
 
 # Configure Tesseract path (update if needed)
 # For Windows: pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -34,6 +57,249 @@ print("InsightFace model loaded successfully!")
 def health():
     """Health check endpoint"""
     return jsonify({'status': 'ok', 'message': 'ID Validation Service is running'})
+
+@app.route('/ai/chat', methods=['POST'])
+def ai_chat():
+    """
+    AI Chat endpoint for Subspace AI assistant
+    Expects: {
+        "message": "user message",
+        "conversationHistory": [
+            {"role": "user", "content": "..."},
+            {"role": "assistant", "content": "..."}
+        ],
+        "userId": "optional user id for personalization"
+    }
+    Returns: {
+        "response": "AI response text",
+        "error": null or error message
+    }
+    """
+    try:
+        data = request.json
+        if not data or 'message' not in data:
+            return jsonify({'error': 'Message is required'}), 400
+        
+        user_message = data['message'].strip()
+        if not user_message:
+            return jsonify({'error': 'Message cannot be empty'}), 400
+        
+        conversation_history = data.get('conversationHistory', [])
+        user_id = data.get('userId')
+        
+        # Enhanced system prompt for Subspace AI
+        system_prompt = """You are Subspace, an intelligent AI assistant for RentEase, a property rental platform.
+
+YOUR EXPERTISE:
+- Property Types: Apartments, Rooms, Condos, Houses, Dorms, Boarding Houses, Studios
+- Rental Details: Monthly rent, Security deposit, Advance payment, Bedrooms, Bathrooms, Floor area, Location, Availability
+- Amenities: Electricity, Water, Internet/WiFi, Laundry, Parking, Security, Aircon, Pet-friendly, Kitchen access, Private/Shared CR, Furnished/Unfurnished
+- Math Skills: Calculate rental costs, monthly payments, deposits, total first payments, percentages, basic arithmetic (addition, subtraction, multiplication, division)
+
+YOUR CAPABILITIES:
+- Help users find rental properties matching budget, location, and preferences
+- Calculate rental costs accurately (rent + deposit = total first payment, etc.)
+- Explain property listings, amenities, and rental terms
+- Provide practical rental advice and tips
+- Answer questions about RentEase platform features
+- Understand context from conversation history
+
+RESPONSE STYLE:
+- Be friendly, professional, and CONCISE (50-120 words max)
+- For math: Show clear calculations and results
+- For properties: Guide users to search feature for specific listings
+- Be helpful, accurate, and actionable
+- Use natural, conversational language
+- If unsure, ask clarifying questions
+
+IMPORTANT: Keep responses SHORT, DIRECT, and USEFUL. No fluff."""
+        
+        # Build conversation messages for OpenAI
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # Add conversation history (limit to last 10 messages to avoid token limits)
+        for msg in conversation_history[-10:]:
+            role = msg.get('role', 'user')
+            content = msg.get('content', '')
+            if role in ['user', 'assistant'] and content:
+                messages.append({"role": role, "content": content})
+        
+        # Add current user message
+        messages.append({"role": "user", "content": user_message})
+        
+        # Call OpenAI API if available (with optimized timeout and settings)
+        if openai_client:
+            try:
+                response = openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=150,  # Further reduced for faster responses
+                    timeout=8.0,  # Reduced timeout to 8 seconds
+                )
+                ai_response = response.choices[0].message.content.strip()
+                if ai_response:
+                    return jsonify({
+                        'response': ai_response,
+                        'error': None
+                    }), 200
+            except Exception:
+                # Fall through to fallback response on timeout or error
+                pass
+        
+        # Fallback response if OpenAI is not available
+        fallback_response = _generate_fallback_response(user_message)
+        return jsonify({
+            'response': fallback_response,
+            'error': None,
+            'note': 'Using fallback response (OpenAI not configured)'
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        # print(f"AI Chat error: {e}")
+        # print(traceback.format_exc())
+        return jsonify({
+            'response': "I'm sorry, I encountered an error. Please try again.",
+            'error': str(e)
+        }), 500
+
+def _generate_fallback_response(user_message: str) -> str:
+    """Generate intelligent fallback response with enhanced listing knowledge and math"""
+    import re
+    message_lower = user_message.lower().strip()
+    
+    # Enhanced math calculations - supports decimals
+    math_patterns = [
+        (r'(\d+\.?\d*)\s*\+\s*(\d+\.?\d*)', lambda m: float(m.group(1)) + float(m.group(2))),
+        (r'(\d+\.?\d*)\s*-\s*(\d+\.?\d*)', lambda m: float(m.group(1)) - float(m.group(2))),
+        (r'(\d+\.?\d*)\s*\*\s*(\d+\.?\d*)', lambda m: float(m.group(1)) * float(m.group(2))),
+        (r'(\d+\.?\d*)\s*/\s*(\d+\.?\d*)', lambda m: float(m.group(1)) / float(m.group(2)) if float(m.group(2)) != 0 else None),
+        (r'(\d+\.?\d*)\s*%\s*of\s*(\d+\.?\d*)', lambda m: float(m.group(1)) * float(m.group(2)) / 100),
+    ]
+    
+    # Check for math questions
+    for pattern, func in math_patterns:
+        match = re.search(pattern, user_message, re.IGNORECASE)
+        if match:
+            try:
+                result = func(match)
+                if result is None:
+                    return "Cannot divide by zero."
+                if result % 1 == 0:
+                    return f"The answer is {int(result)}."
+                else:
+                    return f"The answer is {result:.2f}."
+            except:
+                pass
+    
+    # Enhanced rental cost calculations - Yearly/Annual calculations
+    if any(word in message_lower for word in ['year', 'annual', 'per year']) and any(word in message_lower for word in ['how much', 'cost', 'spend', 'rent']):
+        numbers = re.findall(r'\d+', user_message)
+        if numbers:
+            try:
+                monthly_rent = float(numbers[0])
+                yearly_cost = monthly_rent * 12
+                return f"If the monthly rent is ₱{monthly_rent:,.0f}, you'll spend ₱{yearly_cost:,.0f} per year (₱{monthly_rent:,.0f} × 12 months)."
+            except:
+                pass
+    
+    # Monthly calculations
+    if 'month' in message_lower and any(word in message_lower for word in ['how much', 'cost']):
+        numbers = re.findall(r'\d+', user_message)
+        if len(numbers) >= 2:
+            try:
+                total = float(numbers[0])
+                months = float(numbers[1])
+                monthly = total / months
+                return f"If you spend ₱{total:,.0f} over {int(months)} months, that's ₱{monthly:,.0f} per month."
+            except:
+                pass
+    
+    # Enhanced rental cost calculations - First payment (rent + deposit)
+    if any(word in message_lower for word in ['calculate', 'total', 'deposit', 'advance', 'first payment']):
+        numbers = re.findall(r'\d+', user_message)
+        if len(numbers) >= 2:
+            try:
+                rent = float(numbers[0])
+                deposit = float(numbers[1])
+                total = rent + deposit
+                return f"Monthly rent: ₱{rent:,.0f}\nDeposit: ₱{deposit:,.0f}\nTotal first payment: ₱{total:,.0f}"
+            except:
+                pass
+        elif len(numbers) == 1:
+            return f"For ₱{numbers[0]}, you can find good rental options. Use search filters to browse properties in this price range."
+    
+    # Rental cost questions with numbers - smarter detection
+    if any(word in message_lower for word in ['how much', 'cost', 'spend']) and 'rent' in message_lower:
+        numbers = re.findall(r'\d+', user_message)
+        if numbers:
+            try:
+                monthly_rent = float(numbers[0])
+                if 'year' in message_lower or 'annual' in message_lower:
+                    yearly_cost = monthly_rent * 12
+                    return f"If the monthly rent is ₱{monthly_rent:,.0f}, you'll spend ₱{yearly_cost:,.0f} per year (₱{monthly_rent:,.0f} × 12 months)."
+                elif 'month' in message_lower and len(numbers) >= 2:
+                    months = float(numbers[1])
+                    total = monthly_rent * months
+                    return f"If the monthly rent is ₱{monthly_rent:,.0f}, you'll spend ₱{total:,.0f} over {int(months)} months."
+                else:
+                    yearly_cost = monthly_rent * 12
+                    return f"For ₱{monthly_rent:,.0f} monthly rent, that's ₱{yearly_cost:,.0f} per year. Use search filters to find properties in this price range."
+            except:
+                pass
+    
+    # Enhanced greetings
+    if any(word in message_lower for word in ['hello', 'hi', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening']):
+        return "Hello! I'm Subspace, your AI assistant for RentEase. I can help you find rental properties, calculate costs, and answer questions. How can I assist you today?"
+    
+    # Property types with context
+    property_keywords = {
+        'apartment': 'apartments',
+        'room': 'rooms',
+        'condo': 'condos',
+        'house': 'houses',
+        'dorm': 'dorms',
+        'boarding': 'boarding houses',
+        'studio': 'studios'
+    }
+    for key, value in property_keywords.items():
+        if key in message_lower:
+            return f"I can help you find {value}! Use the search feature to browse listings. What's your budget and preferred location?"
+    
+    # Price/Budget with smarter responses (only if not already handled by calculation logic)
+    if (any(word in message_lower for word in ['price', 'cost', 'rent', 'budget', 'cheap', 'expensive', 'affordable']) and
+        'how much' not in message_lower and
+        'calculate' not in message_lower and
+        'year' not in message_lower and
+        'month' not in message_lower):
+        numbers = re.findall(r'\d+', user_message)
+        if numbers:
+            return f"For ₱{numbers[0]}, you can find good options! Use search filters to find properties in your budget range. Prices vary by location, size, and amenities."
+        return "Rental prices vary by location and property type. Use search filters to find properties within your budget. What's your price range?"
+    
+    # Location with more helpful info
+    if any(word in message_lower for word in ['location', 'where', 'area', 'address', 'near', 'place']):
+        return "Search by location using the search feature. The app shows properties on a map with filters. What area or landmark are you interested in?"
+    
+    # Enhanced amenities
+    if any(word in message_lower for word in ['amenity', 'amenities', 'wifi', 'parking', 'aircon', 'kitchen', 'laundry', 'security', 'furnished']):
+        return "Common amenities include: WiFi, Parking, Aircon, Kitchen, Laundry, Security, Furnished options. Use search filters to find properties with specific amenities you need."
+    
+    # Help with specific guidance
+    if any(word in message_lower for word in ['help', 'how', 'what can you', 'what do you', 'guide', 'assist']):
+        return "I help with:\n• Finding rental properties\n• Calculating rental costs\n• Understanding listings\n• Rental advice\n\nWhat do you need help with?"
+    
+    # Thanks
+    if any(word in message_lower for word in ['thank', 'thanks']):
+        return "You're welcome! Feel free to ask anytime for help with rentals or RentEase."
+    
+    # Questions about RentEase
+    if any(word in message_lower for word in ['rentease', 'app', 'platform']):
+        return "RentEase is a property rental platform. You can search for apartments, rooms, condos, houses, dorms, and boarding houses. Use the search feature to find properties that match your needs!"
+    
+    # Default
+    return "I can help you find rental properties, calculate costs, or answer questions about RentEase. What would you like to know?"
 
 @app.route('/extract-text', methods=['POST'])
 def extract_text():
@@ -492,7 +758,7 @@ def extract_text_internal(image_base64):
             'dateOfBirth': extract_date_of_birth(combined_text)
         }
     except Exception as e:
-        print(f"OCR Error: {e}")
+        # print(f"OCR Error: {e}")
         # Fallback to basic OCR
         try:
             image_data = base64.b64decode(image_base64)

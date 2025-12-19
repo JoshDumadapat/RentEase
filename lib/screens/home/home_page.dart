@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -17,6 +18,7 @@ import 'package:rentease_app/backend/BFavoriteService.dart';
 import 'package:rentease_app/backend/BReviewService.dart';
 import 'package:rentease_app/backend/BHiddenPostService.dart';
 import 'package:rentease_app/backend/BCommentService.dart';
+import 'package:rentease_app/backend/BLikeService.dart';
 import 'package:rentease_app/screens/posts/posts_page.dart';
 import 'package:rentease_app/screens/listing_details/listing_details_page.dart';
 import 'package:rentease_app/screens/looking_for_post_detail/looking_for_post_detail_page.dart';
@@ -27,6 +29,7 @@ import 'package:rentease_app/utils/snackbar_utils.dart';
 import 'package:rentease_app/widgets/ad_card_widget.dart';
 import 'package:rentease_app/models/ad_model.dart';
 import 'package:rentease_app/screens/chat/chats_list_page.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 // Theme color constants
 const Color _themeColor = Color(0xFF00D1FF);
@@ -60,11 +63,13 @@ class _HomePageState extends State<HomePage>
   bool _hasMoreListings = true;
   bool _isLoadingMoreListings = false;
   int _listingsPageOffset = 0; // Track how many listings we've already shown
+  final Set<String> _seenListingIds = {}; // Track seen listing IDs to prevent duplicates
   
   // Pagination state for looking for posts
   DocumentSnapshot? _lastPostDocument;
   bool _hasMorePosts = true;
   bool _isLoadingMorePosts = false;
+  final Set<String> _seenPostIds = {}; // Track seen post IDs to prevent duplicates
   
   // Backend services
   final BListingService _listingService = BListingService();
@@ -115,19 +120,21 @@ class _HomePageState extends State<HomePage>
   }
   
   Future<void> _loadInitialListings() async {
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-        _listings = []; // Clear old data
-        _lastListingDocument = null;
-        _hasMoreListings = true;
-        _listingsPageOffset = 0; // Reset offset
-      });
-    }
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _listings = []; // Clear old data
+          _lastListingDocument = null;
+          _hasMoreListings = true;
+          _listingsPageOffset = 0; // Reset offset
+          _seenListingIds.clear(); // Clear seen IDs
+        });
+      }
     
     try {
+      // Reduced initial limit from 12 to 6 for faster startup
       final result = await _listingService.getListingsPaginated(
-        limit: 12,
+        limit: 6,
         lastDocument: null,
         randomize: true,
       );
@@ -136,71 +143,109 @@ class _HomePageState extends State<HomePage>
       _lastListingDocument = result['lastDocument'] as DocumentSnapshot?;
       _hasMoreListings = result['hasMore'] as bool;
       
-      debugPrint('📊 [HomePage] Loaded ${listingsData.length} listings from pagination');
+      // Store original data for later review update
+      final listingIds = listingsData.map((data) => data['id'] as String? ?? '').where((id) => id.isNotEmpty).toList();
+      final originalDataCopy = listingsData.map((data) => Map<String, dynamic>.from(data)).toList();
       
-      // Convert to ListingModel and fetch ratings
-      final listings = await Future.wait(
-        listingsData.map((data) async {
-          // Fetch actual review count and average rating FIRST, before creating ListingModel
-          String listingId = data['id'] as String? ?? '';
-          int actualCount = 0;
-          double actualAverageRating = 0.0;
-          
-          try {
-            actualCount = await _reviewService.getReviewCount(listingId);
-            debugPrint('🔍 [HomePage] Fetching rating for $listingId: reviewCount=$actualCount');
-            
-            if (actualCount > 0) {
-              actualAverageRating = await _reviewService.getAverageRating(listingId);
-              debugPrint('✅ [HomePage] Fetched rating for $listingId: $actualAverageRating (from $actualCount reviews)');
-            } else {
-              debugPrint('📊 [HomePage] No reviews found for $listingId');
-            }
-          } catch (e, stackTrace) {
-            debugPrint('⚠️ [HomePage] Error fetching review data for $listingId: $e');
-            debugPrint('📚 Stack trace: $stackTrace');
-          }
-          
-          // Update data map with fetched values BEFORE creating ListingModel
-          final updatedData = Map<String, dynamic>.from(data);
-          updatedData['reviewCount'] = actualCount;
-          updatedData['averageRating'] = actualAverageRating; // Already a double from getAverageRating
-          
-          debugPrint('🔧 [HomePage] Creating ListingModel for $listingId with: reviewCount=$actualCount, averageRating=$actualAverageRating');
-          
-          // Create ListingModel with updated data
-          final listing = ListingModel.fromMap(updatedData);
-          
-          // Verify the values were set correctly
-          if ((listing.reviewCount != actualCount) || (listing.averageRating - actualAverageRating).abs() > 0.01) {
-            debugPrint('⚠️ [HomePage] WARNING: ListingModel values mismatch for $listingId!');
-            debugPrint('   Expected: reviewCount=$actualCount, averageRating=$actualAverageRating');
-            debugPrint('   Got: reviewCount=${listing.reviewCount}, averageRating=${listing.averageRating}');
-          } else {
-            debugPrint('✅ [HomePage] Verified listing $listingId: reviewCount=${listing.reviewCount}, averageRating=${listing.averageRating}');
-          }
-          
-          return listing;
-        }),
-      );
+      // Convert to ListingModel first (without review data for faster initial load)
+      final listings = listingsData.map((data) {
+        final updatedData = Map<String, dynamic>.from(data);
+        // Set default review values - will be updated after UI shows
+        updatedData['reviewCount'] = 0;
+        updatedData['averageRating'] = 0.0;
+        return ListingModel.fromMap(updatedData);
+      }).toList();
       
+      // Show listings immediately without waiting for review data
       if (mounted) {
         setState(() {
           _listings = listings;
           _isLoading = false;
           _listingsPageOffset = listings.length;
         });
-        debugPrint('✅ [HomePage] Set ${listings.length} listings in state. Total listings available: ${listings.length}');
+      }
+      
+      // Load review data in background after UI is shown (non-blocking)
+      if (listingIds.isNotEmpty && mounted) {
+        // Defer review loading to improve startup performance
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _loadReviewDataInBackground(listingIds, originalDataCopy);
+        });
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ [HomePage] Error loading initial listings: $e');
-      debugPrint('📚 Stack trace: $stackTrace');
+      if (kDebugMode) {
+        debugPrint('❌ [HomePage] Error loading initial listings: $e');
+      }
       if (mounted) {
         setState(() {
           _listings = [];
           _isLoading = false;
         });
       }
+    }
+  }
+  
+  /// Load review data in background and update listings
+  Future<void> _loadReviewDataInBackground(List<String> listingIds, List<Map<String, dynamic>> originalData) async {
+    if (!mounted || listingIds.isEmpty) return;
+    
+    try {
+      // Fetch all review counts and ratings in parallel
+      final reviewFutures = listingIds.map((listingId) async {
+        try {
+          final count = await _reviewService.getReviewCount(listingId);
+          final rating = count > 0 ? await _reviewService.getAverageRating(listingId) : 0.0;
+          return {
+            'id': listingId,
+            'count': count,
+            'rating': rating,
+          };
+        } catch (e) {
+          return {
+            'id': listingId,
+            'count': 0,
+            'rating': 0.0,
+          };
+        }
+      });
+      
+      final reviewResults = await Future.wait(reviewFutures);
+      
+      // Create a map of review data by listing ID
+      final reviewDataMap = <String, Map<String, dynamic>>{};
+      for (final result in reviewResults) {
+        reviewDataMap[result['id'] as String] = {
+          'reviewCount': result['count'] as int,
+          'averageRating': result['rating'] as double,
+        };
+      }
+      
+      // Update listings with review data using original data
+      if (mounted) {
+        final updatedListings = originalData.map((data) {
+          final listingId = data['id'] as String? ?? '';
+          final updatedData = Map<String, dynamic>.from(data);
+          
+          // Update with review data if available
+          if (reviewDataMap.containsKey(listingId)) {
+            updatedData.addAll(reviewDataMap[listingId]!);
+          } else {
+            updatedData['reviewCount'] = 0;
+            updatedData['averageRating'] = 0.0;
+          }
+          
+          return ListingModel.fromMap(updatedData);
+        }).toList();
+        
+        setState(() {
+          _listings = updatedListings;
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [HomePage] Error loading review data in background: $e');
+      }
+      // Don't show error to user - reviews are not critical for initial display
     }
   }
   
@@ -222,32 +267,63 @@ class _HomePageState extends State<HomePage>
       _lastListingDocument = result['lastDocument'] as DocumentSnapshot?;
       _hasMoreListings = result['hasMore'] as bool;
       
-      // Convert to ListingModel and fetch ratings
-      final newListings = await Future.wait(
-        listingsData.map((data) async {
-          // Fetch actual review count and average rating FIRST, before creating ListingModel
-          String listingId = data['id'] as String? ?? '';
-          int actualCount = 0;
-          double actualAverageRating = 0.0;
-          
+      // Filter out duplicates before processing
+      final uniqueListingsData = <String, Map<String, dynamic>>{};
+      for (var data in listingsData) {
+        final listingId = data['id'] as String? ?? '';
+        if (listingId.isNotEmpty && !_seenListingIds.contains(listingId)) {
+          uniqueListingsData[listingId] = data;
+          _seenListingIds.add(listingId);
+        }
+      }
+      
+      // Batch fetch all review data first (more efficient than sequential calls)
+      final listingIds = uniqueListingsData.keys.toList();
+      final reviewDataMap = <String, Map<String, dynamic>>{};
+      
+      // Fetch all review counts and ratings in parallel
+      if (listingIds.isNotEmpty) {
+        final reviewFutures = listingIds.map((listingId) async {
           try {
-            actualCount = await _reviewService.getReviewCount(listingId);
-            if (actualCount > 0) {
-              actualAverageRating = await _reviewService.getAverageRating(listingId);
-            }
+            final count = await _reviewService.getReviewCount(listingId);
+            final rating = count > 0 ? await _reviewService.getAverageRating(listingId) : 0.0;
+            return {
+              'id': listingId,
+              'count': count,
+              'rating': rating,
+            };
           } catch (e) {
-            debugPrint('⚠️ [HomePage] Error fetching review data for $listingId: $e');
+            return {
+              'id': listingId,
+              'count': 0,
+              'rating': 0.0,
+            };
           }
-          
-          // Update data map with fetched values BEFORE creating ListingModel
-          final updatedData = Map<String, dynamic>.from(data);
-          updatedData['reviewCount'] = actualCount;
-          updatedData['averageRating'] = actualAverageRating;
-          
-          // Create ListingModel with updated data
-          return ListingModel.fromMap(updatedData);
-        }),
-      );
+        });
+        
+        final reviewResults = await Future.wait(reviewFutures);
+        for (final result in reviewResults) {
+          reviewDataMap[result['id'] as String] = {
+            'reviewCount': result['count'] as int,
+            'averageRating': result['rating'] as double,
+          };
+        }
+      }
+      
+      // Convert to ListingModel with pre-fetched review data
+      final newListings = uniqueListingsData.values.map((data) {
+        final listingId = data['id'] as String? ?? '';
+        final updatedData = Map<String, dynamic>.from(data);
+        
+        if (reviewDataMap.containsKey(listingId)) {
+          updatedData.addAll(reviewDataMap[listingId]!);
+        } else {
+          updatedData['reviewCount'] = 0;
+          updatedData['averageRating'] = 0.0;
+        }
+        
+        return ListingModel.fromMap(updatedData);
+      }).toList();
       
       if (mounted) {
         setState(() {
@@ -256,7 +332,9 @@ class _HomePageState extends State<HomePage>
         });
       }
     } catch (e) {
-      debugPrint('❌ [HomePage] Error loading more listings: $e');
+      if (kDebugMode) {
+        debugPrint('❌ [HomePage] Error loading more listings: $e');
+      }
       if (mounted) {
         setState(() {
           _isLoadingMoreListings = false;
@@ -266,29 +344,39 @@ class _HomePageState extends State<HomePage>
   }
   
   Future<void> _loadInitialLookingForPosts() async {
-    if (mounted) {
-      setState(() {
-        _isLoadingLookingFor = true;
-        _lookingForPosts = []; // Clear old data
-        _lastPostDocument = null;
-        _hasMorePosts = true;
-      });
-    }
+      if (mounted) {
+        setState(() {
+          _isLoadingLookingFor = true;
+          _lookingForPosts = []; // Clear old data
+          _lastPostDocument = null;
+          _hasMorePosts = true;
+          _seenPostIds.clear(); // Clear seen IDs
+        });
+      }
     
     try {
       final result = await _lookingForPostService.getLookingForPostsPaginated(
         limit: 12,
         lastDocument: null,
-        randomize: true,
+        randomize: false, // Set to false so new posts appear on top
       );
       
       final postsData = result['posts'] as List<Map<String, dynamic>>;
       _lastPostDocument = result['lastDocument'] as DocumentSnapshot?;
       _hasMorePosts = result['hasMore'] as bool;
       
-      // Filter out hidden posts
+      // Filter out duplicates and hidden posts
       final currentUserId = _auth.currentUser?.uid;
-      List<LookingForPostModel> posts = postsData
+      final uniquePostsData = <String, Map<String, dynamic>>{};
+      for (var data in postsData) {
+        final postId = data['id'] as String? ?? '';
+        if (postId.isNotEmpty && !_seenPostIds.contains(postId)) {
+          uniquePostsData[postId] = data;
+          _seenPostIds.add(postId);
+        }
+      }
+      
+      List<LookingForPostModel> posts = uniquePostsData.values
           .map((data) => LookingForPostModel.fromMap(data))
           .toList();
       
@@ -297,6 +385,8 @@ class _HomePageState extends State<HomePage>
         posts = posts.where((post) => !hiddenPostIds.contains(post.id)).toList();
       }
       
+      // Removed debug print for performance
+      
       if (mounted) {
         setState(() {
           _lookingForPosts = posts;
@@ -304,7 +394,9 @@ class _HomePageState extends State<HomePage>
         });
       }
     } catch (e) {
-      debugPrint('❌ [HomePage] Error loading initial looking for posts: $e');
+      if (kDebugMode) {
+        debugPrint('❌ [HomePage] Error loading initial looking for posts: $e');
+      }
       if (mounted) {
         setState(() {
           _lookingForPosts = [];
@@ -325,16 +417,25 @@ class _HomePageState extends State<HomePage>
       final result = await _lookingForPostService.getLookingForPostsPaginated(
         limit: 12,
         lastDocument: _lastPostDocument,
-        randomize: true,
+        randomize: false, // Set to false so new posts appear on top
       );
       
       final postsData = result['posts'] as List<Map<String, dynamic>>;
       _lastPostDocument = result['lastDocument'] as DocumentSnapshot?;
       _hasMorePosts = result['hasMore'] as bool;
       
-      // Filter out hidden posts
+      // Filter out duplicates and hidden posts
       final currentUserId = _auth.currentUser?.uid;
-      List<LookingForPostModel> newPosts = postsData
+      final uniquePostsData = <String, Map<String, dynamic>>{};
+      for (var data in postsData) {
+        final postId = data['id'] as String? ?? '';
+        if (postId.isNotEmpty && !_seenPostIds.contains(postId)) {
+          uniquePostsData[postId] = data;
+          _seenPostIds.add(postId);
+        }
+      }
+      
+      List<LookingForPostModel> newPosts = uniquePostsData.values
           .map((data) => LookingForPostModel.fromMap(data))
           .toList();
       
@@ -343,6 +444,8 @@ class _HomePageState extends State<HomePage>
         newPosts = newPosts.where((post) => !hiddenPostIds.contains(post.id)).toList();
       }
       
+      // Removed debug print for performance
+      
       if (mounted) {
         setState(() {
           _lookingForPosts.addAll(newPosts);
@@ -350,7 +453,9 @@ class _HomePageState extends State<HomePage>
         });
       }
     } catch (e) {
-      debugPrint('❌ [HomePage] Error loading more looking for posts: $e');
+      if (kDebugMode) {
+        debugPrint('❌ [HomePage] Error loading more looking for posts: $e');
+      }
       if (mounted) {
         setState(() {
           _isLoadingMorePosts = false;
@@ -472,14 +577,17 @@ class _HomePageState extends State<HomePage>
             ),
             actions: [
               IconButton(
-                icon: SvgPicture.asset(
-                  'assets/icons/chat_icon.svg',
-                  width: 20,
-                  height: 20,
-                  colorFilter: ColorFilter.mode(
-                    isDark ? Colors.white : Colors.black87,
-                    BlendMode.srcIn,
-                  ),
+                icon: Image.asset(
+                  'assets/chat.png',
+                  width: 22,
+                  height: 22,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(
+                      Icons.chat_bubble_outline,
+                      size: 22,
+                      color: isDark ? Colors.white : Colors.black87,
+                    );
+                  },
                 ),
                 onPressed: () {
                   Navigator.push(
@@ -491,7 +599,7 @@ class _HomePageState extends State<HomePage>
                 },
                 tooltip: 'Messages',
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 2),
               const ThreeDotsMenu(),
               const SizedBox(width: 8),
             ],
@@ -948,6 +1056,8 @@ class _LargeCategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -957,7 +1067,9 @@ class _LargeCategoryCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withValues(alpha: 0.2),
+              color: isDark 
+                  ? Colors.black.withValues(alpha: 0.6)
+                  : Colors.grey.withValues(alpha: 0.2),
               spreadRadius: 1,
               blurRadius: 8,
               offset: const Offset(0, 4),
@@ -1033,6 +1145,7 @@ class _TallCategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const double tallCardHeight = 140 + 12 + 140;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
       onTap: onTap,
@@ -1043,7 +1156,9 @@ class _TallCategoryCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withValues(alpha: 0.2),
+              color: isDark 
+                  ? Colors.black.withValues(alpha: 0.6)
+                  : Colors.grey.withValues(alpha: 0.2),
               spreadRadius: 1,
               blurRadius: 8,
               offset: const Offset(0, 4),
@@ -1120,6 +1235,8 @@ class _SmallCategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1129,7 +1246,9 @@ class _SmallCategoryCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withValues(alpha: 0.2),
+              color: isDark 
+                  ? Colors.black.withValues(alpha: 0.6)
+                  : Colors.grey.withValues(alpha: 0.2),
               spreadRadius: 1,
               blurRadius: 8,
               offset: const Offset(0, 4),
@@ -1287,6 +1406,9 @@ class _VisitListingsSection extends StatelessWidget {
                 physics: const NeverScrollableScrollPhysics(),
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 itemCount: totalItemCount,
+                cacheExtent: 500, // Cache more items for smoother scrolling
+                addAutomaticKeepAlives: false, // Don't keep items alive when off-screen
+                addRepaintBoundaries: true, // Add repaint boundaries for better performance
                 itemBuilder: (context, index) {
                   // Ads appear after every 6 listings: at positions 6, 13, 20, 27, etc.
                   // Pattern: (index + 1) % 7 == 0 means it's an ad position (after 6 items)
@@ -1346,43 +1468,44 @@ class _ModernListingCard extends StatelessWidget {
   const _ModernListingCard({required this.listing, required this.onTap});
 
   /// Build image widget that handles both network and asset images
+  /// Optimized with caching for network images
   Widget _buildListingImage(String imagePath) {
     final isNetworkImage = imagePath.startsWith('http://') || 
                            imagePath.startsWith('https://');
     
     if (isNetworkImage) {
-      return Image.network(
-        imagePath,
+      return CachedNetworkImage(
+        imageUrl: imagePath,
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Container(
-            color: Colors.grey[100],
-            child: Center(
+        memCacheWidth: 800, // Limit memory cache size for better performance
+        memCacheHeight: 450,
+        maxWidthDiskCache: 1200, // Limit disk cache size
+        maxHeightDiskCache: 675,
+        placeholder: (context, url) => Container(
+          color: Colors.grey[100],
+          child: const Center(
+            child: SizedBox(
+              width: 24,
+              height: 24,
               child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
-                    : null,
-                color: Colors.grey[400],
+                strokeWidth: 2,
+                color: Colors.grey,
               ),
             ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            color: Colors.grey[100],
-            child: Center(
-              child: Icon(
-                Icons.image_outlined,
-                size: 48,
-                color: Colors.grey[400],
-              ),
+          ),
+        ),
+        errorWidget: (context, url, error) => Container(
+          color: Colors.grey[100],
+          child: const Center(
+            child: Icon(
+              Icons.image_outlined,
+              size: 48,
+              color: Colors.grey,
             ),
-          );
-        },
+          ),
+        ),
       );
     } else {
       // Asset image
@@ -1391,18 +1514,16 @@ class _ModernListingCard extends StatelessWidget {
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            color: Colors.grey[100],
-            child: Center(
-              child: Icon(
-                Icons.image_outlined,
-                size: 48,
-                color: Colors.grey[400],
-              ),
+        errorBuilder: (context, error, stackTrace) => Container(
+          color: Colors.grey[100],
+          child: const Center(
+            child: Icon(
+              Icons.image_outlined,
+              size: 48,
+              color: Colors.grey,
             ),
-          );
-        },
+          ),
+        ),
       );
     }
   }
@@ -1411,6 +1532,7 @@ class _ModernListingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    // Use const colors where possible for better performance
     final cardColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtextColor = isDark ? Colors.grey[300] : Colors.grey[600];
@@ -1577,7 +1699,7 @@ class _ModernListingCard extends StatelessWidget {
                           builder: (context) {
                             // Debug: Log the rating value being displayed
                             if (listing.reviewCount > 0) {
-                              debugPrint('🎨 [HomePage UI] Displaying rating for ${listing.id}: reviewCount=${listing.reviewCount}, averageRating=${listing.averageRating}');
+                              // Removed debug print for performance
                             }
                             
                             if (listing.reviewCount > 0) {
@@ -1721,7 +1843,7 @@ class _ModernListingCard extends StatelessWidget {
                           assetPath: 'assets/icons/navbar/comment_outlined.svg',
                           count: listing.reviewCount,
                           onTap: () {
-                            debugPrint('🔍 [HomePage] Comment icon tapped - reviewCount: ${listing.reviewCount}');
+                            // Removed debug print for performance
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -1878,7 +2000,9 @@ class _HeartActionIconState extends State<_HeartActionIcon>
         }
       }
     }, onError: (error) {
-      debugPrint('❌ [_HeartActionIcon] Error listening to listing: $error');
+      if (kDebugMode) {
+        debugPrint('❌ [_HeartActionIcon] Error listening to listing: $error');
+      }
     });
   }
 
@@ -2204,18 +2328,24 @@ class _LookingForSectionState extends State<_LookingForSection>
             },
           ),
         ),
-        // Posts List
+        // Posts List - Optimized with better caching
         SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           sliver: SliverList(
-            delegate: SliverChildBuilderDelegate((context, index) {
-              return Padding(
-                padding: EdgeInsets.only(
-                  bottom: index == widget.posts.length - 1 ? 16 : 16,
-                ),
-                child: _LookingForPostCard(post: widget.posts[index]),
-              );
-            }, childCount: widget.posts.length),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                return Padding(
+                  key: ValueKey('post_${widget.posts[index].id}'),
+                  padding: EdgeInsets.only(
+                    bottom: index == widget.posts.length - 1 ? 16 : 16,
+                  ),
+                  child: _LookingForPostCard(post: widget.posts[index]),
+                );
+              },
+              childCount: widget.posts.length,
+              addAutomaticKeepAlives: false, // Don't keep items alive when off-screen
+              addRepaintBoundaries: true, // Add repaint boundaries for better performance
+            ),
           ),
         ),
         // Loading more indicator
@@ -2282,6 +2412,7 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
   final List<CommentModel> _comments = [];
   final BHiddenPostService _hiddenPostService = BHiddenPostService();
   final BCommentService _commentService = BCommentService();
+  final BLikeService _likeService = BLikeService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   bool _isLoadingCommentCount = false;
 
@@ -2291,6 +2422,25 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
     _likeCount = widget.post.likeCount;
     _commentCount = widget.post.commentCount;
     _loadCommentCount();
+    _checkLikeStatus();
+  }
+
+  Future<void> _checkLikeStatus() async {
+    final user = _auth.currentUser;
+    if (user != null && widget.post.id.isNotEmpty) {
+      try {
+        final isLikedPost = await _likeService.isLiked(user.uid, widget.post.id);
+        if (mounted) {
+          setState(() {
+            _isLiked = isLikedPost;
+          });
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [LookingForPostCard] Error checking like status: $e');
+        }
+      }
+    }
   }
   
   Future<void> _loadCommentCount() async {
@@ -2309,7 +2459,9 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
         });
       }
     } catch (e) {
-      debugPrint('⚠️ [LookingForPostCard] Error loading comment count: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [LookingForPostCard] Error loading comment count: $e');
+      }
       if (mounted) {
         setState(() {
           _isLoadingCommentCount = false;
@@ -2455,7 +2607,9 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
 
   Future<void> _hidePost(String userId) async {
     try {
-      debugPrint('🔒 [LookingForPostCard] Attempting to hide post: ${widget.post.id} for user: $userId');
+      if (kDebugMode) {
+        debugPrint('🔒 [LookingForPostCard] Attempting to hide post: ${widget.post.id} for user: $userId');
+      }
       
       await _hiddenPostService.hidePost(
         userId: userId,
@@ -2480,9 +2634,11 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
         }
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ [LookingForPostCard] Error hiding post: $e');
-      debugPrint('❌ [LookingForPostCard] Stack trace: $stackTrace');
-      debugPrint('❌ [LookingForPostCard] Error type: ${e.runtimeType}');
+      if (kDebugMode) {
+        debugPrint('❌ [LookingForPostCard] Error hiding post: $e');
+        debugPrint('❌ [LookingForPostCard] Stack trace: $stackTrace');
+        debugPrint('❌ [LookingForPostCard] Error type: ${e.runtimeType}');
+      }
       
       if (mounted) {
         String errorMessage = 'Failed to hide post. Please try again.';
@@ -2491,7 +2647,9 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
         // Check for specific error types
         if (errorString.contains('permission-denied') || errorString.contains('permission')) {
           errorMessage = 'Permission denied. Please make sure Firestore rules are deployed.';
-          debugPrint('🔒 PERMISSION DENIED - Check if Firestore rules are deployed!');
+          if (kDebugMode) {
+            debugPrint('🔒 PERMISSION DENIED - Check if Firestore rules are deployed!');
+          }
         } else if (errorString.contains('network') || errorString.contains('connection')) {
           errorMessage = 'Network error. Please check your connection and try again.';
         } else if (errorString.contains('already')) {
@@ -2639,11 +2797,55 @@ class _LookingForPostCardState extends State<_LookingForPostCard> {
             commentCount: _commentCount,
             isLiked: _isLiked,
             isDark: isDark,
-            onLikeTap: () {
+            onLikeTap: () async {
+              final user = _auth.currentUser;
+              if (user == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBarUtils.buildThemedSnackBar(context, 'Please sign in to like posts'),
+                );
+                return;
+              }
+
+              if (widget.post.id.isEmpty) {
+                if (kDebugMode) {
+                  debugPrint('⚠️ [LookingForPostCard] Cannot like: empty post ID');
+                }
+                return;
+              }
+
+              // Optimistically update UI
               setState(() {
                 _isLiked = !_isLiked;
                 _likeCount += _isLiked ? 1 : -1;
               });
+
+              try {
+                // Toggle like in backend
+                await _likeService.toggleLike(
+                  userId: user.uid,
+                  postId: widget.post.id,
+                );
+                if (kDebugMode) {
+                  debugPrint('✅ [LookingForPostCard] Like toggled successfully');
+                }
+              } catch (e) {
+                if (kDebugMode) {
+                  debugPrint('❌ [LookingForPostCard] Error toggling like: $e');
+                }
+                // Revert optimistic update on error
+                if (mounted) {
+                  setState(() {
+                    _isLiked = !_isLiked;
+                    _likeCount += _isLiked ? 1 : -1;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBarUtils.buildThemedSnackBar(
+                      context,
+                      'Error updating like. Please try again.',
+                    ),
+                  );
+                }
+              }
             },
             onCommentTap: () async {
               final result = await Navigator.push<dynamic>(

@@ -2,8 +2,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
-/// Backend service for admin operations in Firestore
-/// Handles all admin-related database operations
+/// Admin service
 class BAdminService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -17,7 +16,7 @@ class BAdminService {
       }
       return false;
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error checking admin status: $e');
+      // debugPrint('❌ [BAdminService] Error checking admin status: $e');
       return false;
     }
   }
@@ -29,12 +28,26 @@ class BAdminService {
           .collection('listings')
           .orderBy('createdAt', descending: true)
           .get();
-      return snapshot.docs.map((doc) => {
-        'id': doc.id,
-        ...doc.data(),
-      }).toList();
+      
+      // Remove duplicates by ID
+      final seenIds = <String>{};
+      final listings = <Map<String, dynamic>>[];
+      
+      for (final doc in snapshot.docs) {
+        final listingId = doc.id;
+        if (!seenIds.contains(listingId)) {
+          seenIds.add(listingId);
+          listings.add({
+            'id': listingId,
+            ...doc.data(),
+          });
+        }
+      }
+      
+      // debugPrint('✅ [BAdminService] Returning ${listings.length} unique listings');
+      return listings;
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error getting all listings: $e');
+      // debugPrint('❌ [BAdminService] Error getting all listings: $e');
       return [];
     }
   }
@@ -43,9 +56,9 @@ class BAdminService {
   Future<void> deleteListing(String listingId) async {
     try {
       await _firestore.collection('listings').doc(listingId).delete();
-      debugPrint('✅ [BAdminService] Listing deleted: $listingId');
+      // debugPrint('✅ [BAdminService] Listing deleted: $listingId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error deleting listing: $e');
+      // debugPrint('❌ [BAdminService] Error deleting listing: $e');
       rethrow;
     }
   }
@@ -86,12 +99,12 @@ class BAdminService {
               
               // Skip this notification if user is already verified or is admin
               if (isVerified || isAdmin) {
-                debugPrint('⏭️ [BAdminService] Skipping verification notification for ${isAdmin ? "admin" : "already verified"} user: $userId');
+                // debugPrint('⏭️ [BAdminService] Skipping verification notification for ${isAdmin ? "admin" : "already verified"} user: $userId');
                 continue;
               }
             }
           } catch (e) {
-            debugPrint('⚠️ [BAdminService] Error checking user verification status: $e');
+            // debugPrint('⚠️ [BAdminService] Error checking user verification status: $e');
             // If we can't check, include the notification to be safe
           }
         }
@@ -101,7 +114,7 @@ class BAdminService {
       
       return filteredNotifications;
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error getting all notifications: $e');
+      // debugPrint('❌ [BAdminService] Error getting all notifications: $e');
       return [];
     }
   }
@@ -110,9 +123,9 @@ class BAdminService {
   Future<void> deleteNotification(String notificationId) async {
     try {
       await _firestore.collection('notifications').doc(notificationId).delete();
-      debugPrint('✅ [BAdminService] Notification deleted: $notificationId');
+      // debugPrint('✅ [BAdminService] Notification deleted: $notificationId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error deleting notification: $e');
+      // debugPrint('❌ [BAdminService] Error deleting notification: $e');
       rethrow;
     }
   }
@@ -130,7 +143,7 @@ class BAdminService {
         'totalNotifications': notificationsSnapshot.docs.length,
       };
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error getting dashboard stats: $e');
+      // debugPrint('❌ [BAdminService] Error getting dashboard stats: $e');
       return {
         'totalUsers': 0,
         'totalListings': 0,
@@ -151,7 +164,7 @@ class BAdminService {
         ...doc.data(),
       }).toList();
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error getting all users: $e');
+      // debugPrint('❌ [BAdminService] Error getting all users: $e');
       return [];
     }
   }
@@ -165,9 +178,9 @@ class BAdminService {
         if (reason != null) 'banReason': reason,
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      debugPrint('✅ [BAdminService] User banned: $userId');
+      // debugPrint('✅ [BAdminService] User banned: $userId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error banning user: $e');
+      // debugPrint('❌ [BAdminService] Error banning user: $e');
       rethrow;
     }
   }
@@ -182,15 +195,14 @@ class BAdminService {
         'bannedAt': FieldValue.delete(),
         'banReason': FieldValue.delete(),
       });
-      debugPrint('✅ [BAdminService] User unbanned: $userId');
+      // debugPrint('✅ [BAdminService] User unbanned: $userId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error unbanning user: $e');
+      // debugPrint('❌ [BAdminService] Error unbanning user: $e');
       rethrow;
     }
   }
 
   /// Verify user
-  /// Note: Does not send verification notifications to admin accounts
   Future<void> verifyUser(String userId) async {
     try {
       // Check if user is admin before verifying
@@ -205,14 +217,13 @@ class BAdminService {
       
       // Do not send verification notification to admin accounts
       if (!isAdmin) {
-        // Note: If verification notifications are added in the future,
-        // they should be sent here, but only for non-admin users
+        // Verification notifications would go here for non-admin users
         // For now, no notifications are sent for verification
       }
       
-      debugPrint('✅ [BAdminService] User verified: $userId${isAdmin ? ' (admin - no notification sent)' : ''}');
+      // debugPrint('✅ [BAdminService] User verified: $userId${isAdmin ? ' (admin - no notification sent)' : ''}');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error verifying user: $e');
+      // debugPrint('❌ [BAdminService] Error verifying user: $e');
       rethrow;
     }
   }
@@ -225,9 +236,9 @@ class BAdminService {
         'unverifiedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      debugPrint('✅ [BAdminService] User unverified: $userId');
+      // debugPrint('✅ [BAdminService] User unverified: $userId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error unverifying user: $e');
+      // debugPrint('❌ [BAdminService] Error unverifying user: $e');
       rethrow;
     }
   }
@@ -246,7 +257,7 @@ class BAdminService {
         ...doc.data(),
       }).toList();
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error getting all comments: $e');
+      // debugPrint('❌ [BAdminService] Error getting all comments: $e');
       return [];
     }
   }
@@ -255,9 +266,9 @@ class BAdminService {
   Future<void> deleteComment(String commentId) async {
     try {
       await _firestore.collection('comments').doc(commentId).delete();
-      debugPrint('✅ [BAdminService] Comment deleted: $commentId');
+      // debugPrint('✅ [BAdminService] Comment deleted: $commentId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error deleting comment: $e');
+      // debugPrint('❌ [BAdminService] Error deleting comment: $e');
       rethrow;
     }
   }
@@ -271,9 +282,9 @@ class BAdminService {
         'flaggedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      debugPrint('✅ [BAdminService] Comment flagged: $commentId');
+      // debugPrint('✅ [BAdminService] Comment flagged: $commentId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error flagging comment: $e');
+      // debugPrint('❌ [BAdminService] Error flagging comment: $e');
       rethrow;
     }
   }
@@ -287,9 +298,9 @@ class BAdminService {
         'flagReason': FieldValue.delete(),
         'flaggedAt': FieldValue.delete(),
       });
-      debugPrint('✅ [BAdminService] Comment unflagged: $commentId');
+      // debugPrint('✅ [BAdminService] Comment unflagged: $commentId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error unflagging comment: $e');
+      // debugPrint('❌ [BAdminService] Error unflagging comment: $e');
       rethrow;
     }
   }
@@ -303,12 +314,26 @@ class BAdminService {
           .collection('lookingForPosts')
           .orderBy('createdAt', descending: true)
           .get();
-      return snapshot.docs.map((doc) => {
-        'id': doc.id,
-        ...doc.data(),
-      }).toList();
+      
+      // Remove duplicates by ID
+      final seenIds = <String>{};
+      final posts = <Map<String, dynamic>>[];
+      
+      for (final doc in snapshot.docs) {
+        final postId = doc.id;
+        if (!seenIds.contains(postId)) {
+          seenIds.add(postId);
+          posts.add({
+            'id': postId,
+            ...doc.data(),
+          });
+        }
+      }
+      
+      // debugPrint('✅ [BAdminService] Returning ${posts.length} unique looking for posts');
+      return posts;
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error getting all looking for posts: $e');
+      // debugPrint('❌ [BAdminService] Error getting all looking for posts: $e');
       return [];
     }
   }
@@ -317,9 +342,9 @@ class BAdminService {
   Future<void> deleteLookingForPost(String postId) async {
     try {
       await _firestore.collection('lookingForPosts').doc(postId).delete();
-      debugPrint('✅ [BAdminService] Looking for post deleted: $postId');
+      // debugPrint('✅ [BAdminService] Looking for post deleted: $postId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error deleting looking for post: $e');
+      // debugPrint('❌ [BAdminService] Error deleting looking for post: $e');
       rethrow;
     }
   }
@@ -333,9 +358,9 @@ class BAdminService {
         'flaggedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      debugPrint('✅ [BAdminService] Looking for post flagged: $postId');
+      // debugPrint('✅ [BAdminService] Looking for post flagged: $postId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error flagging looking for post: $e');
+      // debugPrint('❌ [BAdminService] Error flagging looking for post: $e');
       rethrow;
     }
   }
@@ -349,9 +374,9 @@ class BAdminService {
         'flagReason': FieldValue.delete(),
         'flaggedAt': FieldValue.delete(),
       });
-      debugPrint('✅ [BAdminService] Looking for post unflagged: $postId');
+      // debugPrint('✅ [BAdminService] Looking for post unflagged: $postId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error unflagging looking for post: $e');
+      // debugPrint('❌ [BAdminService] Error unflagging looking for post: $e');
       rethrow;
     }
   }
@@ -379,10 +404,10 @@ class BAdminService {
       };
 
       final docRef = await _firestore.collection('reports').add(reportData);
-      debugPrint('✅ [BAdminService] Report created: ${docRef.id}');
+      // debugPrint('✅ [BAdminService] Report created: ${docRef.id}');
       return docRef.id;
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error creating report: $e');
+      // debugPrint('❌ [BAdminService] Error creating report: $e');
       rethrow;
     }
   }
@@ -407,7 +432,7 @@ class BAdminService {
         };
       }).toList();
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error getting all reports: $e');
+      // debugPrint('❌ [BAdminService] Error getting all reports: $e');
       return [];
     }
   }
@@ -422,9 +447,9 @@ class BAdminService {
         'updatedAt': FieldValue.serverTimestamp(),
         if (adminNotes != null) 'adminNotes': adminNotes,
       });
-      debugPrint('✅ [BAdminService] Report resolved: $reportId');
+      // debugPrint('✅ [BAdminService] Report resolved: $reportId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error resolving report: $e');
+      // debugPrint('❌ [BAdminService] Error resolving report: $e');
       rethrow;
     }
   }
@@ -438,9 +463,9 @@ class BAdminService {
         'updatedAt': FieldValue.serverTimestamp(),
         if (adminNotes != null) 'adminNotes': adminNotes,
       });
-      debugPrint('✅ [BAdminService] Report dismissed: $reportId');
+      // debugPrint('✅ [BAdminService] Report dismissed: $reportId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error dismissing report: $e');
+      // debugPrint('❌ [BAdminService] Error dismissing report: $e');
       rethrow;
     }
   }
@@ -454,9 +479,9 @@ class BAdminService {
         'flaggedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      debugPrint('✅ [BAdminService] Listing flagged: $listingId');
+      // debugPrint('✅ [BAdminService] Listing flagged: $listingId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error flagging listing: $e');
+      // debugPrint('❌ [BAdminService] Error flagging listing: $e');
       rethrow;
     }
   }
@@ -470,9 +495,9 @@ class BAdminService {
         'flagReason': FieldValue.delete(),
         'flaggedAt': FieldValue.delete(),
       });
-      debugPrint('✅ [BAdminService] Listing unflagged: $listingId');
+      // debugPrint('✅ [BAdminService] Listing unflagged: $listingId');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error unflagging listing: $e');
+      // debugPrint('❌ [BAdminService] Error unflagging listing: $e');
       rethrow;
     }
   }
@@ -487,9 +512,9 @@ class BAdminService {
         batch.delete(_firestore.collection('listings').doc(listingId));
       }
       await batch.commit();
-      debugPrint('✅ [BAdminService] Bulk deleted ${listingIds.length} listings');
+      // debugPrint('✅ [BAdminService] Bulk deleted ${listingIds.length} listings');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error bulk deleting listings: $e');
+      // debugPrint('❌ [BAdminService] Error bulk deleting listings: $e');
       rethrow;
     }
   }
@@ -502,9 +527,9 @@ class BAdminService {
         batch.delete(_firestore.collection('comments').doc(commentId));
       }
       await batch.commit();
-      debugPrint('✅ [BAdminService] Bulk deleted ${commentIds.length} comments');
+      // debugPrint('✅ [BAdminService] Bulk deleted ${commentIds.length} comments');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error bulk deleting comments: $e');
+      // debugPrint('❌ [BAdminService] Error bulk deleting comments: $e');
       rethrow;
     }
   }
@@ -517,9 +542,9 @@ class BAdminService {
         batch.delete(_firestore.collection('lookingForPosts').doc(postId));
       }
       await batch.commit();
-      debugPrint('✅ [BAdminService] Bulk deleted ${postIds.length} looking for posts');
+      // debugPrint('✅ [BAdminService] Bulk deleted ${postIds.length} looking for posts');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error bulk deleting looking for posts: $e');
+      // debugPrint('❌ [BAdminService] Error bulk deleting looking for posts: $e');
       rethrow;
     }
   }
@@ -538,9 +563,9 @@ class BAdminService {
         });
       }
       await batch.commit();
-      debugPrint('✅ [BAdminService] Bulk banned ${userIds.length} users');
+      // debugPrint('✅ [BAdminService] Bulk banned ${userIds.length} users');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error bulk banning users: $e');
+      // debugPrint('❌ [BAdminService] Error bulk banning users: $e');
       rethrow;
     }
   }
@@ -559,9 +584,9 @@ class BAdminService {
         });
       }
       await batch.commit();
-      debugPrint('✅ [BAdminService] Bulk flagged ${listingIds.length} listings');
+      // debugPrint('✅ [BAdminService] Bulk flagged ${listingIds.length} listings');
     } catch (e) {
-      debugPrint('❌ [BAdminService] Error bulk flagging listings: $e');
+      // debugPrint('❌ [BAdminService] Error bulk flagging listings: $e');
       rethrow;
     }
   }
@@ -571,35 +596,35 @@ class BAdminService {
   /// Get enhanced dashboard stats with trends
   Future<Map<String, dynamic>> getEnhancedDashboardStats() async {
     try {
-      debugPrint('📊 [BAdminService] Starting to fetch dashboard stats...');
+      // debugPrint('📊 [BAdminService] Starting to fetch dashboard stats...');
       final now = DateTime.now();
       final thirtyDaysAgo = now.subtract(const Duration(days: 30));
       final sevenDaysAgo = now.subtract(const Duration(days: 7));
 
       // Get all data
-      debugPrint('📊 [BAdminService] Fetching users...');
+      // debugPrint('📊 [BAdminService] Fetching users...');
       final usersSnapshot = await _firestore.collection('users').get();
-      debugPrint('✅ [BAdminService] Fetched ${usersSnapshot.docs.length} users');
+      // debugPrint('✅ [BAdminService] Fetched ${usersSnapshot.docs.length} users');
       
-      debugPrint('📊 [BAdminService] Fetching listings...');
+      // debugPrint('📊 [BAdminService] Fetching listings...');
       final listingsSnapshot = await _firestore.collection('listings').get();
-      debugPrint('✅ [BAdminService] Fetched ${listingsSnapshot.docs.length} listings');
+      // debugPrint('✅ [BAdminService] Fetched ${listingsSnapshot.docs.length} listings');
       
-      debugPrint('📊 [BAdminService] Fetching comments...');
+      // debugPrint('📊 [BAdminService] Fetching comments...');
       final commentsSnapshot = await _firestore.collection('comments').get();
-      debugPrint('✅ [BAdminService] Fetched ${commentsSnapshot.docs.length} comments');
+      // debugPrint('✅ [BAdminService] Fetched ${commentsSnapshot.docs.length} comments');
       
-      debugPrint('📊 [BAdminService] Fetching lookingForPosts...');
+      // debugPrint('📊 [BAdminService] Fetching lookingForPosts...');
       final lookingForPostsSnapshot = await _firestore.collection('lookingForPosts').get();
-      debugPrint('✅ [BAdminService] Fetched ${lookingForPostsSnapshot.docs.length} lookingForPosts');
+      // debugPrint('✅ [BAdminService] Fetched ${lookingForPostsSnapshot.docs.length} lookingForPosts');
       
-      debugPrint('📊 [BAdminService] Fetching notifications...');
+      // debugPrint('📊 [BAdminService] Fetching notifications...');
       final notificationsSnapshot = await _firestore.collection('notifications').get();
-      debugPrint('✅ [BAdminService] Fetched ${notificationsSnapshot.docs.length} notifications');
+      // debugPrint('✅ [BAdminService] Fetched ${notificationsSnapshot.docs.length} notifications');
       
-      debugPrint('📊 [BAdminService] Fetching reports...');
+      // debugPrint('📊 [BAdminService] Fetching reports...');
       final reportsSnapshot = await _firestore.collection('reports').where('status', isEqualTo: 'pending').get();
-      debugPrint('✅ [BAdminService] Fetched ${reportsSnapshot.docs.length} pending reports');
+      // debugPrint('✅ [BAdminService] Fetched ${reportsSnapshot.docs.length} pending reports');
 
       // Calculate trends
       int newUsersLast7Days = 0;
@@ -745,16 +770,16 @@ class BAdminService {
         'potentialMonthlyRevenue': potentialMonthlyRevenue,
       };
       
-      debugPrint('✅ [BAdminService] Dashboard stats calculated successfully');
-      debugPrint('   Total Users: ${result['totalUsers']}');
-      debugPrint('   Total Listings: ${result['totalListings']}');
-      debugPrint('   Verified Users: ${result['verifiedUsers']}');
-      debugPrint('   Monthly Revenue: ${result['estimatedMonthlyRevenue']}');
+      // debugPrint('✅ [BAdminService] Dashboard stats calculated successfully');
+      // debugPrint('   Total Users: ${result['totalUsers']}');
+      // debugPrint('   Total Listings: ${result['totalListings']}');
+      // debugPrint('   Verified Users: ${result['verifiedUsers']}');
+      // debugPrint('   Monthly Revenue: ${result['estimatedMonthlyRevenue']}');
       
       return result;
     } catch (e, stackTrace) {
-      debugPrint('❌ [BAdminService] Error getting enhanced dashboard stats: $e');
-      debugPrint('❌ [BAdminService] Stack trace: $stackTrace');
+      // debugPrint('❌ [BAdminService] Error getting enhanced dashboard stats: $e');
+      // debugPrint('❌ [BAdminService] Stack trace: $stackTrace');
       return {
         'totalUsers': 0,
         'totalListings': 0,

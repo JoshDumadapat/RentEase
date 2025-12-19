@@ -90,19 +90,27 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     });
 
     try {
-      debugPrint('📊 [AdminDashboard] Loading dashboard data...');
+      if (kDebugMode) {
+        debugPrint('📊 [AdminDashboard] Loading dashboard data...');
+      }
       final stats = await _adminService.getEnhancedDashboardStats();
-      debugPrint('✅ [AdminDashboard] Dashboard data loaded: $stats');
+      if (kDebugMode) {
+        debugPrint('✅ [AdminDashboard] Dashboard data loaded: $stats');
+      }
       if (mounted) {
         setState(() {
           _stats = stats;
           _isLoading = false;
         });
-        debugPrint('✅ [AdminDashboard] Stats updated in UI');
+        if (kDebugMode) {
+          debugPrint('✅ [AdminDashboard] Stats updated in UI');
+        }
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ [AdminDashboard] Error loading dashboard data: $e');
-      debugPrint('❌ [AdminDashboard] Stack trace: $stackTrace');
+      if (kDebugMode) {
+        debugPrint('❌ [AdminDashboard] Error loading dashboard data: $e');
+        debugPrint('❌ [AdminDashboard] Stack trace: $stackTrace');
+      }
       if (mounted) {
         setState(() {
           _isLoading = false;

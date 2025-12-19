@@ -2,8 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Backend service for notification operations in Firestore
-/// Handles all notification-related database operations
+/// Notification service
 class BNotificationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const String _collectionName = 'notifications';
@@ -234,7 +233,7 @@ class BNotificationService {
       );
     } catch (e) {
       // Log error but don't throw - notification failure shouldn't break comment creation
-      debugPrint('❌ [BNotificationService] Error creating comment notification: $e');
+      // debugPrint('❌ [BNotificationService] Error creating comment notification: $e');
     }
   }
 
@@ -272,7 +271,7 @@ class BNotificationService {
       );
     } catch (e) {
       // Log error but don't throw - notification failure shouldn't break comment creation
-      debugPrint('❌ [BNotificationService] Error creating comment notification: $e');
+      // debugPrint('❌ [BNotificationService] Error creating comment notification: $e');
     }
   }
 
@@ -306,7 +305,7 @@ class BNotificationService {
       );
     } catch (e) {
       // Log error but don't throw - notification failure shouldn't break review creation
-      debugPrint('❌ [BNotificationService] Error creating review notification: $e');
+      // debugPrint('❌ [BNotificationService] Error creating review notification: $e');
     }
   }
 
@@ -338,7 +337,7 @@ class BNotificationService {
       );
     } catch (e) {
       // Log error but don't throw - notification failure shouldn't break favorite creation
-      debugPrint('❌ [BNotificationService] Error creating favorite notification: $e');
+      // debugPrint('❌ [BNotificationService] Error creating favorite notification: $e');
     }
   }
 
@@ -375,7 +374,33 @@ class BNotificationService {
       );
     } catch (e) {
       // Log error but don't throw - notification failure shouldn't break like creation
-      debugPrint('❌ [BNotificationService] Error creating like notification: $e');
+      // debugPrint('❌ [BNotificationService] Error creating like notification: $e');
+    }
+  }
+
+  /// Create a notification when someone follows you
+  /// Notifies the user when someone starts following them
+  Future<void> notifyFollow({
+    required String followedUserId,
+    required String followerId,
+    required String followerName,
+    String? followerAvatarUrl,
+  }) async {
+    try {
+      // Don't notify if user is following themselves
+      if (followedUserId == followerId) {
+        return;
+      }
+
+      await createNotification(
+        userId: followedUserId,
+        type: 'follow',
+        actorName: followerName,
+        actorAvatarUrl: followerAvatarUrl,
+      );
+    } catch (e) {
+      // Log error but don't throw - notification failure shouldn't break follow creation
+      // debugPrint('❌ [BNotificationService] Error creating follow notification: $e');
     }
   }
 }

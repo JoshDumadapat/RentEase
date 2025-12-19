@@ -23,6 +23,7 @@ class FloatingAIAssistantButton extends StatefulWidget {
 class _FloatingAIAssistantButtonState extends State<FloatingAIAssistantButton>
     with SingleTickerProviderStateMixin {
   late AnimationController _rotationController;
+  late AnimationController _pulseController;
 
   @override
   void initState() {
@@ -31,11 +32,18 @@ class _FloatingAIAssistantButtonState extends State<FloatingAIAssistantButton>
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat();
+    
+    // Pulsing animation for visibility
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
   }
 
   @override
   void dispose() {
     _rotationController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -66,76 +74,128 @@ class _FloatingAIAssistantButtonState extends State<FloatingAIAssistantButton>
     final bgColor = isDark ? Colors.black : Colors.white;
 
     return Positioned(
-      right: 16,
-      bottom: 80, // Above bottom navigation bar
+      right: 20,
+      bottom: 90, // Above bottom navigation bar
       child: AnimatedBuilder(
-        animation: _rotationController,
+        animation: Listenable.merge([_rotationController, _pulseController]),
         builder: (context, child) {
-          return GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AIChatPage(),
-                ),
-              );
-            },
-            child: Container(
-              width: 56,
-              height: 56,
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AIChatPage(),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(32),
+              child: Container(
+              width: 64,
+              height: 64,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 boxShadow: [
+                  // Outer glow shadow
                   BoxShadow(
-                    color: _themeColor.withValues(alpha: 0.5),
-                    blurRadius: 12,
-                    spreadRadius: 2,
+                    color: _themeColor.withValues(alpha: 0.4),
+                    blurRadius: 20,
+                    spreadRadius: 4,
+                  ),
+                  // Inner shadow for depth
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    spreadRadius: -2,
                   ),
                 ],
               ),
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Rotating glow ring
+                  // Outer rotating glow ring - more visible
                   Transform.rotate(
                     angle: _rotationController.value * 2 * math.pi,
                     child: Container(
-                      width: 56,
-                      height: 56,
+                      width: 70,
+                      height: 70,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: SweepGradient(
                           colors: [
                             Colors.transparent,
-                            _themeColor.withValues(alpha: 0.6),
+                            _themeColor.withValues(alpha: 0.8),
+                            _themeColor.withValues(alpha: 0.9),
+                            _themeColor.withValues(alpha: 0.8),
                             Colors.transparent,
                           ],
-                          stops: const [0.0, 0.5, 1.0],
+                          stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
                         ),
                       ),
                     ),
                   ),
-                  // Background circle
+                  // Middle pulsing ring - more visible
+                  Transform.scale(
+                    scale: 1.0 + (_pulseController.value * 0.15),
+                    child: Container(
+                      width: 66,
+                      height: 66,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _themeColor.withValues(alpha: 0.6 + (_pulseController.value * 0.3)),
+                          width: 2.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Background circle with gradient
                   Container(
-                    width: 50,
-                    height: 50,
+                    width: 58,
+                    height: 58,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: bgColor, // Black in dark mode, white in light mode
-                      border: Border.all(
-                        color: _themeColor,
-                        width: 2,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: isDark
+                            ? [
+                                Colors.grey[900]!,
+                                Colors.black,
+                              ]
+                            : [
+                                Colors.white,
+                                Colors.grey[50]!,
+                              ],
                       ),
+                      border: Border.all(
+                        color: _themeColor.withValues(alpha: 0.8),
+                        width: 2.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _themeColor.withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          spreadRadius: 2,
+                        ),
+                      ],
                     ),
                     child: ClipOval(
                       child: Image.network(
                         'https://res.cloudinary.com/dqymvfmbi/image/upload/v1765755084/ai/subspace_logo.jpg',
-                        fit: BoxFit.contain,
+                        fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
-                          return Icon(
-                            Icons.smart_toy,
-                            color: _themeColor,
-                            size: 28,
+                          return Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _themeColor.withValues(alpha: 0.1),
+                            ),
+                            child: Icon(
+                              Icons.smart_toy,
+                              color: _themeColor,
+                              size: 32,
+                            ),
                           );
                         },
                       ),
@@ -144,7 +204,8 @@ class _FloatingAIAssistantButtonState extends State<FloatingAIAssistantButton>
                 ],
               ),
             ),
-          );
+          ),
+        );
         },
       ),
     );

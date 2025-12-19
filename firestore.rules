@@ -12,7 +12,14 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == userId;
       allow update: if request.auth != null && 
-        (request.auth.uid == userId || isAdmin());
+        (request.auth.uid == userId || isAdmin() ||
+         // Allow follower/following count updates for follow/unfollow functionality
+         // Ensure email doesn't change and counts are valid non-negative integers
+         (request.resource.data.email == resource.data.email &&
+          (!('followersCount' in request.resource.data) || 
+           (request.resource.data.followersCount is int && request.resource.data.followersCount >= 0)) &&
+          (!('followingCount' in request.resource.data) || 
+           (request.resource.data.followingCount is int && request.resource.data.followingCount >= 0))));
       allow delete: if request.auth != null && 
         (request.auth.uid == userId || isAdmin());
     }
@@ -23,13 +30,7 @@ service cloud.firestore {
         request.resource.data.userId is string &&
         request.resource.data.userId == request.auth.uid;
       allow update: if request.auth != null && 
-        (resource.data.userId == request.auth.uid ||
-         isAdmin() ||
-         (request.resource.data.userId == resource.data.userId &&
-          request.resource.data.title == resource.data.title &&
-          request.resource.data.category == resource.data.category &&
-          request.resource.data.location == resource.data.location &&
-          request.resource.data.price == resource.data.price));
+        (resource.data.userId == request.auth.uid || isAdmin());
       allow delete: if request.auth != null && 
         (resource.data.userId == request.auth.uid || isAdmin());
     }
@@ -55,6 +56,40 @@ service cloud.firestore {
         (resource.data.userId == request.auth.uid || isAdmin());
       allow delete: if request.auth != null && 
         (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    
+    match /lookingForLikes/{likeId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update: if false; // Likes should not be updated, only created/deleted
+      allow delete: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    
+    // Followers collection - tracks who follows whom
+    // Structure: followers/{targetUserId}/userFollowers/{followerId}
+    match /followers/{targetUserId}/userFollowers/{followerId} {
+      allow read: if request.auth != null; // Anyone can see followers
+      allow create: if request.auth != null && 
+        request.auth.uid == followerId && 
+        request.auth.uid != targetUserId && // Can't follow yourself
+        request.resource.data.followerId == request.auth.uid;
+      allow update: if false; // Follow relationships should not be updated
+      allow delete: if request.auth != null && 
+        (request.auth.uid == followerId || isAdmin());
+    }
+    
+    // Following collection - tracks who a user is following
+    // Structure: following/{userId}/userFollowing/{followingId}
+    match /following/{userId}/userFollowing/{followingId} {
+      allow read: if request.auth != null; // Anyone can see who someone is following
+      allow create: if request.auth != null && 
+        request.auth.uid == userId && 
+        request.auth.uid != followingId && // Can't follow yourself
+        request.resource.data.followingId == followingId;
+      allow update: if false; // Follow relationships should not be updated
+      allow delete: if request.auth != null && 
+        (request.auth.uid == userId || isAdmin());
     }
     
     match /lookingForPosts/{postId} {
@@ -112,6 +147,108 @@ service cloud.firestore {
     match /deleted_accounts/{docId} {
       allow create: if request.auth != null;
       allow read, update, delete: if isAdmin();
+    }
+    
+    // AI Chat Messages collection
+    // Structure: ai_chat_messages/{userId}/messages/{messageId}
+    match /ai_chat_messages/{userId}/messages/{messageId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && 
+        request.auth.uid == userId &&
+        request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null && 
+        request.auth.uid == userId &&
+        resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null && 
+        (request.auth.uid == userId || isAdmin());
+    }
+    
+    // User Chat Threads collection
+    // Structure: chat_threads/{threadId} where threadId = sorted userId1_userId2
+    match /chat_threads/{threadId} {
+      // Helper function to check if user is participant in existing thread
+      function isParticipant() {
+        return request.auth != null && 
+               exists(/databases/$(database)/documents/chat_threads/$(threadId)) &&
+               request.auth.uid in resource.data.participants;
+      }
+      
+      // Helper function to check if user will be participant (for create)
+      function willBeParticipant() {
+        return request.auth != null && 
+               request.auth.uid in request.resource.data.participants;
+      }
+      
+      
+      // Users can read threads they participate in
+      // Allow reading if thread doesn't exist (for checking existence) OR if user is participant
+      allow read: if request.auth != null && 
+        (!exists(/databases/$(database)/documents/chat_threads/$(threadId)) ||
+         (exists(/databases/$(database)/documents/chat_threads/$(threadId)) &&
+          request.auth.uid in resource.data.participants));
+      
+      // Users can create threads they participate in (must have exactly 2 participants)
+      // Both users must be in participants array
+      allow create: if request.auth != null && 
+        request.auth.uid in request.resource.data.participants &&
+        request.resource.data.participants.size() == 2;
+      
+      // Users can update threads they participate in
+      // Allow updating lastMessage, lastMessageTime, unreadCount, etc.
+      allow update: if request.auth != null && 
+        exists(/databases/$(database)/documents/chat_threads/$(threadId)) &&
+        request.auth.uid in resource.data.participants;
+      
+      // Users can delete threads they participate in (or admins)
+      allow delete: if request.auth != null && 
+        (exists(/databases/$(database)/documents/chat_threads/$(threadId)) &&
+         (request.auth.uid in resource.data.participants || isAdmin()));
+      
+      // Chat Messages subcollection
+      // Structure: chat_threads/{threadId}/messages/{messageId}
+      match /messages/{messageId} {
+        // Helper function to check if user is participant in thread
+        function isThreadParticipant() {
+          return exists(/databases/$(database)/documents/chat_threads/$(threadId)) &&
+                 request.auth.uid in get(/databases/$(database)/documents/chat_threads/$(threadId)).data.participants;
+        }
+        
+        // Users can read messages in threads they participate in
+        // Allow reading if:
+        // 1. Thread doesn't exist yet (empty chat - query will return empty results)
+        // 2. Thread exists and user is participant
+        allow read: if request.auth != null && 
+          (!exists(/databases/$(database)/documents/chat_threads/$(threadId)) ||
+           (exists(/databases/$(database)/documents/chat_threads/$(threadId)) &&
+            request.auth.uid in get(/databases/$(database)/documents/chat_threads/$(threadId)).data.participants));
+        
+        // Users can create messages if:
+        // 1. senderId matches current user (prevents spoofing)
+        // 2. Either thread exists and user is participant, OR thread doesn't exist yet (first message scenario)
+        // This handles both cases: existing thread and first message where thread is created simultaneously
+        allow create: if request.auth != null && 
+          request.resource.data.senderId == request.auth.uid &&
+          (
+            // Case 1: Thread exists and user is participant
+            (exists(/databases/$(database)/documents/chat_threads/$(threadId)) &&
+             request.auth.uid in get(/databases/$(database)/documents/chat_threads/$(threadId)).data.participants) ||
+            // Case 2: Thread doesn't exist yet (first message - thread will be created by client code)
+            // We allow this because the client creates the thread before sending the message,
+            // but there might be a brief moment where the message is sent before thread write completes
+            !exists(/databases/$(database)/documents/chat_threads/$(threadId))
+          );
+        
+        // Users can update their own messages or mark messages as read in threads they participate in
+        allow update: if request.auth != null && 
+          (resource.data.senderId == request.auth.uid ||
+           (exists(/databases/$(database)/documents/chat_threads/$(threadId)) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']) &&
+            request.auth.uid in get(/databases/$(database)/documents/chat_threads/$(threadId)).data.participants));
+        
+        // Users can delete their own messages (or admins)
+        allow delete: if request.auth != null && 
+          (resource.data.senderId == request.auth.uid || isAdmin());
+      }
     }
     
     match /{document=**} {

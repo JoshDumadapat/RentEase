@@ -5,6 +5,7 @@ import 'package:rentease_app/models/user_model.dart';
 import 'package:rentease_app/backend/BFollowService.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
 import 'package:rentease_app/screens/chat/user_chat_page.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 // Theme colors matching the listing cards
 const Color _themeColorLight = Color(0xFFE5F9FF); // Light background (like blue[50])
@@ -213,19 +214,20 @@ class _UserInfoSectionState extends State<UserInfoSection> {
                 child: widget.user.profileImageUrl != null
 
                     ? ClipOval(
-
-                        child: Image.network(
-
-                          widget.user.profileImageUrl!,
-
-                          fit: BoxFit.cover,
-
-                          errorBuilder: (context, error, stackTrace) =>
-
-                              _buildDefaultAvatar(context),
-
+                        child: SizedBox(
+                          width: 100,
+                          height: 100,
+                          child: CachedNetworkImage(
+                            imageUrl: widget.user.profileImageUrl!,
+                            fit: BoxFit.cover,
+                            width: 100,
+                            height: 100,
+                            memCacheWidth: 200,
+                            memCacheHeight: 200,
+                            placeholder: (context, url) => _buildDefaultAvatar(context),
+                            errorWidget: (context, url, error) => _buildDefaultAvatar(context),
+                          ),
                         ),
-
                       )
 
                     : _buildDefaultAvatar(context),
@@ -392,35 +394,19 @@ class _UserInfoSectionState extends State<UserInfoSection> {
 
           
 
-          // Bio with Follow button for visitors
+          // Bio (follow button removed - it's in action buttons section below)
           if (widget.user.bio != null && widget.user.bio!.isNotEmpty) ...[
             const SizedBox(height: 20),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.user.bio!,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: isDark ? Colors.grey[300] : const Color(0xFF2D2D2D),
-                      height: 1.5,
-                      fontWeight: FontWeight.w600,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-                // Follow button beside bio for visitors
-                if (widget.isVisitorView) ...[
-                  const SizedBox(width: 12),
-                  _buildFollowButton(isDark),
-                ],
-              ],
+            Text(
+              widget.user.bio!,
+              style: TextStyle(
+                fontSize: 15,
+                color: isDark ? Colors.grey[300] : const Color(0xFF2D2D2D),
+                height: 1.5,
+                fontWeight: FontWeight.w600,
+                fontStyle: FontStyle.italic,
+              ),
             ),
-          ] else if (widget.isVisitorView) ...[
-            // If no bio, show follow button in its own row
-            const SizedBox(height: 20),
-            _buildFollowButton(isDark),
           ],
 
           // Action Buttons

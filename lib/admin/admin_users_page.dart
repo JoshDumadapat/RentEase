@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rentease_app/admin/utils/admin_auth_utils.dart';
@@ -359,6 +360,9 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                     : RefreshIndicator(
                         onRefresh: _loadUsers,
                         child: ListView.builder(
+                          cacheExtent: 500,
+                          addAutomaticKeepAlives: false,
+                          addRepaintBoundaries: true,
                           key: const PageStorageKey<String>('admin_users_list'),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _filteredUsers.length,

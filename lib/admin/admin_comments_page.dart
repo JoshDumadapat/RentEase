@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rentease_app/admin/utils/admin_auth_utils.dart';
@@ -83,7 +84,9 @@ class _AdminCommentsPageState extends State<AdminCommentsPage> {
             _userCache[userId] = userData;
           }
         } catch (e) {
-          debugPrint('Error loading user $userId: $e');
+          if (kDebugMode) {
+            debugPrint('Error loading user $userId: $e');
+          }
         }
       }
       
@@ -455,6 +458,9 @@ class _AdminCommentsPageState extends State<AdminCommentsPage> {
                     : RefreshIndicator(
                         onRefresh: _loadComments,
                         child: ListView.builder(
+                          cacheExtent: 500,
+                          addAutomaticKeepAlives: false,
+                          addRepaintBoundaries: true,
                           key: const PageStorageKey<String>('admin_comments_list'),
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _filteredComments.length,

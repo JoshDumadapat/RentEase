@@ -4,15 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'BUserService.dart';
 
-/// Backend service for listing/property operations in Firestore
-/// Handles all listing-related database operations
+/// Listing service for Firestore
 class BListingService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final BUserService _userService = BUserService();
   static const String _collectionName = 'listings';
 
-  /// Create a new listing with all property fields
+  /// Create a new listing
   Future<String> createListing({
     required String userId,
     required String ownerName,
@@ -58,17 +57,17 @@ class BListingService {
     Map<String, dynamic>? additionalData,
   }) async {
     try {
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      debugPrint('📝 [BListingService] Creating new listing...');
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      debugPrint('👤 User ID: $userId');
-      debugPrint('📋 Title: $title');
-      debugPrint('🏠 Category: $category');
-      debugPrint('📍 Location: $location');
-      debugPrint('💰 Price: $price');
-      debugPrint('📸 Image URLs count: ${imageUrls.length}');
-      debugPrint('📝 Is Draft: $isDraft');
-      debugPrint('📊 Status: ${isDraft ? 'draft' : 'published'}');
+      // debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // debugPrint('📝 [BListingService] Creating new listing...');
+      // debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // debugPrint('👤 User ID: $userId');
+      // debugPrint('📋 Title: $title');
+      // debugPrint('🏠 Category: $category');
+      // debugPrint('📍 Location: $location');
+      // debugPrint('💰 Price: $price');
+      // debugPrint('📸 Image URLs count: ${imageUrls.length}');
+      // debugPrint('📝 Is Draft: $isDraft');
+      // debugPrint('📊 Status: ${isDraft ? 'draft' : 'published'}');
       
       final listingData = <String, dynamic>{
         'userId': userId,
@@ -83,8 +82,8 @@ class BListingService {
         'createdAt': FieldValue.serverTimestamp(),
         'postedDate': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-        'isDraft': isDraft,
-        'status': isDraft ? 'draft' : 'published',
+        'isDraft': isDraft ? true : false, // Explicitly set boolean
+        'status': isDraft ? 'draft' : 'published', // Ensure status is set correctly
         // Optional fields
         if (bedrooms != null) 'bedrooms': bedrooms,
         if (bathrooms != null) 'bathrooms': bathrooms,
@@ -121,13 +120,13 @@ class BListingService {
         if (additionalData != null) ...additionalData,
       };
 
-      debugPrint('📦 Listing data prepared with ${listingData.length} fields');
-      debugPrint('🔑 Key fields check:');
-      debugPrint('   - userId: ${listingData['userId']} (type: ${listingData['userId'].runtimeType})');
-      debugPrint('   - title: ${listingData['title']}');
-      debugPrint('   - category: ${listingData['category']}');
-      debugPrint('   - status: ${listingData['status']}');
-      debugPrint('   - isDraft: ${listingData['isDraft']}');
+      // debugPrint('📦 Listing data prepared with ${listingData.length} fields');
+      // debugPrint('🔑 Key fields check:');
+      // debugPrint('   - userId: ${listingData['userId']} (type: ${listingData['userId'].runtimeType})');
+      // debugPrint('   - title: ${listingData['title']}');
+      // debugPrint('   - category: ${listingData['category']}');
+      // debugPrint('   - status: ${listingData['status']}');
+      // debugPrint('   - isDraft: ${listingData['isDraft']}');
       
       // Verify userId is a string (required by Firestore rules)
       if (listingData['userId'] is! String) {
@@ -143,14 +142,14 @@ class BListingService {
       final authUid = currentUser.uid;
       final dataUserId = listingData['userId'] as String;
       
-      debugPrint('🔐 AUTH VERIFICATION BEFORE WRITE:');
-      debugPrint('   - Firebase Auth UID: $authUid');
-      debugPrint('   - Data userId: $dataUserId');
-      debugPrint('   - UIDs match: ${authUid == dataUserId}');
-      debugPrint('   - Auth UID length: ${authUid.length}');
-      debugPrint('   - Data userId length: ${dataUserId.length}');
-      debugPrint('   - Auth UID bytes: ${authUid.codeUnits}');
-      debugPrint('   - Data userId bytes: ${dataUserId.codeUnits}');
+      // debugPrint('🔐 AUTH VERIFICATION BEFORE WRITE:');
+      // debugPrint('   - Firebase Auth UID: $authUid');
+      // debugPrint('   - Data userId: $dataUserId');
+      // debugPrint('   - UIDs match: ${authUid == dataUserId}');
+      // debugPrint('   - Auth UID length: ${authUid.length}');
+      // debugPrint('   - Data userId length: ${dataUserId.length}');
+      // debugPrint('   - Auth UID bytes: ${authUid.codeUnits}');
+      // debugPrint('   - Data userId bytes: ${dataUserId.codeUnits}');
       
       // Ensure userId matches auth.uid exactly (Firestore rules requirement)
       if (authUid != dataUserId) {
@@ -160,26 +159,48 @@ class BListingService {
         );
       }
       
-      debugPrint('✅ Auth verification passed - UIDs match exactly');
-      debugPrint('💾 Attempting to write to Firestore collection: $_collectionName');
-      debugPrint('   (Collection will be auto-created on first write)');
-      debugPrint('⚠️  IMPORTANT: Make sure Firestore rules are deployed to Firebase Console!');
-      debugPrint('   See DEPLOY_FIRESTORE_RULES.md for instructions');
-      debugPrint('   Current rule should be: allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;');
+      // debugPrint('✅ Auth verification passed - UIDs match exactly');
+      // debugPrint('💾 Attempting to write to Firestore collection: $_collectionName');
+      // debugPrint('   (Collection will be auto-created on first write)');
+      // debugPrint('⚠️  IMPORTANT: Make sure Firestore rules are deployed to Firebase Console!');
+      // debugPrint('   See DEPLOY_FIRESTORE_RULES.md for instructions');
+      // debugPrint('   Current rule should be: allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;');
       
       // Firestore automatically creates collections on first write
       // No need to manually create the collection
       final docRef = await _firestore.collection(_collectionName).add(listingData);
       
-      debugPrint('✅ [BListingService] Listing created successfully!');
-      debugPrint('📄 Document ID: ${docRef.id}');
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // Verify the listing was created correctly with correct status
+      // This ensures the data is committed and searchable
+      try {
+        // Wait a brief moment to ensure write is committed
+        await Future.delayed(const Duration(milliseconds: 100));
+        final verifyDoc = await docRef.get(const GetOptions(source: Source.server));
+        if (verifyDoc.exists) {
+          final verifyData = verifyDoc.data();
+          final verifyStatus = verifyData?['status'] as String?;
+          final verifyIsDraft = verifyData?['isDraft'] as bool?;
+          
+          if (!isDraft && (verifyStatus != 'published' || verifyIsDraft == true)) {
+            debugPrint('⚠️ [BListingService] WARNING: Listing created but status might be incorrect');
+            debugPrint('   Expected: status=published, isDraft=false');
+            debugPrint('   Actual: status=$verifyStatus, isDraft=$verifyIsDraft');
+            debugPrint('   Listing ID: ${docRef.id}');
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ [BListingService] Could not verify listing creation: $e');
+      }
+      
+      // debugPrint('✅ [BListingService] Listing created successfully!');
+      // debugPrint('📄 Document ID: ${docRef.id}');
+      // debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       
       return docRef.id;
     } catch (e, stackTrace) {
-      debugPrint('❌ [BListingService] Error creating listing: $e');
-      debugPrint('📚 Stack trace: $stackTrace');
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // debugPrint('❌ [BListingService] Error creating listing: $e');
+      // debugPrint('📚 Stack trace: $stackTrace');
+      // debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       rethrow;
     }
   }
@@ -187,13 +208,24 @@ class BListingService {
   /// Get listing by ID
   Future<Map<String, dynamic>?> getListing(String listingId) async {
     try {
+      if (listingId.isEmpty) {
+        // debugPrint('⚠️ [BListingService] Empty listingId provided');
+        return null;
+      }
       final doc = await _firestore.collection(_collectionName).doc(listingId).get();
       if (doc.exists) {
-        return doc.data();
+        final data = doc.data();
+        if (data != null) {
+          // Include the document ID in the returned data
+          return {
+            'id': doc.id,
+            ...data,
+          };
+        }
       }
       return null;
     } catch (e) {
-      // Error:'Error getting listing: $e');
+      // debugPrint('❌ [BListingService] Error getting listing: $e');
       return null;
     }
   }
@@ -207,7 +239,7 @@ class BListingService {
     bool randomize = true,
   }) async {
     try {
-      debugPrint('📖 [BListingService] Fetching paginated listings (limit: $limit)...');
+      // debugPrint('📖 [BListingService] Fetching paginated listings (limit: $limit)...');
       
       // Query without orderBy to avoid composite index requirement
       // We'll sort and paginate in memory
@@ -215,18 +247,41 @@ class BListingService {
           .collection(_collectionName)
           .where('status', isEqualTo: 'published');
       
-      // Get a larger batch to ensure we have enough after filtering
-      // We'll filter isDraft and deactivated users in memory
-      final batchSize = limit * 3; // Get 3x the limit to account for filtering
-      query = query.limit(batchSize);
+      bool usedOrderBy = false;
       
-      debugPrint('📖 [BListingService] Executing query: status=published, limit=$batchSize');
-      final snapshot = await query.get();
+      // If randomize is false, try to use proper Firestore pagination with orderBy
+      if (!randomize) {
+        try {
+          // Use orderBy for proper pagination
+          if (lastDocument != null) {
+            query = query.orderBy('postedDate', descending: true).startAfterDocument(lastDocument).limit(limit);
+          } else {
+            query = query.orderBy('postedDate', descending: true).limit(limit);
+          }
+          usedOrderBy = true;
+          // debugPrint('📖 [BListingService] Using orderBy pagination (randomize: false)');
+        } catch (e) {
+          // If orderBy fails (missing index), fall back to in-memory pagination
+          // debugPrint('⚠️ [BListingService] OrderBy query failed, falling back to in-memory pagination: $e');
+          usedOrderBy = false;
+          final batchSize = limit * 3; // Get 3x the limit to account for filtering
+          query = query.limit(batchSize);
+        }
+      } else {
+        // Randomize mode - get larger batch and shuffle
+        final batchSize = limit * 3; // Get 3x the limit to account for filtering
+        query = query.limit(batchSize);
+        // debugPrint('📖 [BListingService] Using randomize mode with batch size: $batchSize');
+      }
       
-      debugPrint('📖 [BListingService] Query returned ${snapshot.docs.length} documents');
+      // debugPrint('📖 [BListingService] Executing query: status=published');
+      // Use Source.server to force fresh data from server (not cache) to ensure new posts appear
+      final snapshot = await query.get(const GetOptions(source: Source.server));
+      
+      // debugPrint('📖 [BListingService] Query returned ${snapshot.docs.length} documents');
       
       if (snapshot.docs.isEmpty) {
-        debugPrint('⚠️ [BListingService] No documents found in query');
+        // debugPrint('⚠️ [BListingService] No documents found in query');
         return {
           'listings': <Map<String, dynamic>>[],
           'lastDocument': null,
@@ -250,12 +305,12 @@ class BListingService {
         return isDraft != true; // Filter out drafts (handle null as false)
       }).toList();
       
-      debugPrint('📊 [BListingService] After filtering drafts: ${allListings.length} listings (removed ${beforeDraftFilter - allListings.length})');
+      // debugPrint('📊 [BListingService] After filtering drafts: ${allListings.length} listings (removed ${beforeDraftFilter - allListings.length})');
       
       // Filter out listings from deactivated users
       if (allListings.isNotEmpty) {
         final userIds = allListings.map((l) => l['userId'] as String?).whereType<String>().toList();
-        debugPrint('📊 [BListingService] Checking ${userIds.length} unique user IDs for deactivation');
+        // debugPrint('📊 [BListingService] Checking ${userIds.length} unique user IDs for deactivation');
         final deactivatedUserIds = await _userService.getDeactivatedUserIds(userIds);
         
         if (deactivatedUserIds.isNotEmpty) {
@@ -264,65 +319,81 @@ class BListingService {
             final userId = listing['userId'] as String?;
             return userId == null || !deactivatedUserIds.contains(userId);
           }).toList();
-          debugPrint('📊 [BListingService] After filtering deactivated users: ${allListings.length} listings (removed ${beforeDeactivatedFilter - allListings.length})');
+          // debugPrint('📊 [BListingService] After filtering deactivated users: ${allListings.length} listings (removed ${beforeDeactivatedFilter - allListings.length})');
         } else {
-          debugPrint('📊 [BListingService] No deactivated users found, keeping all ${allListings.length} listings');
+          // debugPrint('📊 [BListingService] No deactivated users found, keeping all ${allListings.length} listings');
         }
       }
       
-      // Sort by postedDate in memory (newest first)
-      allListings.sort((a, b) {
-        final aDate = a['postedDate'];
-        final bDate = b['postedDate'];
-        
-        DateTime aDateTime;
-        DateTime bDateTime;
-        
-        if (aDate is Timestamp) {
-          aDateTime = aDate.toDate();
-        } else if (aDate is DateTime) {
-          aDateTime = aDate;
-        } else {
-          aDateTime = DateTime.fromMillisecondsSinceEpoch(0);
-        }
-        
-        if (bDate is Timestamp) {
-          bDateTime = bDate.toDate();
-        } else if (bDate is DateTime) {
-          bDateTime = bDate;
-        } else {
-          bDateTime = DateTime.fromMillisecondsSinceEpoch(0);
-        }
-        
-        return bDateTime.compareTo(aDateTime); // Descending order
-      });
-      
-      // Randomize if requested (shuffle the list)
-      if (randomize && allListings.length > 1) {
-        allListings.shuffle();
-      }
-      
-      // Apply pagination limit
-      final listings = allListings.take(limit).toList();
-      final hasMore = allListings.length > limit;
-      
-      // Create a mock lastDocument for pagination tracking
-      // Since we're doing in-memory pagination, we'll use the last listing's ID
+      List<Map<String, dynamic>> listings;
       DocumentSnapshot? lastDoc;
-      if (listings.isNotEmpty && snapshot.docs.isNotEmpty) {
-        // Find the document that corresponds to the last listing
-        final lastListingId = listings.last['id'] as String;
-        try {
-          lastDoc = snapshot.docs.firstWhere(
-            (doc) => doc.id == lastListingId,
-          );
-        } catch (e) {
-          // If not found, use the last document from snapshot
-          lastDoc = snapshot.docs.last;
+      bool hasMore;
+      
+      if (usedOrderBy) {
+        // We used orderBy pagination - results are already sorted and limited
+        // But we still need to filter drafts and deactivated users
+        listings = allListings; // Already filtered above
+        hasMore = snapshot.docs.length == limit; // If we got full limit, there might be more
+        lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+        // debugPrint('📊 [BListingService] Using orderBy pagination results: ${listings.length} listings');
+      } else {
+        // In-memory pagination (for randomize or fallback)
+        // Sort by postedDate in memory (newest first)
+        allListings.sort((a, b) {
+          final aDate = a['postedDate'];
+          final bDate = b['postedDate'];
+          
+          DateTime aDateTime;
+          DateTime bDateTime;
+          
+          if (aDate is Timestamp) {
+            aDateTime = aDate.toDate();
+          } else if (aDate is DateTime) {
+            aDateTime = aDate;
+          } else {
+            aDateTime = DateTime.fromMillisecondsSinceEpoch(0);
+          }
+          
+          if (bDate is Timestamp) {
+            bDateTime = bDate.toDate();
+          } else if (bDate is DateTime) {
+            bDateTime = bDate;
+          } else {
+            bDateTime = DateTime.fromMillisecondsSinceEpoch(0);
+          }
+          
+          return bDateTime.compareTo(aDateTime); // Descending order
+        });
+        
+        // Randomize if requested (shuffle the list)
+        // NOTE: Only randomize on first page to avoid duplicates
+        if (randomize && lastDocument == null && allListings.length > 1) {
+          allListings.shuffle();
+          // debugPrint('📊 [BListingService] Randomized ${allListings.length} listings (first page only)');
         }
+        
+        // Apply pagination limit
+        listings = allListings.take(limit).toList();
+        hasMore = allListings.length > limit;
+        
+        // Create a mock lastDocument for pagination tracking
+        // Since we're doing in-memory pagination, we'll use the last listing's ID
+        if (listings.isNotEmpty && snapshot.docs.isNotEmpty) {
+          // Find the document that corresponds to the last listing
+          final lastListingId = listings.last['id'] as String;
+          try {
+            lastDoc = snapshot.docs.firstWhere(
+              (doc) => doc.id == lastListingId,
+            );
+          } catch (e) {
+            // If not found, use the last document from snapshot
+            lastDoc = snapshot.docs.last;
+          }
+        }
+        // debugPrint('📊 [BListingService] Using in-memory pagination: ${listings.length} listings from ${allListings.length} total');
       }
       
-      debugPrint('✅ [BListingService] Fetched ${listings.length} listings from ${allListings.length} total (hasMore: $hasMore)');
+      // debugPrint('✅ [BListingService] Fetched ${listings.length} listings from ${allListings.length} total (hasMore: $hasMore)');
       
       return {
         'listings': listings,
@@ -330,8 +401,8 @@ class BListingService {
         'hasMore': hasMore,
       };
     } catch (e, stackTrace) {
-      debugPrint('❌ [BListingService] Error fetching paginated listings: $e');
-      debugPrint('📚 Stack trace: $stackTrace');
+      // debugPrint('❌ [BListingService] Error fetching paginated listings: $e');
+      // debugPrint('📚 Stack trace: $stackTrace');
       return {
         'listings': <Map<String, dynamic>>[],
         'lastDocument': null,
@@ -343,30 +414,37 @@ class BListingService {
   /// Get all published listings (excludes drafts and listings from deactivated users)
   Future<List<Map<String, dynamic>>> getAllListings() async {
     try {
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      debugPrint('📖 [BListingService] Fetching all published listings...');
+      // debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // debugPrint('📖 [BListingService] Fetching all published listings...');
       
       // Query without orderBy to avoid composite index requirement
       // We'll sort in memory instead
+      // Use Source.server to force fresh data from server (not cache) to ensure new posts appear
       final snapshot = await _firestore
           .collection(_collectionName)
           .where('status', isEqualTo: 'published')
-          .get();
+          .get(const GetOptions(source: Source.server));
       
       // Filter out drafts and sort by postedDate in memory
-      final listings = snapshot.docs
-          .where((doc) {
-            final data = doc.data();
-            return data['isDraft'] == false;
-          })
-          .map((doc) {
-            final data = doc.data();
-            return {
-              'id': doc.id,
-              ...data,
-            };
-          })
-          .toList();
+      // Remove duplicates by ID
+      final seenIds = <String>{};
+      final listings = <Map<String, dynamic>>[];
+      
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final status = data['status'] as String?;
+        final isDraft = data['isDraft'] as bool? ?? false;
+        final listingId = doc.id;
+        
+        // Only include if status is 'published' AND isDraft is false AND not duplicate
+        if (status == 'published' && !isDraft && !seenIds.contains(listingId)) {
+          seenIds.add(listingId);
+          listings.add({
+            'id': listingId,
+            ...data,
+          });
+        }
+      }
       
       // Filter out listings from deactivated users
       if (listings.isNotEmpty) {
@@ -374,7 +452,7 @@ class BListingService {
         final deactivatedUserIds = await _userService.getDeactivatedUserIds(userIds);
         
         if (deactivatedUserIds.isNotEmpty) {
-          debugPrint('🚫 [BListingService] Filtering out ${deactivatedUserIds.length} listings from deactivated users');
+          // debugPrint('🚫 [BListingService] Filtering out ${deactivatedUserIds.length} listings from deactivated users');
           listings.removeWhere((listing) {
             final userId = listing['userId'] as String?;
             return userId != null && deactivatedUserIds.contains(userId);
@@ -410,16 +488,16 @@ class BListingService {
         return bDateTime.compareTo(aDateTime); // Descending order
       });
       
-      debugPrint('✅ [BListingService] Found ${listings.length} published listings (excluding deactivated users)');
+      // debugPrint('✅ [BListingService] Found ${listings.length} published listings (excluding deactivated users)');
       for (var listing in listings) {
-        debugPrint('   - ${listing['title']} (ID: ${listing['id']}, userId: ${listing['userId']}, status: ${listing['status']}, isDraft: ${listing['isDraft']})');
+        // debugPrint('   - ${listing['title']} (ID: ${listing['id']}, userId: ${listing['userId']}, status: ${listing['status']}, isDraft: ${listing['isDraft']})');
       }
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       
       return listings;
     } catch (e, stackTrace) {
-      debugPrint('❌ [BListingService] Error fetching all listings: $e');
-      debugPrint('📚 Stack trace: $stackTrace');
+      // debugPrint('❌ [BListingService] Error fetching all listings: $e');
+      // debugPrint('📚 Stack trace: $stackTrace');
       return [];
     }
   }
@@ -427,22 +505,27 @@ class BListingService {
   /// Get listings by user ID (published only)
   Future<List<Map<String, dynamic>>> getListingsByUser(String userId) async {
     try {
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      debugPrint('📖 [BListingService] Fetching listings for user: $userId');
+      // debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // debugPrint('📖 [BListingService] Fetching listings for user: $userId');
       
       // Query without orderBy to avoid composite index requirement
       // We'll sort in memory instead
+      // IMPORTANT: Always filter out drafts - drafts should only be visible to the owner via getDraftsByUser
       final snapshot = await _firestore
           .collection(_collectionName)
           .where('userId', isEqualTo: userId)
           .where('status', isEqualTo: 'published')
-          .get();
+          .get(const GetOptions(source: Source.server));
       
       // Filter out drafts and sort by postedDate in memory
+      // Double-check to ensure no drafts slip through
       final listings = snapshot.docs
           .where((doc) {
             final data = doc.data();
-            return data['isDraft'] == false;
+            final isDraft = data['isDraft'] as bool? ?? false;
+            final status = data['status'] as String? ?? '';
+            // Only include if explicitly not a draft AND status is published
+            return isDraft == false && status == 'published';
           })
           .map((doc) {
             final data = doc.data();
@@ -481,23 +564,21 @@ class BListingService {
         return bDateTime.compareTo(aDateTime); // Descending order
       });
       
-      debugPrint('✅ [BListingService] Found ${listings.length} listings for user $userId');
+      // debugPrint('✅ [BListingService] Found ${listings.length} listings for user $userId');
       for (var listing in listings) {
-        debugPrint('   - ${listing['title']} (ID: ${listing['id']}, status: ${listing['status']}, isDraft: ${listing['isDraft']})');
+        // debugPrint('   - ${listing['title']} (ID: ${listing['id']}, status: ${listing['status']}, isDraft: ${listing['isDraft']})');
       }
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       
       return listings;
     } catch (e, stackTrace) {
-      debugPrint('❌ [BListingService] Error fetching user listings: $e');
-      debugPrint('📚 Stack trace: $stackTrace');
+      // debugPrint('❌ [BListingService] Error fetching user listings: $e');
+      // debugPrint('📚 Stack trace: $stackTrace');
       return [];
     }
   }
 
-  /// Get listings by user ID as a real-time stream
-  /// Returns a stream that emits updated lists of listings whenever listings change
-  /// Note: This stream doesn't filter deactivated users (used for user's own listings)
+  /// Get listings by user ID as a stream
   Stream<List<Map<String, dynamic>>> getListingsByUserStream(String userId) {
     return _firestore
         .collection(_collectionName)
@@ -506,10 +587,14 @@ class BListingService {
         .snapshots()
         .map((snapshot) {
       // Filter out drafts and sort by postedDate in memory
+      // IMPORTANT: Always filter out drafts - drafts should only be visible to the owner via getDraftsByUser
       final listings = snapshot.docs
           .where((doc) {
             final data = doc.data();
-            return data['isDraft'] == false;
+            final isDraft = data['isDraft'] as bool? ?? false;
+            final status = data['status'] as String? ?? '';
+            // Only include if explicitly not a draft AND status is published
+            return isDraft == false && status == 'published';
           })
           .map((doc) {
             final data = doc.data();
@@ -555,21 +640,22 @@ class BListingService {
   /// Get listings by category (published only, excludes deactivated users)
   Future<List<Map<String, dynamic>>> getListingsByCategory(String category) async {
     try {
-      debugPrint('🔍 [BListingService] Querying category: "$category"');
+      // debugPrint('🔍 [BListingService] Querying category: "$category"');
       
       List<Map<String, dynamic>> listings = [];
       
       // Try query with orderBy first
       try {
+        // Use Source.server to force fresh data from server (not cache) to ensure new posts appear
         final snapshot = await _firestore
             .collection(_collectionName)
             .where('category', isEqualTo: category)
             .where('isDraft', isEqualTo: false)
             .where('status', isEqualTo: 'published')
             .orderBy('postedDate', descending: true)
-            .get();
+            .get(const GetOptions(source: Source.server));
         
-        debugPrint('📊 [BListingService] Firestore query returned ${snapshot.docs.length} documents for category "$category"');
+        // debugPrint('📊 [BListingService] Firestore query returned ${snapshot.docs.length} documents for category "$category"');
         
         listings = snapshot.docs.map((doc) => {
           'id': doc.id,
@@ -577,15 +663,16 @@ class BListingService {
         }).toList();
       } catch (e) {
         // If orderBy fails (missing index), try without orderBy and sort in memory
-        debugPrint('⚠️ [BListingService] OrderBy query failed, trying without orderBy: $e');
+        // debugPrint('⚠️ [BListingService] OrderBy query failed, trying without orderBy: $e');
+        // Use Source.server to force fresh data from server (not cache) to ensure new posts appear
         final snapshotNoOrder = await _firestore
             .collection(_collectionName)
             .where('category', isEqualTo: category)
             .where('isDraft', isEqualTo: false)
             .where('status', isEqualTo: 'published')
-            .get();
+            .get(const GetOptions(source: Source.server));
         
-        debugPrint('📊 [BListingService] Firestore query (no orderBy) returned ${snapshotNoOrder.docs.length} documents for category "$category"');
+        // debugPrint('📊 [BListingService] Firestore query (no orderBy) returned ${snapshotNoOrder.docs.length} documents for category "$category"');
         
         listings = snapshotNoOrder.docs.map((doc) {
           final data = doc.data();
@@ -626,6 +713,18 @@ class BListingService {
         });
       }
       
+      // Remove duplicates by ID (safety check, though Firestore shouldn't return duplicates)
+      final seenIds = <String>{};
+      final uniqueListings = <Map<String, dynamic>>[];
+      for (var listing in listings) {
+        final listingId = listing['id'] as String? ?? '';
+        if (listingId.isNotEmpty && !seenIds.contains(listingId)) {
+          seenIds.add(listingId);
+          uniqueListings.add(listing);
+        }
+      }
+      listings = uniqueListings;
+      
       // Filter out listings from deactivated users
       if (listings.isNotEmpty) {
         final userIds = listings.map((l) => l['userId'] as String?).whereType<String>().toList();
@@ -637,15 +736,15 @@ class BListingService {
             final userId = listing['userId'] as String?;
             return userId == null || !deactivatedUserIds.contains(userId);
           }).toList();
-          debugPrint('🚫 [BListingService] Filtered out ${beforeCount - listings.length} listings from deactivated users');
+          // debugPrint('🚫 [BListingService] Filtered out ${beforeCount - listings.length} listings from deactivated users');
         }
       }
       
-      debugPrint('✅ [BListingService] Returning ${listings.length} listings for category "$category"');
+      // debugPrint('✅ [BListingService] Returning ${listings.length} unique listings for category "$category"');
       return listings;
     } catch (e, stackTrace) {
-      debugPrint('❌ [BListingService] Error querying category "$category": $e');
-      debugPrint('❌ [BListingService] Stack trace: $stackTrace');
+      // debugPrint('❌ [BListingService] Error querying category "$category": $e');
+      // debugPrint('❌ [BListingService] Stack trace: $stackTrace');
       return [];
     }
   }
@@ -666,8 +765,20 @@ class BListingService {
       }
 
       final listingData = listingDoc.data()!;
-      if (listingData['userId'] != currentUser.uid) {
-        throw Exception('You do not have permission to update this listing');
+      final listingUserId = listingData['userId'] as String?;
+      
+      // Debug logging
+      // debugPrint('🔍 [BListingService] Update ownership check:');
+      // debugPrint('   Current user UID: ${currentUser.uid}');
+      // debugPrint('   Listing userId: $listingUserId');
+      // debugPrint('   Match: ${listingUserId == currentUser.uid}');
+      
+      if (listingUserId == null) {
+        throw Exception('Listing has no owner. Cannot update.');
+      }
+      
+      if (listingUserId != currentUser.uid) {
+        throw Exception('You do not have permission to update this listing. Owner: $listingUserId, Current user: ${currentUser.uid}');
       }
 
       // Prevent userId from being changed
@@ -684,9 +795,9 @@ class BListingService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      debugPrint('✅ [BListingService] Listing updated: $listingId');
+      // debugPrint('✅ [BListingService] Listing updated: $listingId');
     } catch (e) {
-      debugPrint('❌ [BListingService] Error updating listing: $e');
+      // debugPrint('❌ [BListingService] Error updating listing: $e');
       rethrow;
     }
   }
@@ -717,29 +828,54 @@ class BListingService {
       // This can be handled via Firestore delete rules or Cloud Functions
       await _firestore.collection(_collectionName).doc(listingId).delete();
 
-      debugPrint('✅ [BListingService] Listing deleted: $listingId');
+      // debugPrint('✅ [BListingService] Listing deleted: $listingId');
     } catch (e) {
-      debugPrint('❌ [BListingService] Error deleting listing: $e');
+      // debugPrint('❌ [BListingService] Error deleting listing: $e');
       rethrow;
     }
   }
 
   /// Search listings by query (excludes listings from deactivated users)
+  /// Searches through title, description, location, category, and owner name
   Future<List<Map<String, dynamic>>> searchListings(String query) async {
     try {
+      if (query.trim().isEmpty) {
+        return [];
+      }
+      
+      // Get all published listings (without isDraft) to search in memory
+      // This allows us to search across multiple fields (title, description, ownerName)
+      // Use Source.server to force fresh data from server (not cache) to ensure new posts appear
       final snapshot = await _firestore
           .collection(_collectionName)
           .where('status', isEqualTo: 'published')
-          .where('title', isGreaterThanOrEqualTo: query)
-          .where('title', isLessThanOrEqualTo: '$query\uf8ff')
-          .get();
+          .get(const GetOptions(source: Source.server));
       
+      // Filter listings with explicit checks for status and isDraft
       var listings = snapshot.docs
-          .where((doc) => doc.data()['isDraft'] != true)
+          .where((doc) {
+            final data = doc.data();
+            final status = data['status'] as String?;
+            final isDraft = data['isDraft'] as bool?;
+            // Only include if status is 'published' AND isDraft is explicitly false or null
+            return status == 'published' && (isDraft == false || isDraft == null);
+          })
           .map((doc) => {
         'id': doc.id,
         ...doc.data(),
       }).toList();
+      
+      // Remove duplicates by ID
+      final seenIds = <String>{};
+      final uniqueListings = <Map<String, dynamic>>[];
+      for (var listing in listings) {
+        final listingId = listing['id'] as String? ?? '';
+        if (listingId.isNotEmpty && !seenIds.contains(listingId)) {
+          seenIds.add(listingId);
+          uniqueListings.add(listing);
+        }
+      }
+      listings = uniqueListings;
       
       // Filter out listings from deactivated users
       if (listings.isNotEmpty) {
@@ -754,9 +890,28 @@ class BListingService {
         }
       }
       
+      // Apply text search filter in memory
+      // Search through title, description, location, category, and owner name
+      final queryLower = query.toLowerCase().trim();
+      listings = listings.where((listing) {
+        final title = (listing['title'] as String? ?? '').toLowerCase();
+        final description = (listing['description'] as String? ?? '').toLowerCase();
+        final location = (listing['location'] as String? ?? '').toLowerCase();
+        final listingCategory = (listing['category'] as String? ?? '').toLowerCase();
+        final ownerName = (listing['ownerName'] as String? ?? '').toLowerCase();
+        // Check if any field contains the search query
+        return title.contains(queryLower) || 
+               description.contains(queryLower) ||
+               location.contains(queryLower) || 
+               listingCategory.contains(queryLower) ||
+               ownerName.contains(queryLower);
+      }).toList();
+      
+      // debugPrint('🔍 [BListingService] Text search "$query" found ${listings.length} listings');
+      
       return listings;
     } catch (e) {
-      debugPrint('❌ [BListingService] Error searching listings: $e');
+      // debugPrint('❌ [BListingService] Error searching listings: $e');
       return [];
     }
   }
@@ -797,26 +952,53 @@ class BListingService {
         query = query.where('bathrooms', isEqualTo: bathrooms);
       }
       
-      final snapshot = await query.get();
+      // Use Source.server to force fresh data from server (not cache) to ensure new posts appear
+      final snapshot = await query.get(const GetOptions(source: Source.server));
       
+      // Filter listings with explicit checks for status and isDraft
       var listings = snapshot.docs
-          .where((doc) => doc.data()['isDraft'] != true)
+          .where((doc) {
+            final data = doc.data();
+            final status = data['status'] as String?;
+            final isDraft = data['isDraft'] as bool?;
+            // Only include if status is 'published' AND isDraft is explicitly false or null
+            return status == 'published' && (isDraft == false || isDraft == null);
+          })
           .map((doc) => {
         'id': doc.id,
         ...doc.data(),
       }).toList();
       
+      // Remove duplicates by ID first
+      final seenIds = <String>{};
+      final uniqueListings = <Map<String, dynamic>>[];
+      for (var listing in listings) {
+        final listingId = listing['id'] as String? ?? '';
+        if (listingId.isNotEmpty && !seenIds.contains(listingId)) {
+          seenIds.add(listingId);
+          uniqueListings.add(listing);
+        }
+      }
+      listings = uniqueListings;
+
       // Apply text search filter in memory (if provided)
+      // Search through title, description, location, category, and owner name
       if (searchQuery != null && searchQuery.isNotEmpty) {
-        final queryLower = searchQuery.toLowerCase();
+        final queryLower = searchQuery.toLowerCase().trim();
         listings = listings.where((listing) {
           final title = (listing['title'] as String? ?? '').toLowerCase();
+          final description = (listing['description'] as String? ?? '').toLowerCase();
           final location = (listing['location'] as String? ?? '').toLowerCase();
           final listingCategory = (listing['category'] as String? ?? '').toLowerCase();
+          final ownerName = (listing['ownerName'] as String? ?? '').toLowerCase();
+          // Check if any field contains the search query
           return title.contains(queryLower) || 
+                 description.contains(queryLower) ||
                  location.contains(queryLower) || 
-                 listingCategory.contains(queryLower);
+                 listingCategory.contains(queryLower) ||
+                 ownerName.contains(queryLower);
         }).toList();
+        // debugPrint('🔍 [BListingService] Text search "$searchQuery" filtered to ${listings.length} listings');
       }
       
       // Apply property type filter in memory (complex matching)
@@ -881,8 +1063,8 @@ class BListingService {
       
       return listings;
     } catch (e, stackTrace) {
-      debugPrint('❌ [BListingService] Error searching listings with filters: $e');
-      debugPrint('📚 Stack trace: $stackTrace');
+      // debugPrint('❌ [BListingService] Error searching listings with filters: $e');
+      // debugPrint('📚 Stack trace: $stackTrace');
       return [];
     }
   }
@@ -1029,8 +1211,8 @@ class BListingService {
     Map<String, dynamic>? additionalData,
   }) async {
     try {
-      debugPrint('💾 [BListingService] Saving draft - userId: $userId, draftId: $draftId');
-      debugPrint('💾 [BListingService] Draft data - title: $title, step: $currentStep, imageUrls: ${imageUrls?.length ?? 0}');
+      // debugPrint('💾 [BListingService] Saving draft - userId: $userId, draftId: $draftId');
+      // debugPrint('💾 [BListingService] Draft data - title: $title, step: $currentStep, imageUrls: ${imageUrls?.length ?? 0}');
       
       final draftData = <String, dynamic>{
         'userId': userId,
@@ -1051,20 +1233,20 @@ class BListingService {
 
       if (draftId != null) {
         // Update existing draft
-        debugPrint('💾 [BListingService] Updating existing draft: $draftId');
+        // debugPrint('💾 [BListingService] Updating existing draft: $draftId');
         await _firestore.collection(_collectionName).doc(draftId).update(draftData);
-        debugPrint('✅ [BListingService] Draft updated successfully: $draftId');
+        // debugPrint('✅ [BListingService] Draft updated successfully: $draftId');
         return draftId;
       } else {
         // Create new draft
         draftData['createdAt'] = FieldValue.serverTimestamp();
-        debugPrint('💾 [BListingService] Creating new draft');
+        // debugPrint('💾 [BListingService] Creating new draft');
         final docRef = await _firestore.collection(_collectionName).add(draftData);
-        debugPrint('✅ [BListingService] Draft created successfully: ${docRef.id}');
+        // debugPrint('✅ [BListingService] Draft created successfully: ${docRef.id}');
         return docRef.id;
       }
     } catch (e) {
-      debugPrint('❌ [BListingService] Error saving draft: $e');
+      // debugPrint('❌ [BListingService] Error saving draft: $e');
       rethrow;
     }
   }
@@ -1074,7 +1256,7 @@ class BListingService {
   /// Sorting is done in memory instead
   Future<List<Map<String, dynamic>>> getDraftsByUser(String userId) async {
     try {
-      debugPrint('📖 [BListingService] Fetching drafts for user: $userId');
+      // debugPrint('📖 [BListingService] Fetching drafts for user: $userId');
       
       // Query WITHOUT orderBy to avoid composite index requirement
       final snapshot = await _firestore
@@ -1083,7 +1265,7 @@ class BListingService {
           .where('isDraft', isEqualTo: true)
           .get();
       
-      debugPrint('📖 [BListingService] Found ${snapshot.docs.length} draft documents');
+      // debugPrint('📖 [BListingService] Found ${snapshot.docs.length} draft documents');
       
       // Sort by updatedAt descending in memory (newest first)
       final drafts = snapshot.docs.map((doc) {
@@ -1101,14 +1283,14 @@ class BListingService {
         return bDate.compareTo(aDate); // Descending order
       });
       
-      debugPrint('✅ [BListingService] Returning ${drafts.length} sorted drafts');
+      // debugPrint('✅ [BListingService] Returning ${drafts.length} sorted drafts');
       for (var draft in drafts) {
-        debugPrint('   - ${draft['title'] ?? 'Untitled'} (ID: ${draft['id']}, step: ${draft['currentStep']}, images: ${(draft['imageUrls'] as List?)?.length ?? 0})');
+        // debugPrint('   - ${draft['title'] ?? 'Untitled'} (ID: ${draft['id']}, step: ${draft['currentStep']}, images: ${(draft['imageUrls'] as List?)?.length ?? 0})');
       }
       
       return drafts;
     } catch (e) {
-      debugPrint('❌ [BListingService] Error fetching drafts: $e');
+      // debugPrint('❌ [BListingService] Error fetching drafts: $e');
       return [];
     }
   }

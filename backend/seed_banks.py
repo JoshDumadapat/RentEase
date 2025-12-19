@@ -39,9 +39,9 @@ if not FIREBASE_CREDENTIALS_PATH:
     FIREBASE_CREDENTIALS_PATH = os.path.join(_script_dir, 'firebase-credentials.json')
 
 if not os.path.exists(FIREBASE_CREDENTIALS_PATH):
-    print(f"[ERROR] Firebase credentials file not found at {FIREBASE_CREDENTIALS_PATH}")
-    print("Please download your Firebase service account key from Firebase Console")
-    print("and save it as 'backend/firebase-credentials.json'")
+    # print(f"[ERROR] Firebase credentials file not found at {FIREBASE_CREDENTIALS_PATH}")
+    # print("Please download your Firebase service account key from Firebase Console")
+    # print("and save it as 'backend/firebase-credentials.json'")
     sys.exit(1)
 
 cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
@@ -127,7 +127,7 @@ BANKS_DATA = [
 def download_image(url: str, timeout: int = 30) -> Optional[bytes]:
     """Download image from URL"""
     try:
-        print(f"  [DOWNLOAD] Downloading from: {url[:80]}...")
+        # print(f"  [DOWNLOAD] Downloading from: {url[:80]}...")
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
@@ -135,7 +135,7 @@ def download_image(url: str, timeout: int = 30) -> Optional[bytes]:
         response.raise_for_status()
         return response.content
     except Exception as e:
-        print(f"  [ERROR] Failed to download: {e}")
+        # print(f"  [ERROR] Failed to download: {e}")
         return None
 
 def create_placeholder_logo(bank_name: str, bank_id: str) -> Optional[bytes]:
@@ -172,13 +172,13 @@ def create_placeholder_logo(bank_name: str, bank_id: str) -> Optional[bytes]:
         img_bytes.seek(0)
         return img_bytes.getvalue()
     except Exception as e:
-        print(f"  [ERROR] Failed to create placeholder: {e}")
+        # print(f"  [ERROR] Failed to create placeholder: {e}")
         return None
 
 def upload_to_cloudinary(image_bytes: bytes, bank_id: str) -> Optional[str]:
     """Upload image to Cloudinary"""
     try:
-        print(f"  [UPLOAD] Uploading to Cloudinary...")
+        # print(f"  [UPLOAD] Uploading to Cloudinary...")
         upload_result = cloudinary.uploader.upload(
             image_bytes,
             folder="banks",
@@ -187,26 +187,26 @@ def upload_to_cloudinary(image_bytes: bytes, bank_id: str) -> Optional[str]:
             overwrite=True
         )
         cloudinary_url = upload_result.get('secure_url')
-        print(f"  [OK] Uploaded: {cloudinary_url[:80]}...")
+        # print(f"  [OK] Uploaded: {cloudinary_url[:80]}...")
         return cloudinary_url
     except Exception as e:
-        print(f"  [ERROR] Failed to upload: {e}")
+        # print(f"  [ERROR] Failed to upload: {e}")
         return None
 
 def seed_banks(use_manual_logos: bool = False, force_update: bool = False):
     """Create bank entries in Firestore. If use_manual_logos is True, skip logo download and create placeholder entries."""
-    print("=" * 80)
-    print("SEEDING BANKS TO FIRESTORE")
-    print("=" * 80)
+    # print("=" * 80)
+    # print("SEEDING BANKS TO FIRESTORE")
+    # print("=" * 80)
     
     if use_manual_logos:
-        print("\n[MODE] Creating bank entries without logos.")
-        print("       You can upload logos to Cloudinary manually and update the logoUrl field.")
+        # print("\n[MODE] Creating bank entries without logos.")
+        # print("       You can upload logos to Cloudinary manually and update the logoUrl field.")
     else:
-        print("\n[MODE] Attempting to download and upload logos automatically.")
+        # print("\n[MODE] Attempting to download and upload logos automatically.")
     
     if force_update:
-        print("\n[FORCE] Force update mode - will re-download and upload logos even if they exist.")
+        # print("\n[FORCE] Force update mode - will re-download and upload logos even if they exist.")
     
     banks_collection = db.collection('banks')
     
@@ -216,7 +216,7 @@ def seed_banks(use_manual_logos: bool = False, force_update: bool = False):
         bank_code = bank_data.get("code", "")
         logo_url = bank_data.get("logo_url", "")
         
-        print(f"\n[{bank_name}] Processing...")
+        # print(f"\n[{bank_name}] Processing...")
         
         # Check if bank already exists
         doc_ref = banks_collection.document(bank_id)
@@ -230,9 +230,9 @@ def seed_banks(use_manual_logos: bool = False, force_update: bool = False):
             if existing_logo and 'cloudinary.com' in existing_logo:
                 # Check if it's a valid URL (not placeholder)
                 if not existing_logo.endswith('.png') or 'placeholder' in existing_logo.lower():
-                    print(f"  [INFO] Bank exists but logo may be placeholder, attempting to update...")
+                    # print(f"  [INFO] Bank exists but logo may be placeholder, attempting to update...")
                 else:
-                    print(f"  [SKIP] Bank already exists with Cloudinary logo")
+                    # print(f"  [SKIP] Bank already exists with Cloudinary logo")
                     continue
         
         cloudinary_url = None
@@ -246,7 +246,7 @@ def seed_banks(use_manual_logos: bool = False, force_update: bool = False):
             
             # If download failed, create placeholder logo
             if not cloudinary_url:
-                print(f"  [INFO] Creating placeholder logo for {bank_name}...")
+                # print(f"  [INFO] Creating placeholder logo for {bank_name}...")
                 placeholder_bytes = create_placeholder_logo(bank_name, bank_id)
                 if placeholder_bytes:
                     cloudinary_url = upload_to_cloudinary(placeholder_bytes, bank_id)
@@ -254,12 +254,12 @@ def seed_banks(use_manual_logos: bool = False, force_update: bool = False):
         # If still no Cloudinary URL, create placeholder entry
         if not cloudinary_url:
             if use_manual_logos:
-                print(f"  [INFO] Creating bank entry. Upload logo to Cloudinary folder 'banks' with public_id '{bank_id}'")
-                print(f"         Then update the logoUrl field in Firestore.")
+                # print(f"  [INFO] Creating bank entry. Upload logo to Cloudinary folder 'banks' with public_id '{bank_id}'")
+                # print(f"         Then update the logoUrl field in Firestore.")
             else:
-                print(f"  [WARN] Could not create logo, creating entry with placeholder URL.")
-                print(f"         Upload logo to Cloudinary folder 'banks' with public_id '{bank_id}'")
-                print(f"         Then update the logoUrl field in Firestore.")
+                # print(f"  [WARN] Could not create logo, creating entry with placeholder URL.")
+                # print(f"         Upload logo to Cloudinary folder 'banks' with public_id '{bank_id}'")
+                # print(f"         Then update the logoUrl field in Firestore.")
             
             # Create placeholder entry
             cloudinary_url = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/image/upload/banks/{bank_id}.png"
@@ -273,26 +273,26 @@ def seed_banks(use_manual_logos: bool = False, force_update: bool = False):
         
         try:
             doc_ref.set(bank_doc, merge=True)
-            print(f"  [SUCCESS] Added {bank_name} to Firestore")
+            # print(f"  [SUCCESS] Added {bank_name} to Firestore")
             if not cloudinary_url or 'placeholder' in cloudinary_url.lower() or not cloudinary_url.startswith('https://res.cloudinary.com'):
-                print(f"           ⚠️  Logo URL needs to be updated with actual Cloudinary URL")
+                # print(f"           ⚠️  Logo URL needs to be updated with actual Cloudinary URL")
         except Exception as e:
-            print(f"  [ERROR] Failed to add to Firestore: {e}")
+            # print(f"  [ERROR] Failed to add to Firestore: {e}")
     
-    print("\n" + "=" * 80)
-    print("BANK SEEDING COMPLETE")
-    print("=" * 80)
+    # print("\n" + "=" * 80)
+    # print("BANK SEEDING COMPLETE")
+    # print("=" * 80)
     
     # Verify banks
-    print("\nVerifying banks in Firestore...")
+    # print("\nVerifying banks in Firestore...")
     try:
         banks = list(banks_collection.get())
-        print(f"Total banks in Firestore: {len(banks)}")
+        # print(f"Total banks in Firestore: {len(banks)}")
         for doc in banks:
             data = doc.to_dict()
-            print(f"  - {data.get('name', 'Unknown')} ({doc.id})")
+            # print(f"  - {data.get('name', 'Unknown')} ({doc.id})")
     except Exception as e:
-        print(f"  [WARN] Could not verify banks: {e}")
+        # print(f"  [WARN] Could not verify banks: {e}")
 
 if __name__ == "__main__":
     import sys
@@ -306,23 +306,23 @@ if __name__ == "__main__":
         seed_banks(use_manual_logos=use_manual, force_update=force_update)
         
         if use_manual:
-            print("\n" + "=" * 80)
-            print("NEXT STEPS:")
-            print("=" * 80)
-            print("1. Go to Cloudinary Console: https://console.cloudinary.com/")
-            print("2. Navigate to Media Library")
-            print("3. Create folder 'banks' if it doesn't exist")
-            print("4. Upload bank logos with these public_ids:")
+            # print("\n" + "=" * 80)
+            # print("NEXT STEPS:")
+            # print("=" * 80)
+            # print("1. Go to Cloudinary Console: https://console.cloudinary.com/")
+            # print("2. Navigate to Media Library")
+            # print("3. Create folder 'banks' if it doesn't exist")
+            # print("4. Upload bank logos with these public_ids:")
             for bank in BANKS_DATA:
-                print(f"   - {bank['id']} ({bank['name']})")
-            print("5. Copy the Secure URL for each logo")
-            print("6. Update the logoUrl field in Firestore for each bank document")
-            print("=" * 80)
+                # print(f"   - {bank['id']} ({bank['name']})")
+            # print("5. Copy the Secure URL for each logo")
+            # print("6. Update the logoUrl field in Firestore for each bank document")
+            # print("=" * 80)
     except KeyboardInterrupt:
-        print("\n\n[INTERRUPTED] Seeding cancelled by user")
+        # print("\n\n[INTERRUPTED] Seeding cancelled by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\n[ERROR] Unexpected error: {e}")
+        # print(f"\n\n[ERROR] Unexpected error: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

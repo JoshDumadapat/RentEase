@@ -5,8 +5,7 @@ import 'package:rentease_app/backend/BListingService.dart';
 import 'package:rentease_app/backend/BNotificationService.dart';
 import 'package:rentease_app/backend/BUserService.dart';
 
-/// Backend service for favorite operations in Firestore
-/// Handles all favorite-related database operations
+/// Favorite service
 class BFavoriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final BListingService _listingService = BListingService();
@@ -23,7 +22,7 @@ class BFavoriteService {
       // Check if already favorited
       final existing = await isFavorite(userId, listingId);
       if (existing) {
-        debugPrint('⚠️ [BFavoriteService] Listing already in favorites');
+        // debugPrint('⚠️ [BFavoriteService] Listing already in favorites');
         return;
       }
 
@@ -62,17 +61,17 @@ class BFavoriteService {
               listingId: listingId,
               listingTitle: listing['title'] as String?,
             );
-            debugPrint('✅ [BFavoriteService] Notification created for listing owner');
+            // debugPrint('✅ [BFavoriteService] Notification created for listing owner');
           }
         }
       } catch (e) {
         // Log error but don't throw - notification failure shouldn't break favorite creation
-        debugPrint('⚠️ [BFavoriteService] Error creating notification: $e');
+        // debugPrint('⚠️ [BFavoriteService] Error creating notification: $e');
       }
 
-      debugPrint('✅ [BFavoriteService] Favorite added: $userId -> $listingId');
+      // debugPrint('✅ [BFavoriteService] Favorite added: $userId -> $listingId');
     } catch (e) {
-      debugPrint('❌ [BFavoriteService] Error adding favorite: $e');
+      // debugPrint('❌ [BFavoriteService] Error adding favorite: $e');
       rethrow;
     }
   }
@@ -92,7 +91,7 @@ class BFavoriteService {
           .get();
 
       if (snapshot.docs.isEmpty) {
-        debugPrint('⚠️ [BFavoriteService] Favorite not found');
+        // debugPrint('⚠️ [BFavoriteService] Favorite not found');
         return;
       }
 
@@ -102,9 +101,9 @@ class BFavoriteService {
       // Decrement favorite count on listing
       await _listingService.decrementFavoriteCount(listingId);
 
-      debugPrint('✅ [BFavoriteService] Favorite removed: $userId -> $listingId');
+      // debugPrint('✅ [BFavoriteService] Favorite removed: $userId -> $listingId');
     } catch (e) {
-      debugPrint('❌ [BFavoriteService] Error removing favorite: $e');
+      // debugPrint('❌ [BFavoriteService] Error removing favorite: $e');
       rethrow;
     }
   }
@@ -124,7 +123,7 @@ class BFavoriteService {
         return true;
       }
     } catch (e) {
-      debugPrint('❌ [BFavoriteService] Error toggling favorite: $e');
+      // debugPrint('❌ [BFavoriteService] Error toggling favorite: $e');
       rethrow;
     }
   }
@@ -140,7 +139,7 @@ class BFavoriteService {
           .get();
       return snapshot.docs.isNotEmpty;
     } catch (e) {
-      debugPrint('❌ [BFavoriteService] Error checking favorite: $e');
+      // debugPrint('❌ [BFavoriteService] Error checking favorite: $e');
       return false;
     }
   }
@@ -159,7 +158,7 @@ class BFavoriteService {
           .cast<String>()
           .toList();
     } catch (e) {
-      debugPrint('❌ [BFavoriteService] Error getting favorite IDs: $e');
+      // debugPrint('❌ [BFavoriteService] Error getting favorite IDs: $e');
       return [];
     }
   }
@@ -193,7 +192,7 @@ class BFavoriteService {
 
       return listings;
     } catch (e) {
-      debugPrint('❌ [BFavoriteService] Error getting favorite listings: $e');
+      // debugPrint('❌ [BFavoriteService] Error getting favorite listings: $e');
       return [];
     }
   }
@@ -207,7 +206,7 @@ class BFavoriteService {
           .get();
       return snapshot.docs.length;
     } catch (e) {
-      debugPrint('❌ [BFavoriteService] Error getting favorite count: $e');
+      // debugPrint('❌ [BFavoriteService] Error getting favorite count: $e');
       return 0;
     }
   }
@@ -226,7 +225,7 @@ class BFavoriteService {
       }
       return null;
     } catch (e) {
-      debugPrint('❌ [BFavoriteService] Error getting favorite document ID: $e');
+      // debugPrint('❌ [BFavoriteService] Error getting favorite document ID: $e');
       return null;
     }
   }

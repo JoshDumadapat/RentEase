@@ -10,6 +10,7 @@ import 'package:rentease_app/backend/BUserService.dart';
 import 'package:rentease_app/dialogs/image_source_dialog.dart';
 import 'package:rentease_app/screens/settings/change_email_page.dart';
 import 'package:rentease_app/utils/snackbar_utils.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 const Color _themeColorDark = Color(0xFF00B8E6);
 const Color _themeColor = Color(0xFF00D1FF);
@@ -432,26 +433,36 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           ],
                         ),
                         child: ClipOval(
-                          child: _isUploadingImage
-                              ? Container(
-                                  color: isDark ? Colors.grey[800] : Colors.grey[200],
-                                  child: const Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                )
-                              : _selectedImage != null
-                                  ? Image.file(
-                                      _selectedImage!,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : _uploadedImageUrl != null
-                                      ? Image.network(
-                                          _uploadedImageUrl!,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) =>
-                                              _buildDefaultAvatar(textColor, isDark),
-                                        )
-                                      : _buildDefaultAvatar(textColor, isDark),
+                          child: SizedBox(
+                            width: 140,
+                            height: 140,
+                            child: _isUploadingImage
+                                ? Container(
+                                    color: isDark ? Colors.grey[800] : Colors.grey[200],
+                                    child: const Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  )
+                                : _selectedImage != null
+                                    ? Image.file(
+                                        _selectedImage!,
+                                        fit: BoxFit.cover,
+                                        width: 140,
+                                        height: 140,
+                                      )
+                                    : _uploadedImageUrl != null
+                                        ? CachedNetworkImage(
+                                            imageUrl: _uploadedImageUrl!,
+                                            fit: BoxFit.cover,
+                                            width: 140,
+                                            height: 140,
+                                            memCacheWidth: 280,
+                                            memCacheHeight: 280,
+                                            placeholder: (context, url) => _buildDefaultAvatar(textColor, isDark),
+                                            errorWidget: (context, url, error) => _buildDefaultAvatar(textColor, isDark),
+                                          )
+                                        : _buildDefaultAvatar(textColor, isDark),
+                          ),
                         ),
                       ),
                       Positioned(

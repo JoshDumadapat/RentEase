@@ -5,8 +5,7 @@ import 'package:rentease_app/backend/BListingService.dart';
 import 'package:rentease_app/backend/BNotificationService.dart';
 import 'package:rentease_app/backend/BUserService.dart';
 
-/// Backend service for review operations in Firestore
-/// Handles all review-related database operations for listings
+/// Review service
 class BReviewService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final BListingService _listingService = BListingService();
@@ -38,13 +37,13 @@ class BReviewService {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      debugPrint('📝 [BReviewService] Creating review with data: $reviewData');
+      // debugPrint('📝 [BReviewService] Creating review with data: $reviewData');
       final docRef = await _firestore.collection(_collectionName).add(reviewData);
-      debugPrint('✅ [BReviewService] Review created successfully: ${docRef.id}');
+      // debugPrint('✅ [BReviewService] Review created successfully: ${docRef.id}');
 
       // Update listing's average rating and review count
       await _updateListingRating(listingId);
-      debugPrint('✅ [BReviewService] Listing rating updated');
+      // debugPrint('✅ [BReviewService] Listing rating updated');
 
       // Create notification for the listing owner
       try {
@@ -66,17 +65,17 @@ class BReviewService {
               listingId: listingId,
               listingTitle: listing['title'] as String?,
             );
-            debugPrint('✅ [BReviewService] Notification created for listing owner');
+            // debugPrint('✅ [BReviewService] Notification created for listing owner');
           }
         }
       } catch (e) {
         // Log error but don't throw - notification failure shouldn't break review creation
-        debugPrint('⚠️ [BReviewService] Error creating notification: $e');
+        // debugPrint('⚠️ [BReviewService] Error creating notification: $e');
       }
 
       return docRef.id;
     } catch (e) {
-      debugPrint('❌ [BReviewService] Error creating review: $e');
+      // debugPrint('❌ [BReviewService] Error creating review: $e');
       rethrow;
     }
   }
@@ -90,7 +89,7 @@ class BReviewService {
       }
       return null;
     } catch (e) {
-      debugPrint('❌ [BReviewService] Error getting review: $e');
+      // debugPrint('❌ [BReviewService] Error getting review: $e');
       return null;
     }
   }
@@ -144,7 +143,7 @@ class BReviewService {
       
       return reviews;
     } catch (e) {
-      debugPrint('❌ [BReviewService] Error getting reviews by listing: $e');
+      // debugPrint('❌ [BReviewService] Error getting reviews by listing: $e');
       return [];
     }
   }
@@ -198,7 +197,7 @@ class BReviewService {
       
       return reviews;
     } catch (e) {
-      debugPrint('❌ [BReviewService] Error getting reviews by user: $e');
+      // debugPrint('❌ [BReviewService] Error getting reviews by user: $e');
       return [];
     }
   }
@@ -221,7 +220,7 @@ class BReviewService {
       
       return matchingReviews.isNotEmpty;
     } catch (e) {
-      debugPrint('❌ [BReviewService] Error checking if user reviewed: $e');
+      // debugPrint('❌ [BReviewService] Error checking if user reviewed: $e');
       // Return false on error to allow the review to proceed
       // This prevents blocking users if there's a temporary error
       return false;
@@ -257,9 +256,9 @@ class BReviewService {
         await _updateListingRating(listingId);
       }
 
-      debugPrint('✅ [BReviewService] Review updated: $reviewId');
+      // debugPrint('✅ [BReviewService] Review updated: $reviewId');
     } catch (e) {
-      debugPrint('❌ [BReviewService] Error updating review: $e');
+      // debugPrint('❌ [BReviewService] Error updating review: $e');
       rethrow;
     }
   }
@@ -278,9 +277,9 @@ class BReviewService {
         await _updateListingRating(listingId);
       }
 
-      debugPrint('✅ [BReviewService] Review deleted: $reviewId');
+      // debugPrint('✅ [BReviewService] Review deleted: $reviewId');
     } catch (e) {
-      debugPrint('❌ [BReviewService] Error deleting review: $e');
+      // debugPrint('❌ [BReviewService] Error deleting review: $e');
       rethrow;
     }
   }
@@ -309,9 +308,9 @@ class BReviewService {
       // Update listing
       await _listingService.updateRating(listingId, averageRating, reviewCount);
 
-      debugPrint('✅ [BReviewService] Updated listing rating: $listingId -> $averageRating ($reviewCount reviews)');
+      // debugPrint('✅ [BReviewService] Updated listing rating: $listingId -> $averageRating ($reviewCount reviews)');
     } catch (e) {
-      debugPrint('❌ [BReviewService] Error updating listing rating: $e');
+      // debugPrint('❌ [BReviewService] Error updating listing rating: $e');
       rethrow;
     }
   }
@@ -319,15 +318,15 @@ class BReviewService {
   /// Get average rating for a listing
   Future<double> getAverageRating(String listingId) async {
     try {
-      debugPrint('📊 [BReviewService] Getting average rating for listing: $listingId');
+      // debugPrint('📊 [BReviewService] Getting average rating for listing: $listingId');
       
       // Try to get reviews - if getReviewsByListing fails (due to index), use direct query
       List<Map<String, dynamic>> reviews;
       try {
         reviews = await getReviewsByListing(listingId);
-        debugPrint('📊 [BReviewService] Got ${reviews.length} reviews via getReviewsByListing');
+        // debugPrint('📊 [BReviewService] Got ${reviews.length} reviews via getReviewsByListing');
       } catch (e) {
-        debugPrint('⚠️ [BReviewService] getReviewsByListing failed (likely index error), using direct query: $e');
+        // debugPrint('⚠️ [BReviewService] getReviewsByListing failed (likely index error), using direct query: $e');
         // Fallback: Query directly without orderBy
         final snapshot = await _firestore
             .collection(_collectionName)
@@ -337,11 +336,11 @@ class BReviewService {
           'id': doc.id,
           ...doc.data(),
         }).toList();
-        debugPrint('📊 [BReviewService] Got ${reviews.length} reviews via direct query');
+        // debugPrint('📊 [BReviewService] Got ${reviews.length} reviews via direct query');
       }
       
       if (reviews.isEmpty) {
-        debugPrint('📊 [BReviewService] No reviews found, returning 0.0');
+        // debugPrint('📊 [BReviewService] No reviews found, returning 0.0');
         return 0.0;
       }
 
@@ -353,23 +352,23 @@ class BReviewService {
         if (rating != null && rating > 0) {
           totalRating += rating;
           validRatings++;
-          debugPrint('📊 [BReviewService] Review ${review['id']}: rating=$rating');
+          // debugPrint('📊 [BReviewService] Review ${review['id']}: rating=$rating');
         } else {
-          debugPrint('⚠️ [BReviewService] Review ${review['id']} has invalid rating: $rating');
+          // debugPrint('⚠️ [BReviewService] Review ${review['id']} has invalid rating: $rating');
         }
       }
 
       if (validRatings == 0) {
-        debugPrint('⚠️ [BReviewService] No valid ratings found, returning 0.0');
+        // debugPrint('⚠️ [BReviewService] No valid ratings found, returning 0.0');
         return 0.0;
       }
 
       final averageRating = totalRating / validRatings;
-      debugPrint('✅ [BReviewService] Calculated average rating: $averageRating (from $validRatings valid reviews out of ${reviews.length} total)');
+      // debugPrint('✅ [BReviewService] Calculated average rating: $averageRating (from $validRatings valid reviews out of ${reviews.length} total)');
       return averageRating;
     } catch (e, stackTrace) {
-      debugPrint('❌ [BReviewService] Error getting average rating: $e');
-      debugPrint('❌ [BReviewService] Stack trace: $stackTrace');
+      // debugPrint('❌ [BReviewService] Error getting average rating: $e');
+      // debugPrint('❌ [BReviewService] Stack trace: $stackTrace');
       return 0.0;
     }
   }
@@ -384,7 +383,7 @@ class BReviewService {
           .get();
       return snapshot.docs.length;
     } catch (e) {
-      debugPrint('❌ [BReviewService] Error getting review count: $e');
+      // debugPrint('❌ [BReviewService] Error getting review count: $e');
       return 0;
     }
   }

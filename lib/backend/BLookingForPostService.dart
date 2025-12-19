@@ -3,8 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'BUserService.dart';
 
-/// Backend service for "Looking For" post operations in Firestore
-/// Handles all looking-for-post-related database operations
+/// Looking for post service
 class BLookingForPostService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final BUserService _userService = BUserService();
@@ -48,13 +47,24 @@ class BLookingForPostService {
   /// Get looking for post by ID
   Future<Map<String, dynamic>?> getLookingForPost(String postId) async {
     try {
+      if (postId.isEmpty) {
+        // debugPrint('⚠️ [BLookingForPostService] Empty postId provided');
+        return null;
+      }
       final doc = await _firestore.collection(_collectionName).doc(postId).get();
       if (doc.exists) {
-        return doc.data();
+        final data = doc.data();
+        if (data != null) {
+          // Include the document ID in the returned data
+          return {
+            'id': doc.id,
+            ...data,
+          };
+        }
       }
       return null;
     } catch (e) {
-      // Error:'Error getting looking for post: $e');
+      // debugPrint('❌ [BLookingForPostService] Error getting looking for post: $e');
       return null;
     }
   }
@@ -67,7 +77,7 @@ class BLookingForPostService {
     bool randomize = true,
   }) async {
     try {
-      debugPrint('📖 [BLookingForPostService] Fetching paginated posts (limit: $limit)...');
+      // debugPrint('📖 [BLookingForPostService] Fetching paginated posts (limit: $limit)...');
       
       Query query = _firestore.collection(_collectionName);
       
@@ -79,7 +89,8 @@ class BLookingForPostService {
       // Order by createdAt for consistent pagination
       query = query.orderBy('createdAt', descending: true).limit(limit);
       
-      final snapshot = await query.get();
+      // Use Source.server to force fresh data from server (not cache) to ensure new posts appear
+      final snapshot = await query.get(const GetOptions(source: Source.server));
       
       if (snapshot.docs.isEmpty) {
         return {
@@ -112,14 +123,16 @@ class BLookingForPostService {
       }
       
       // Randomize if requested (shuffle the list)
-      if (randomize && posts.length > 1) {
+      // NOTE: Only randomize on first page to avoid duplicates
+      if (randomize && lastDocument == null && posts.length > 1) {
         posts.shuffle();
+        // debugPrint('📊 [BLookingForPostService] Randomized ${posts.length} posts (first page only)');
       }
       
-      final lastDoc = snapshot.docs.last;
+      final lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
       final hasMore = snapshot.docs.length == limit; // If we got full limit, there might be more
       
-      debugPrint('✅ [BLookingForPostService] Fetched ${posts.length} posts (hasMore: $hasMore)');
+      // debugPrint('✅ [BLookingForPostService] Fetched ${posts.length} posts (hasMore: $hasMore)');
       
       return {
         'posts': posts,
@@ -127,8 +140,8 @@ class BLookingForPostService {
         'hasMore': hasMore,
       };
     } catch (e, stackTrace) {
-      debugPrint('❌ [BLookingForPostService] Error fetching paginated posts: $e');
-      debugPrint('📚 Stack trace: $stackTrace');
+      // debugPrint('❌ [BLookingForPostService] Error fetching paginated posts: $e');
+      // debugPrint('📚 Stack trace: $stackTrace');
       return {
         'posts': <Map<String, dynamic>>[],
         'lastDocument': null,
@@ -143,14 +156,25 @@ class BLookingForPostService {
   Future<List<Map<String, dynamic>>> getAllLookingForPosts() async {
     try {
       // Query WITHOUT orderBy to avoid composite index requirement
+      // Use Source.server to force fresh data from server (not cache) to ensure new posts appear
       final snapshot = await _firestore
           .collection(_collectionName)
-          .get();
+          .get(const GetOptions(source: Source.server));
       
-      var posts = snapshot.docs.map((doc) => {
-        'id': doc.id,
-        ...doc.data(),
-      }).toList();
+      // Remove duplicates by ID
+      final seenIds = <String>{};
+      final posts = <Map<String, dynamic>>[];
+      
+      for (final doc in snapshot.docs) {
+        final postId = doc.id;
+        if (!seenIds.contains(postId)) {
+          seenIds.add(postId);
+          posts.add({
+            'id': postId,
+            ...doc.data(),
+          });
+        }
+      }
       
       // Sort by createdAt in memory (newest first)
       posts.sort((a, b) {
@@ -167,14 +191,15 @@ class BLookingForPostService {
           final deactivatedUserIds = await _userService.getDeactivatedUserIds(userIds);
           
           if (deactivatedUserIds.isNotEmpty) {
-            posts = posts.where((post) {
+            posts.removeWhere((post) {
               final userId = post['userId'] as String?;
-              return userId == null || !deactivatedUserIds.contains(userId);
-            }).toList();
+              return userId != null && deactivatedUserIds.contains(userId);
+            });
           }
         }
       }
       
+      // debugPrint('✅ [BLookingForPostService] Returning ${posts.length} unique posts');
       return posts;
     } catch (e) {
       // Error:'Error getting all looking for posts: $e');
@@ -269,12 +294,17 @@ class BLookingForPostService {
   /// Increment like count
   Future<void> incrementLikeCount(String postId) async {
     try {
+      if (postId.isEmpty) {
+        // debugPrint('⚠️ [BLookingForPostService] Cannot increment like count: empty postId');
+        return;
+      }
       await _firestore.collection(_collectionName).doc(postId).update({
         'likeCount': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      // debugPrint('✅ [BLookingForPostService] Like count incremented for post: $postId');
     } catch (e) {
-      // Error:'Error incrementing like count: $e');
+      // debugPrint('❌ [BLookingForPostService] Error incrementing like count: $e');
       rethrow;
     }
   }
@@ -282,12 +312,17 @@ class BLookingForPostService {
   /// Decrement like count
   Future<void> decrementLikeCount(String postId) async {
     try {
+      if (postId.isEmpty) {
+        // debugPrint('⚠️ [BLookingForPostService] Cannot decrement like count: empty postId');
+        return;
+      }
       await _firestore.collection(_collectionName).doc(postId).update({
         'likeCount': FieldValue.increment(-1),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      // debugPrint('✅ [BLookingForPostService] Like count decremented for post: $postId');
     } catch (e) {
-      // Error:'Error decrementing like count: $e');
+      // debugPrint('❌ [BLookingForPostService] Error decrementing like count: $e');
       rethrow;
     }
   }
@@ -295,12 +330,17 @@ class BLookingForPostService {
   /// Increment comment count
   Future<void> incrementCommentCount(String postId) async {
     try {
+      if (postId.isEmpty) {
+        // debugPrint('⚠️ [BLookingForPostService] Cannot increment comment count: empty postId');
+        return;
+      }
       await _firestore.collection(_collectionName).doc(postId).update({
         'commentCount': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      // debugPrint('✅ [BLookingForPostService] Comment count incremented for post: $postId');
     } catch (e) {
-      // Error:'Error incrementing comment count: $e');
+      // debugPrint('❌ [BLookingForPostService] Error incrementing comment count: $e');
       rethrow;
     }
   }
@@ -319,7 +359,7 @@ class BLookingForPostService {
   }
 
   /// Search looking for posts with filters
-  /// Searches by description, location, propertyType, and budget
+  /// Searches by description, username, location, propertyType (category), and budget
   Future<List<Map<String, dynamic>>> searchLookingForPosts({
     String? searchQuery,
     String? location,
@@ -341,15 +381,27 @@ class BLookingForPostService {
         query = query.where('propertyType', isEqualTo: propertyType);
       }
       
-      final snapshot = await query.get();
+      // Use Source.server to force fresh data from server (not cache) to ensure new posts appear
+      final snapshot = await query.get(const GetOptions(source: Source.server));
       
-      var posts = snapshot.docs.map<Map<String, dynamic>>((doc) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        return <String, dynamic>{
-          'id': doc.id,
-          ...data,
-        };
-      }).toList();
+      debugPrint('📥 [BLookingForPostService] Fetched ${snapshot.docs.length} posts from Firestore');
+      
+      // Remove duplicates by ID first
+      final seenIds = <String>{};
+      var posts = <Map<String, dynamic>>[];
+      for (final doc in snapshot.docs) {
+        final postId = doc.id;
+        if (!seenIds.contains(postId)) {
+          seenIds.add(postId);
+          final data = doc.data() as Map<String, dynamic>? ?? {};
+          posts.add(<String, dynamic>{
+            'id': postId,
+            ...data,
+          });
+        }
+      }
+      
+      debugPrint('✅ [BLookingForPostService] After deduplication: ${posts.length} unique posts');
       
       // Filter out posts from deactivated users
       if (posts.isNotEmpty) {
@@ -358,27 +410,64 @@ class BLookingForPostService {
           final deactivatedUserIds = await _userService.getDeactivatedUserIds(userIds);
           
           if (deactivatedUserIds.isNotEmpty) {
+            final beforeCount = posts.length;
             posts = posts.where((post) {
               final userId = post['userId'] as String?;
               return userId == null || !deactivatedUserIds.contains(userId);
             }).toList();
+            debugPrint('🚫 [BLookingForPostService] Filtered out ${beforeCount - posts.length} posts from deactivated users');
           }
         }
       }
       
       // Apply text search filter in memory (if provided)
+      // Search through description, username, location, propertyType (category), and budget
       if (searchQuery != null && searchQuery.isNotEmpty) {
-        final queryLower = searchQuery.toLowerCase();
+        final queryLower = searchQuery.toLowerCase().trim();
+        final queryParts = queryLower.split(' ').where((part) => part.isNotEmpty).toList();
+        
         posts = posts.where((post) {
           final description = (post['description'] as String? ?? '').toLowerCase();
           final postLocation = (post['location'] as String? ?? '').toLowerCase();
           final postPropertyType = (post['propertyType'] as String? ?? '').toLowerCase();
           final postBudget = (post['budget'] as String? ?? '').toLowerCase();
-          return description.contains(queryLower) || 
-                 postLocation.contains(queryLower) || 
-                 postPropertyType.contains(queryLower) ||
-                 postBudget.contains(queryLower);
+          final postUsername = (post['username'] as String? ?? '').toLowerCase();
+          
+          // Also check for ownerName or displayName if they exist in the post
+          final ownerName = (post['ownerName'] as String? ?? '').toLowerCase();
+          final displayName = (post['displayName'] as String? ?? '').toLowerCase();
+          
+          // Search in all fields: description, username, ownerName, displayName, location, propertyType (category), and budget
+          // Use contains for partial matching
+          final matchesDescription = description.contains(queryLower);
+          final matchesUsername = postUsername.contains(queryLower);
+          final matchesOwnerName = ownerName.isNotEmpty && ownerName.contains(queryLower);
+          final matchesDisplayName = displayName.isNotEmpty && displayName.contains(queryLower);
+          final matchesLocation = postLocation.contains(queryLower);
+          final matchesPropertyType = postPropertyType.contains(queryLower);
+          final matchesBudget = postBudget.contains(queryLower);
+          
+          // Also check if any part of the query matches username/displayName (for multi-word searches)
+          final matchesUsernameParts = queryParts.any((part) => postUsername.contains(part)) || queryParts.any((part) => ownerName.contains(part)) || queryParts.any((part) => displayName.contains(part));
+          
+          return matchesDescription || 
+                 matchesUsername || 
+                 matchesOwnerName ||
+                 matchesDisplayName ||
+                 matchesUsernameParts ||
+                 matchesLocation || 
+                 matchesPropertyType ||
+                 matchesBudget;
         }).toList();
+        
+        debugPrint('🔍 [BLookingForPostService] Text search "$searchQuery" found ${posts.length} posts');
+        
+        // Debug: Log a few sample posts to see what fields they have
+        if (posts.isNotEmpty && posts.length <= 3) {
+          for (var post in posts) {
+            debugPrint('   📄 Post ID: ${post['id']}, username: "${post['username']}", description: "${post['description']?.toString().substring(0, post['description'].toString().length > 50 ? 50 : post['description'].toString().length)}"');
+          }
+        }
       }
       
       // Apply location filter in memory (if provided)
@@ -409,7 +498,7 @@ class BLookingForPostService {
       
       return posts;
     } catch (e) {
-      debugPrint('❌ [BLookingForPostService] Error searching looking for posts: $e');
+      // debugPrint('❌ [BLookingForPostService] Error searching looking for posts: $e');
       return [];
     }
   }

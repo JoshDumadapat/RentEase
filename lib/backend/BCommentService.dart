@@ -6,8 +6,7 @@ import 'package:rentease_app/backend/BUserService.dart';
 import 'package:rentease_app/backend/BListingService.dart';
 import 'package:rentease_app/backend/BLookingForPostService.dart';
 
-/// Backend service for comment operations in Firestore
-/// Handles all comment-related database operations
+/// Comment service
 class BCommentService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final BNotificationService _notificationService = BNotificationService();
@@ -38,9 +37,9 @@ class BCommentService {
       };
 
       final docRef = await _firestore.collection(_collectionName).add(commentData);
-      debugPrint('✅ [BCommentService] Comment created successfully! ID: ${docRef.id}');
+      // debugPrint('✅ [BCommentService] Comment created successfully! ID: ${docRef.id}');
       if (propertyListingId != null) {
-        debugPrint('🔗 [BCommentService] Comment includes property link: $propertyListingId');
+        // debugPrint('🔗 [BCommentService] Comment includes property link: $propertyListingId');
       }
 
       // Create notification for the post/listing owner
@@ -64,7 +63,7 @@ class BCommentService {
                 listingId: listingId,
                 listingTitle: listing['title'] as String?,
               );
-              debugPrint('✅ [BCommentService] Notification created for listing owner');
+              // debugPrint('✅ [BCommentService] Notification created for listing owner');
             }
           }
         } else if (lookingForPostId != null) {
@@ -72,11 +71,13 @@ class BCommentService {
           final post = await _lookingForPostService.getLookingForPost(lookingForPostId);
           if (post != null) {
             final postOwnerId = post['userId'] as String?;
+            
+            // Get commenter's avatar URL
+            final commenterData = await _userService.getUserData(userId);
+            final commenterAvatarUrl = commenterData?['profileImageUrl'] as String?;
+            
+            // Notify post owner if commenter is not the owner
             if (postOwnerId != null && postOwnerId != userId) {
-              // Get commenter's avatar URL
-              final commenterData = await _userService.getUserData(userId);
-              final commenterAvatarUrl = commenterData?['profileImageUrl'] as String?;
-
               await _notificationService.notifyCommentOnLookingForPost(
                 postOwnerId: postOwnerId,
                 commenterId: userId,
@@ -86,18 +87,58 @@ class BCommentService {
                 postId: lookingForPostId,
                 postDescription: post['description'] as String?,
               );
-              debugPrint('✅ [BCommentService] Notification created for post owner');
+              // debugPrint('✅ [BCommentService] Notification created for post owner');
+            }
+            
+            // If post owner is commenting (replying), notify all previous commenters
+            if (postOwnerId != null && postOwnerId == userId) {
+              // Get all previous comments on this post
+              final previousComments = await getCommentsByLookingForPost(lookingForPostId);
+              
+              // Get unique user IDs of previous commenters (excluding the post owner)
+              final previousCommenterIds = previousComments
+                  .map((c) => c['userId'] as String?)
+                  .whereType<String>()
+                  .where((id) => id != userId && id != postOwnerId)
+                  .toSet()
+                  .toList();
+              
+              // Notify each previous commenter
+              for (final commenterId in previousCommenterIds) {
+                try {
+                  final commenterUserData = await _userService.getUserData(commenterId);
+                  final commenterName = commenterUserData?['username'] as String? ?? 
+                      commenterUserData?['displayName'] as String? ??
+                      (commenterUserData?['fname'] != null && commenterUserData?['lname'] != null
+                          ? '${commenterUserData!['fname']} ${commenterUserData['lname']}'.trim()
+                          : null) ??
+                      'User';
+                  
+                  await _notificationService.notifyCommentOnLookingForPost(
+                    postOwnerId: commenterId,
+                    commenterId: userId,
+                    commenterName: username,
+                    commenterAvatarUrl: commenterAvatarUrl,
+                    commentText: text,
+                    postId: lookingForPostId,
+                    postDescription: post['description'] as String?,
+                  );
+                  // debugPrint('✅ [BCommentService] Notification created for previous commenter: $commenterId');
+                } catch (e) {
+                  // debugPrint('⚠️ [BCommentService] Error notifying commenter $commenterId: $e');
+                }
+              }
             }
           }
         }
       } catch (e) {
         // Log error but don't throw - notification failure shouldn't break comment creation
-        debugPrint('⚠️ [BCommentService] Error creating notification: $e');
+        // debugPrint('⚠️ [BCommentService] Error creating notification: $e');
       }
 
       return docRef.id;
     } catch (e) {
-      debugPrint('❌ [BCommentService] Error creating comment: $e');
+      // debugPrint('❌ [BCommentService] Error creating comment: $e');
       rethrow;
     }
   }
@@ -105,7 +146,7 @@ class BCommentService {
   /// Get comments by listing ID
   Future<List<Map<String, dynamic>>> getCommentsByListing(String listingId) async {
     try {
-      debugPrint('📖 [BCommentService] Fetching comments for listingId: $listingId');
+      // debugPrint('📖 [BCommentService] Fetching comments for listingId: $listingId');
       
       // Query without orderBy to avoid composite index requirement
       // We'll sort in memory instead
@@ -151,10 +192,10 @@ class BCommentService {
         return aDateTime.compareTo(bDateTime); // Ascending order (oldest first)
       });
       
-      debugPrint('✅ [BCommentService] Found ${comments.length} comments for listingId: $listingId');
+      // debugPrint('✅ [BCommentService] Found ${comments.length} comments for listingId: $listingId');
       return comments;
     } catch (e) {
-      debugPrint('❌ [BCommentService] Error getting comments by listing: $e');
+      // debugPrint('❌ [BCommentService] Error getting comments by listing: $e');
       rethrow; // Rethrow so we can see the actual error
     }
   }
@@ -162,7 +203,7 @@ class BCommentService {
   /// Get comments by looking for post ID
   Future<List<Map<String, dynamic>>> getCommentsByLookingForPost(String lookingForPostId) async {
     try {
-      debugPrint('📖 [BCommentService] Fetching comments for lookingForPostId: $lookingForPostId');
+      // debugPrint('📖 [BCommentService] Fetching comments for lookingForPostId: $lookingForPostId');
       
       // Query without orderBy to avoid composite index requirement
       // We'll sort in memory instead
@@ -208,10 +249,10 @@ class BCommentService {
         return aDateTime.compareTo(bDateTime); // Ascending order (oldest first)
       });
       
-      debugPrint('✅ [BCommentService] Found ${comments.length} comments for lookingForPostId: $lookingForPostId');
+      // debugPrint('✅ [BCommentService] Found ${comments.length} comments for lookingForPostId: $lookingForPostId');
       return comments;
     } catch (e) {
-      debugPrint('❌ [BCommentService] Error getting comments by looking for post: $e');
+      // debugPrint('❌ [BCommentService] Error getting comments by looking for post: $e');
       rethrow; // Rethrow so we can see the actual error
     }
   }
